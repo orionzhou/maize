@@ -1,0 +1,48 @@
+FormatDB: see file /blast/doc/formatdb.html
+Command on mthap from: /export/lab/programs/blast/db
+
+ungz -c db_file.gz | ../bin/formatdb -i stdin -p F -V T -n new_db_name
+
+-p T/F	Type of file - T - protein default, F - nucleotide [T/F]: Optional
+-V  Verbose: check for non-unique string ids in the database [T/F]  Optional default = F 
+
+--------------------------------------------------------------------------------
+Blast Flavors:
+
+¥	nucleotide blast: Search a nucleotide database using a nucleotide query (Algorithms: blastn,
+	megablast, discontiguous megablast)
+¥	protein blast: Search protein database using a protein query (Algorithms: blastp, psi-blast,
+	phi-blast)
+¥	blastx: Search protein database using a translated nucleotide query
+¥	tblastn: Search translated nucleotide database using a protein query
+¥	tblastx: Search translated nucleotide database using a translated nucleotide query
+
+--------------------------------------------------------------------------------
+BLAST:
+Command on mthap from: /export/lab/programs/blast/
+
+bin/blastall -p blastp -d db/dbfile -i q/query_file.fasta -o out/qfilexdbfile_e5_blp.txt -e 1e-5 -m 8
+
+-p	Program type of blast
+-d	Database name
+-i	Input file
+-o	Output File
+-e	e-value cut off
+-m	alignment view options (default 0) 0 = pairwise			1 = query-anchored showing identities
+	2 = query-anchored no identities						3 = flat query-anchored, show identities
+	4 = flat query-anchored, no identities					5 = query-anchored no identities and blunt ends
+	6 = flat query-anchored, no identities and blunt ends	7 = XML Blast output
+	8 = tabular												9 = tabular with comment lines [Integer]
+
+--------------------------------------------------------------------------------
+Parse the top blast hit:
+Command on mthap from: /export/lab/programs/blast/out/
+
+parse_top_BLAST.pl qfilexdbfile_e5_blp.txt Q
+
+# -qt_choice Q reports for every unique query the best target hit (target may not be unique in the entire output file)
+# -qt_choice T reports for every unique target the best query hit (query may not be unique in the entire output file)
+# -qt_choice QT reports for every unique query a unique target (both query & target will be unique in the entire output file)
+
+# for a single input file (qfilexdbfile_e5_blp.txt) in the same dir, automatically names an output
+  file (qfilexdbfile_e5_blp.parQT) based on the QT_choice
