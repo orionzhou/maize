@@ -1,25 +1,22 @@
-﻿# -*- coding: utf-8 -*-
+﻿#!/usr/bin/python
+# -*- coding: utf-8 -*-
 import sys
 import os.path
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib/python2.6/site-packages')
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib64/python2.6/site-packages')
-sys.path.append(os.environ['SCRIPT_HOME_PYTHON'])
+import argparse
 
-from time import clock, time
-from InitPath import *
-from Seq import *
+def main(**kwargs):
+    for key, value in kwargs.iteritems():
+        print key, value
+    cmd = '{0} {1}'.format(kwargs['program'], ' '.join(kwargs['infiles']))
+    r = envoy.run(cmd)
+    print r.std_out
+    print r.std_err
 
-if __name__ == "__main__":
-    seq_db = "/project/youngn/zhoup/Data/misc3/spada.crp/Athaliana/01_genome/01_refseq.fa"
-    seq_id = "Chr2"
-    itv = 100000
-
-    for i in range(1, 10):
-        seq_beg = itv * i + 1
-        seq_end = itv * i + 10
-        
-        c0, t0 = clock(), time()
-        print seqret(seq_db, seq_id, seq_beg, seq_end, -1)
-        
-        print "process time [%.2fs], wall time [%.2fs]" % (time()-t0, clock()-c0)
-        
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='descption', version='%(prog)s 1.0')
+    parser.add_argument('program', type=str, help='progname')
+    parser.add_argument('input', nargs='+', type=str, default='',  help='input')
+    parser.add_argument('output', type=str, default='', help='output')
+    args = parser.parse_args()
+    main(**vars(args))
+    
