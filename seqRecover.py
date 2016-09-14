@@ -9,14 +9,14 @@ cutOff = 0.5;
 lstAcc = ['HM005_gsnapout8mm', 'HM029_gsnapout8mm', 'HM101_gsnapout8mm'];
 
 if __name__ == "__main__":
-	locDict = my.getLoc(fIn);
-	with open(fVnt, "r") as fVntH:
-		vntDict = my.pickle.load(fVntH);
-	mySeqRecover = my.SeqRecover(cutOff, lstAcc, vntDict);
-	seqRcdCount = 0;
-	seqRcdLst = [];
-	for chr, value in sorted(locDict.iteritems()):
-		for start, stop in sorted(value.iteritems()):
-			seqRcdLst += mySeqRecover.do(chr, start, stop);
-	with open(fOut, "w") as fOutH:
-		my.SeqIO.write(seqRcdLst, fOutH, "fasta");
+    locDict = my.getLoc(fIn);
+    with open(fVnt, "r") as fVntH:
+        vntDict = my.pickle.load(fVntH);
+    mySeqRecover = my.SeqRecover(cutOff, lstAcc, vntDict);
+    seqRcdCount = 0;
+    seqRcdLst = [];
+    for chr, value in sorted(locDict.iteritems()):
+        for start, stop in sorted(value.iteritems()):
+            seqRcdLst += mySeqRecover.do(chr, start, stop);
+    with open(fOut, "w") as fOutH:
+        my.SeqIO.write(seqRcdLst, fOutH, "fasta");

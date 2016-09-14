@@ -1,4 +1,4 @@
-﻿#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
 import os.path
@@ -13,10 +13,11 @@ def main(**kwargs):
     print r.std_err
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='descption', version='%(prog)s 1.0')
+    parser = argparse.ArgumentParser(description='JJJ')
+    parser.add_argument('--version', action="version", version="%(prog)s 1.0")
     parser.add_argument('program', type=str, help='progname')
-    parser.add_argument('input', nargs='+', type=str, default='',  help='input')
-    parser.add_argument('output', type=str, default='', help='output')
+    parser.add_argument('input', type=argparse.FileType('r'), default=sys.stdin, help='input')
+    parser.add_argument('output', type=argparse.FileType('w'), default=sys.stdout, help='output')
     args = parser.parse_args()
     main(**vars(args))
-    
+ 

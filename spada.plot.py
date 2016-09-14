@@ -1,10 +1,7 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
 import os
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib/python2.6/site-packages')
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib64/python2.6/site-packages')
-sys.path.append(os.environ['SCRIPT_HOME_PYTHON'])
-
 from igv import IGV
 igv = IGV()
 

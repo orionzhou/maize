@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
 import os.path
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib/python2.6/site-packages')
-sys.path.append(os.environ['PYTHON_HOME'] + '/lib64/python2.6/site-packages')
 sys.path.append(os.environ['SCRIPT_HOME_PYTHON'])
 from Bio import Seq, SeqIO
 from subprocess import Popen, PIPE
@@ -53,5 +51,5 @@ def seqret_slow(f_seq, id, beg, end, strand=1):
     return seq_str
 
 if __name__ == "__main__":
-    fi = "/project/youngn/zhoup/Data/misc3/spada.crp/Athaliana/01_genome/01_refseq.fa"
+    fi = "/home/youngn/zhoup/Data/misc3/spada.crp/Athaliana/01_genome/01_refseq.fa"
     print seqret(fi, 'Chr1', 100001, 100010, -1)

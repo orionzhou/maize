@@ -1,7 +1,7 @@
-import my;
+import os;
 import re;
 
-fOut = my.os.path.join(my.DIR_input, "geneLoc_0102.txt");
+fo = os.path.join(my.DIR_input, "geneLoc_0102.txt");
 retType = ["mRNA", "CDS", "intron", "UTR5", "UTR3"];
 geneLst = ["Late nodulin", "Protein kinase", "Peptidase", "Transcriptase", \
     "Leucine-rich repeat", "Oxidase", "Hydrolase", "Helicase", "Transporter"];
@@ -13,14 +13,14 @@ lenMin = 300;
 i = 0;
 if __name__ == "__main__":   
     mygrep = my.grepGene(lenMin, lenMax);
-    fOutH = open(fOut, "w");
-    print >>fOutH, "Gene";
+    fho = open(fo, "w");
+    print >>fho, "Gene";
     for geneCatgry in geneLst:
         geneIdLst = mygrep.getGeneID(geneCatgry);
         newId = "%s(%d)" % (re.sub(" ","_",geneCatgry.capitalize()), \
             len(geneIdLst));
         print ">%s" % (newId);
-        print >>fOutH, ">%s" % (newId);
+        print >>fho, ">%s" % (newId);
         for geneId in geneIdLst:
             print >>fOutH, "%s\t" % geneId,
             tmpLst = [];
@@ -29,4 +29,4 @@ if __name__ == "__main__":
                 assert type in locLstDict;
                 locLst = locLstDict[type];
                 tmpLst.append(";".join(locLst));
-            print >>fOutH, "\t".join(tmpLst);
+            print >>fho, "\t".join(tmpLst);
