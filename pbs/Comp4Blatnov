@@ -1,0 +1,34 @@
+##PBS -l nodes=1:ppn=16,walltime=20:00:00
+#PBS -l nodes=1:ppn=24,walltime=30:00:00
+#PBS -m ae
+#PBS -M zhoux379@umn.edu
+##PBS -q sb
+#PBS -q small
+
+JOB=${JOB:-blat}
+PPN=${PPN:-24}
+BAT=${BAT:-0}
+PRE=${PRE:-$data/in/pblat}
+SUF=${SUF:-fas}
+QRY=${QRY:-HM004}
+TGT=${TGT:-HM101}
+DIG=${DIG:-2}
+BEG=$((PPN * BAT))
+END=$((BEG + PPN - 1))
+
+echo PRE = $PRE
+echo BAT = $BAT
+echo BEG = $BEG
+echo END = $END
+echo DIG = $DIG
+echo SUF = $SUF
+echo QRY = $QRY
+echo TGT = $TGT
+
+BIT=$data/db/blat/$TGT.2bit
+OOC=$data/db/blat/$TGT.2bit.tile11.ooc
+REM=$data/genome/$TGT/12.rm/11_genome.fas.out
+
+seq $BEG $END | xargs -i printf "%0${DIG}d\\n" {} | \
+  parallel -j $PPN blat $BIT $PRE.{}.$SUF -ooc=$OOC $PRE.{}.psl -noTrimA -noHead
+touch $data/misc3/${QRY}_${TGT}/cps/${JOB}
