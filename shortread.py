@@ -154,6 +154,8 @@ class shortread3Tophat(luigi.Task):
     seqlist = luigi.Parameter(default="18.tsv")
     db = luigi.Parameter()
     samstat = luigi.Parameter()
+    def requires(self):
+        return shortread2Check()
     def run(self):
         name, species, dirw, paired, seqlist, db, samstat = self.name, self.species, self.dirw, self.paired, self.seqlist, self.db, self.samstat
         os.chdir(dirw)
@@ -194,13 +196,41 @@ class shortread3Tophat(luigi.Task):
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
-class shortread4Htseq(luigi.Task):
-    name = luigi.Parameter(default="shortread4Htseq")
+class shortread4Check(luigi.Task):
+    name = luigi.Parameter(default="shortread4Check")
+    dirw = luigi.Parameter()
+    paired = luigi.BoolParameter()
+    seqlist = luigi.Parameter(default="18.tsv")
+    def requires(self):
+        return [shortread3Tophat(), WaitJob("%s/cps/shortread3TophatJob" % self.dirw)]
+    def run(self):
+        name, dirw, paired, seqlist = self.name, self.dirw, self.paired, self.seqlist
+        os.chdir(dirw)
+        assert op.isfile(seqlist), "%s not exist" % seqlist
+        ary = np.genfromtxt(seqlist, names = True, dtype = None, delimiter = "\t")
+        cols = list(ary.dtype.names)
+        d22, f23 = "22.tophat", "23.tsv"
+        d22 = op.abspath(d22)
+        fho = open(f23, "w")
+        print >>fho, "\t".join([cols[0], "bam"]+cols[3:len(cols)])
+        for row in ary:
+            row = list(row)
+            rid, dirf, read1 = row[0:3]
+            fbam = "%s/%s/accepted.bam" % (d22, rid)
+            assert check_bam(fbam), "%s not exist" % fbam
+            print >>fho, "\t".join([rid, fbam]+row[3:len(row)])
+        os.system("touch %s/cps/%s" % (dirw, name))
+    def output(self):
+        return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
+class shortread5Htseq(luigi.Task):
+    name = luigi.Parameter(default="shortread5Htseq")
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
     stranded = luigi.BoolParameter()
     bamlist = luigi.Parameter(default="23.tsv")
     annotation = luigi.Parameter()
+    def requires(self):
+        return shortread4Check()
     def run(self):
         name, dirw, paired, stranded, bamlist, annotation = self.name, self.dirw, self.paired, self.stranded, self.bamlist, self.annotation
         os.chdir(dirw)
