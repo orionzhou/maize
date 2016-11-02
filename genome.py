@@ -50,11 +50,13 @@ class GenomeFas(luigi.Task):
         assert op.isfile("raw.fas"), "no raw.fas in %s" % dirw
         #os.system("seq.check.pl -i raw.fas -o raw.fix.fas")
         if self.ref == 1:
-        #    os.system("cp raw.fix.fas 11_genome.fas")
+            print self.ref
+            #os.system("cp raw.fix.fas 11_genome.fas")
         else:
             os.system("seq.rename.pl -i raw.fix.fas -p scf -o 11_genome.fas")
             if op.isfile("ctg.raw.fas"):
                 os.system("seq.check.pl -i ctg.raw.fas -o ctg.fas")
+        fg = "%s/11_genome.fas" % dirw
         #os.system("seqlen.py 11_genome.fas 15.sizes")
         #os.system("awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"} {print $1, 0, $2}' 15.sizes > 15.bed")
         #os.system("seqgap.pl -i 11_genome.fas -o 16.gap.bed -m 10")
@@ -64,29 +66,31 @@ class GenomeFas(luigi.Task):
         
         if op.isdir("12.rm"): os.system("rm -rf 12.rm")
         os.makedirs("12.rm")
-        nname = name + "Job"
-        dirc = "%s/%s/cps" % (os.environ['genome'], self.org)
+        jname = name + "Job"
         os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
-        os.system("qsub %s -v DIR=%s,SPE=%s,JOB=%s" % (name, dirw, self.species, jname))
+        #os.system("qsub %s -v DIR=%s,SPE=%s,JOB=%s" % (name, dirw, self.species, jname))
         
         if not op.isdir(dird): os.makedirs(dird)
         dird1 = op.join(dird, "blat")
+        if not op.isdir(dird1): os.makedirs(dird1)
         os.chdir(dird1)
-        os.system("module load blat")
+        #os.system("module load blat")
         os.system("faToTwoBit %s %s.2bit" % (fg, org))
         os.system("blat %s.2bit tmp.fas tmp.out -makeOoc=%s.2bit.tile11.ooc" % (org, org))
         if op.isfile("tmp.out"): os.remove("tmp.out")
 
         dird2 = op.join(dird, 'bowtie2')
+        if not op.isdir(dird2): os.makedirs(dird2)
         os.chdir(dird2)
         fd = "%s.fas" % org
         if op.isfile(fd): os.system("rm %s" % fd)
         fd = "%s.fa" % org
         os.system("ln -sf %s %s" % (fg, fd))
-        os.system("module load bowtie2")
+        #os.system("module load bowtie2")
         os.system("bowtie2-build %s %s" % (fd, org))
         
-        os.system("touch %s/cps/%s" % (dirg, name))
+        dirc = "%s/%s/cps" % (self.dirg, self.org)
+        os.system("touch %s/%s" % (dirc, name))
     def output(self):
         dirc = "%s/%s/cps" % (self.dirg, self.org)
         return luigi.LocalTarget("%s/%s" % (dirc, self.name))

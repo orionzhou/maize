@@ -379,8 +379,5 @@ class Anno3Post(luigi.Task):
         dirc = "%s/%s/cps" % (os.environ['genome'], self.org)
         return luigi.LocalTarget("%s/%s" % (dirc, self.name))
 
-
-
-
 if __name__ == "__main__":
     luigi.run()
