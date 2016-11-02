@@ -1,0 +1,19 @@
+#PBS -l nodes=1:ppn=24,walltime=40:00:00
+#PBS -m ae
+#PBS -M zhoux379@umn.edu
+#PBS -q small
+
+PPN=24
+DIR=${DIR:-/scratch.global/zhoux379/shortread/grn23}
+JOB=${JOB:-shortread3TophatJob}
+
+module load bowtie2/2.2.4
+module load tophat/2.0.13
+module load samtools
+
+cd $DIR
+bash 21.1.tophat.sh
+parallel -j $PPN < 21.2.index.sh
+parallel -j $PPN < 21.3.stat.sh
+
+touch $DIR/cps/${JOB}
