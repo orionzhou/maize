@@ -9,6 +9,7 @@ import time
 import argparse
 import itertools
 import pysam
+from fadapa import Fadapa
 import luigi
 
 def run_cmds_ssh(cmds):
@@ -42,6 +43,34 @@ def check_bam(fbam):
     except:
         exist_bam = 0
     return exist_bam
+def parse_fastqc(fqc):
+    assert op.isfile(fqc), "%s not exist" % fqc
+    qc = Fadapa(fqc)
+    r = dict()
+    for ary in qc.clean_data('Basic Statistics'):
+        r[ary[0]] = ary[1]
+    return r
+def parse_samtools_stat(fi):
+    assert op.isfile(fi), "%s not exist" % fi
+    r = dict()
+    for line in open(fi, "r"):
+        line = line.strip("\n")
+        row = line.split("\t")
+        if not row[0] == 'SN':
+            continue
+        r[row[1].strip(":")] = row[2]
+    return r
+def parse_tophat_alignsum(fi):
+    assert op.isfile(fi), "%s not exist" % fi
+    r = dict()
+    for line in open(fi, "r"):
+        row = line.split(":")
+        if len(row) < 2:
+            continue
+        key = row[0].strip(" \n")
+        val = row[1].strip(" \n").split(" ")[0]
+        r[key] = val
+    return r
 
 class WaitJob(luigi.ExternalTask):
     fc = luigi.Parameter()
@@ -61,38 +90,38 @@ class shortread1Trim(luigi.Task):
         if not op.isdir("cps"): os.makedirs("cps")
         assert op.isfile(f_adp), "%s not exist" % f_adp 
         assert op.isfile(seqlist), "%s not exist" % seqlist
-        ary = np.genfromtxt(seqlist, names = True, dtype = None, delimiter = "\t")
-        f12, f14, f16 = "12.fastqc.sh", "14.trim.sh", "16.fastqc.sh"
-        d13, d15, d17 = "13.fastqc", "15.trim", "17.fastqc"
-        fho1, fho2, fho3 = open(f12, "w"), open(f14, "w"), open(f16, "w")
+        ary = np.genfromtxt(seqlist, names = True, dtype = object, delimiter = "\t")
+        fo1, fo2, fo3 = "12.1.fastqc.sh", "12.2.trim.sh", "12.3.fastqc.sh"
+        d13, d14, d15 = "13.fastqc", "14.trim", "15.fastqc"
+        fho1, fho2, fho3 = open(fo1, "w"), open(fo2, "w"), open(fo3, "w")
         assert op.isdir(trimm), "%s is not there" % trimm
-        for diro in [d13, d15, d17]:
+        for diro in [d13, d14, d15]:
             if not op.isdir(diro): 
                 os.makedirs(diro)
         for row in ary:
+            row = list(row)
+            sid = row[0]
             if paired:
-                rid, dirf, read1, read2 = list(row)[0:4]
-                f1 = "%s/%s" % (dirf, read1)
-                f2 = "%s/%s" % (dirf, read2)
+                f1, f2 = row[5:7]
                 assert op.isfile(f1), "%s not there" % f1
                 assert op.isfile(f2), "%s not there" % f2
-                pre1, aff1 = read1.split(".")
-                pre2, aff2 = read2.split(".")
-                f11 = "15.trim/%s.PE.%s" % (pre1, aff1)
-                f12 = "15.trim/%s.SE.%s" % (pre1, aff1)
-                f21 = "15.trim/%s.PE.%s" % (pre2, aff2)
-                f22 = "15.trim/%s.SE.%s" % (pre2, aff2)
-                print >>fho1, "fastqc -o %s --noextract -f fastq %s %s" % (d13, f1, f2)
+                f11 = "%s/%s_1.PE.fastq.gz" % (d14, sid)
+                f12 = "%s/%s_1.SE.fastq.gz" % (d14, sid)
+                f21 = "%s/%s_2.PE.fastq.gz" % (d14, sid)
+                f22 = "%s/%s_2.SE.fastq.gz" % (d14, sid)
+                print >>fho1, "fastqc -o %s --extract -f fastq %s %s" % (d13, f1, f2)
                 print >>fho2, "java -Xmx2500M -jar %s/trimmomatic.jar PE -threads 4 %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36" % (trimm, f1, f2, f11, f12, f21, f22, f_adp)
-                print >>fho3, "fastqc -o %s --noextract -f fastq %s %s %s %s" % (d17, f11, f12, f21, f22)
+                print >>fho3, "fastqc -o %s --extract -f fastq %s %s %s %s" % (d15, f11, f12, f21, f22)
             else:
-                rid, dirf, read1 = list(row)[0:3]
-                f1 = "%s/%s" % (dirf, read1)
+                f1 = row[5]
                 assert op.isfile(f1), "%s not there" % f1
                 print >>fho1, "fastqc -o %s --noextract -f fastq %s" % (d13, f1)
-                fo = "%s/%s" % ("15.trim", read1)
+                fo = "%s/%s.fastq.gz" % (d14, sid)
+                fob = "%s/%s_1.fastq.gz" % (d14, sid)
+                if op.isfile(fob):
+                    os.system("mv %s %s" % (fob, fo))
                 print >>fho2, "java -Xmx2500M -jar %s/trimmomatic.jar SE -threads 4 %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36" % (trimm, f1, fo, f_adp)
-                print >>fho3, "fastqc -o %s --noextract -f fastq %s" % (d17, fo)
+                print >>fho3, "fastqc -o %s --noextract -f fastq %s" % (d15, fo)
         os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
         jname = name + "Job"
         assert op.isfile(name), "no %s in pbs" % name
@@ -104,44 +133,63 @@ class shortread2Check(luigi.Task):
     name = luigi.Parameter(default="shortread2Check")
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
-    seqlist = luigi.Parameter()
+    ilist = luigi.Parameter(default="00.1.read.tsv")
+    olist = luigi.Parameter(default="00.2.trim.tsv")
     def requires(self):
         return [shortread1Trim(), WaitJob("%s/cps/shortread1TrimJob" % self.dirw)]
     def run(self):
-        name, dirw, paired, seqlist = self.name, self.dirw, self.paired, self.seqlist
+        name, dirw, paired, ilist, outseqlist = self.name, self.dirw, self.paired, self.seqlist, self.olist
         os.chdir(dirw)
-        assert op.isfile(seqlist), "%s not exist" % seqlist
-        ary = np.genfromtxt(seqlist, names = True, dtype = None, delimiter = "\t")
+        assert op.isfile(ilist), "%s not exist" % ilist
+        ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
         cols = list(ary.dtype.names)
-        d15, f18 = "15.trim", "18.tsv"
-        d15 = op.abspath(d15)
-        fho = open(f18, "w")
+        do1, do2, do3 = "13.fastqc", "14.trim", "15.fastqc"
+        fho = open(olist, "w")
         if paired:
-            print >>fho, "\t".join([cols[0], "dirf", "read1p", "read1s", "read2p", "read2s"]+cols[4:len(cols)])
+            print >>fho, "\t".join(cols + ["ReadPairCount", "TrimmedReadFile1Paired", "TrimmedReadFile1Unpaired", "TrimmedReadFile2Paired", "TrimmedReadFile2Unpaired", "RetainedReadPairCount", "RetainedRead1Count", "RetainedRead2Count"])
         else:
-            print >>fho, "\t".join([cols[0], "dirf", "read1"]+cols[3:len(cols)])
+            print >>fho, "\t".join(cols + ["ReadCount", "TrimmedReadFile", "TrimmedReadCount"])
         for row in ary:
             row = list(row)
+            sid = row[0]
             if paired:
-                rid, dirf, read1, read2 = row[0:4]
-                pre1, aff1 = read1.split(".")
-                pre2, aff2 = read2.split(".")
-                f1p = "%s.PE.%s" % (pre1, aff1)
-                f1s = "%s.SE.%s" % (pre1, aff1)
-                f2p = "%s.PE.%s" % (pre2, aff2)
-                f2s = "%s.SE.%s" % (pre2, aff2)
-                p1p, p1s, p2p, p2s = ["%s/%s" % (d15, x) for x in [f1p, f1s, f2p, f2s]]
+                f1, f2 = row[5:7]
+                f1p = "%s_1.PE.fastq.gz" % (sid)
+                f1s = "%s_1.SE.fastq.gz" % (sid)
+                f2p = "%s_2.PE.fastq.gz" % (sid)
+                f2s = "%s_2.SE.fastq.gz" % (sid)
+                p1p, p1s, p2p, p2s = [op.abspath("%s/%s" % (do2, x)) for x in [f1p, f1s, f2p, f2s]]
                 assert op.isfile(p1p), "%s not exist" % p1p
                 assert op.isfile(p1s), "%s not exist" % p1s
                 assert op.isfile(p2p), "%s not exist" % p2p
                 assert op.isfile(p2s), "%s not exist" % p2s
-                print >>fho, "\t".join([rid, d15, f1p, f1s, f2p, f2s] + row[4:len(row)])
+                pre1 = op.basename(f1).rstrip(".fastq.gz")
+                pre2 = op.basename(f1).rstrip(".fastq.gz")
+                q11 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
+                q12 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre2)
+                r11, r12 = parse_fastqc(q11), parse_fastqc(q12)
+                rc11, rc12 = r11['Total Sequences'], r12['Total Sequences']
+                assert rc11 == rc12, "%s: read1 %d != read2 %d" % (sid, rc11, rc12)
+                q21 = "%s/%s_1.PE_fastqc/fastqc_data.txt" % (do3, sid)
+                q22 = "%s/%s_2.PE_fastqc/fastqc_data.txt" % (do3, sid)
+                r21, r22 = parse_fastqc(q21), parse_fastqc(q22)
+                rc21, rc22 = r21['Total Sequences'], r22['Total Sequences']
+                assert rc21 == rc22, "%s: read1 %d != read2 %d" % (sid, rc21, rc22)
+                q31 = "%s/%s_1.SE_fastqc/fastqc_data.txt" % (do3, sid)
+                q32 = "%s/%s_2.SE_fastqc/fastqc_data.txt" % (do3, sid)
+                r31, r32 = parse_fastqc(q31), parse_fastqc(q32)
+                rc31, rc32 = r31['Total Sequences'], r32['Total Sequences']
+                print >>fho, "\t".join(row + [rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32])
             else:
-                rid, dirf, read1 = row[0:3]
-                f1 = read1
-                p1 = "%s/%s" % (d15, f1)
+                f1 = row[5]
+                p1 = op.abspath("%s/%s.fastq.gz" % (do2, sid))
                 assert op.isfile(p1), "%s not exist" % p1
-                print >>fho, "\t".join([rid, d15, f1]+row[3:len(row)])
+                pre1 = op.basename(f1).rstrip(".fastq.gz")
+                q1 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
+                q2 = "%s/%s_fastqc/fastqc_data.txt" % (do3, sid)
+                r1, r2 = parse_fastqc(q1), parse_fastqc(q2)
+                rc1, rc2 = r1['Total Sequences'], r2['Total Sequences']
+                print >>fho, "\t".join(row + [rc1, p1, rc2])
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -151,20 +199,20 @@ class shortread3Tophat(luigi.Task):
     species = luigi.Parameter()
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
-    seqlist = luigi.Parameter(default="18.tsv")
+    ilist = luigi.Parameter(default="00.2.trim.tsv")
     db = luigi.Parameter()
     samstat = luigi.Parameter()
     def requires(self):
         return shortread2Check()
     def run(self):
-        name, species, dirw, paired, seqlist, db, samstat = self.name, self.species, self.dirw, self.paired, self.seqlist, self.db, self.samstat
+        name, species, dirw, paired, ilist, db, samstat = self.name, self.species, self.dirw, self.paired, self.ilist, self.db, self.samstat
         os.chdir(dirw)
-        assert op.isfile(seqlist), "%s not exist" % seqlist
+        assert op.isfile(ilist), "%s not exist" % ilist
         assert op.isfile(samstat), "%s not exist" % samstat
-        ary = np.genfromtxt(seqlist, names = True, dtype = None, delimiter = "\t")
-        f211, f212, f213 = "21.1.tophat.sh", "21.2.index.sh", "21.3.stat.sh"
+        ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
+        fo1, fo2, fo3, fo4 = "21.1.tophat.sh", "21.2.index.sh", "21.3.samtools.sh", "21.4.samstat.sh"
         d22 = "22.tophat"
-        fho1, fho2, fho3 = open(f211, "w"), open(f212, "w"), open(f213, "w")
+        fho1, fho2, fho3, fho4 = open(fo1, "w"), open(fo2, "w"), open(fo3, "w"), open(fo4, "w")
         for diro in [d22]:
             if not op.isdir(diro): 
                 os.makedirs(diro)
@@ -172,23 +220,20 @@ class shortread3Tophat(luigi.Task):
         if species == 'rice': min_intron_len = 20000
         for row in ary:
             row = list(row)
+            sid = row[0]
             fbam = "%s/%s/accepted_hits.bam" % (d22, row[0])
             exist_fbam = check_bam(fbam)
             if paired:
-                rid, dirf, read1p, read1s, read2p, read2s = row[0:6]
-                f1 = "%s/%s" % (dirf, read1p)
-                f2 = "%s/%s" % (dirf, read2p)
+                f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
                 if not exist_fbam:
-                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s %s" % (min_intron_len, d22, rid, db, f1, f2)
-                print >>fho2, "samtools index %s/%s/accepted_hits.bam" % (d22, rid)
-                print >>fho3, "%s %s/%s/accepted_hits.bam" % (samstat, d22, rid)
+                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s %s" % (min_intron_len, d22, sid, db, f1p, f2p)
             else:
-                rid, dirf, read1 = row[0:3]
-                f1 = "%s/%s" % (dirf, read1)
+                fr, rc, ft, rrc = row[5:9]
                 if not exist_fbam:
-                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s" % (min_intron_len, d22, rid, db, f1)
-                print >>fho2, "samtools index %s/%s/accepted_hits.bam" % (d22, rid)
-                print >>fho3, "%s %s/%s/accepted_hits.bam" % (samstat, d22, rid)
+                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s" % (min_intron_len, d22, sid, db, ft)
+            print >>fho2, "samtools index %s/%s/accepted_hits.bam" % (d22, sid)
+            print >>fho3, "samtools stats %s/%s/accepted_hits.bam > %s/%s/samtools.stat" % (d22, sid, d22, sid)
+            print >>fho4, "%s %s/%s/accepted_hits.bam" % (samstat, d22, sid)
         os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
         jname = name + "Job"
         assert op.isfile(name), "no %s in pbs" % name
@@ -200,25 +245,43 @@ class shortread4Check(luigi.Task):
     name = luigi.Parameter(default="shortread4Check")
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
-    seqlist = luigi.Parameter(default="18.tsv")
+    ilist = luigi.Parameter(default="00.2.trim.tsv")
+    olist = luigi.Parameter(default="00.3.tophat.tsv")
     def requires(self):
         return [shortread3Tophat(), WaitJob("%s/cps/shortread3TophatJob" % self.dirw)]
     def run(self):
-        name, dirw, paired, seqlist = self.name, self.dirw, self.paired, self.seqlist
+        name, dirw, paired, ilist, olist = self.name, self.dirw, self.paired, self.ilist, self.olist
         os.chdir(dirw)
-        assert op.isfile(seqlist), "%s not exist" % seqlist
-        ary = np.genfromtxt(seqlist, names = True, dtype = None, delimiter = "\t")
+        assert op.isfile(ilist), "%s not exist" % ilist
+        ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
         cols = list(ary.dtype.names)
-        d22, f23 = "22.tophat", "23.tsv"
+        d22 = "22.tophat"
         d22 = op.abspath(d22)
-        fho = open(f23, "w")
-        print >>fho, "\t".join([cols[0], "bam"]+cols[3:len(cols)])
+        fho = open(olist, "w")
+        if paired:
+            print >>fho, "\t".join(cols + ["BamFile", "MappedPairs", "OrphanPairs", "UnmappedPairs", "UniquelyMappedPairs", "UniquelyMappedOrphans", "InsertSizeMean", "insertSizeStd"])
+        else:
+            print >>fho, "\t".join(cols + ["BamFile", "Mapped", "Unmapped", "UniquelyMapped"])
         for row in ary:
             row = list(row)
-            rid, dirf, read1 = row[0:3]
-            fbam = "%s/%s/accepted.bam" % (d22, rid)
+            sid = row[0]
+            fbam = "%s/%s/accepted_hits.bam" % (d22, sid)
             assert check_bam(fbam), "%s not exist" % fbam
-            print >>fho, "\t".join([rid, fbam]+row[3:len(row)])
+            if paired:
+                f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
+                fsum = "%s/%s/align_summary.txt" % (d22, sid)
+            else:
+                fr, rc, ft, rrc = row[5:9]
+                fsum = "%s/%s/align_summary.txt" % (d22, sid)
+                r1 = parse_tophat_alignsum(fsum)
+                fsta = "%s/%s/samtools.stat" % (d22, sid)
+                #r2 = parse_samtools_stat(fsta)
+                assert rrc == r1['Input'], r1
+                #assert r1['Mapped'] == r2['sequences'], (r1, r2)
+                mapped = r1['Mapped']
+                unmapped = str(int(rrc) - int(mapped))
+                uni = str(int(mapped) - int(r1['of these']))
+                print >>fho, "\t".join(row + [fbam, mapped, unmapped, uni])
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -227,31 +290,67 @@ class shortread5Htseq(luigi.Task):
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
     stranded = luigi.BoolParameter()
-    bamlist = luigi.Parameter(default="23.tsv")
+    ilist = luigi.Parameter(default="00.3.tophat.tsv")
     annotation = luigi.Parameter()
     def requires(self):
         return shortread4Check()
     def run(self):
-        name, dirw, paired, stranded, bamlist, annotation = self.name, self.dirw, self.paired, self.stranded, self.bamlist, self.annotation
+        name, dirw, paired, stranded, ilist, annotation = self.name, self.dirw, self.paired, self.stranded, self.ilist, self.annotation
         os.chdir(dirw)
-        assert op.isfile(bamlist), "%s not exist" % bamlist
+        assert op.isfile(ilist), "%s not exist" % ilist
         assert op.isfile(annotation), "%s not exist" % annotation
-        ary = np.genfromtxt(bamlist, names = True, dtype = None, delimiter = "\t")
+        ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
         f31 = "31.htseq.sh"
         d32 = "32.htseq"
         fho1 = open(f31, "w")
         for diro in [d32]:
             if not op.isdir(diro): 
                 os.makedirs(diro)
+        srd = 'no'
+        if stranded: srd = 'yes'
         for row in ary:
             row = list(row)
-            rid, fbam = row[0:2]
-            print >>fho1, "htseq-count -s no -t gene -i ID -m union -a 20 -f bam %s %s > %s/%s.txt" % (fbam, annotation, d32, rid)
+            sid = row[0]
+            if paired:
+                fbam = row[15]
+            else:
+                fbam = row[9]
+            print >>fho1, "htseq-count -s %s -t gene -i ID -m union -a 20 -f bam %s %s > %s/%s.txt" % (srd, fbam, annotation, d32, sid)
         os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
         jname = name + "Job"
         assert op.isfile(name), "no %s in pbs" % name
-        #os.system("qsub %s -v JOB=%s,DIR=%s" % (name, jname, dirw))
-        #os.system("touch %s/cps/%s" % (dirw, name))
+        os.system("qsub %s -v JOB=%s,DIR=%s" % (name, jname, dirw))
+        os.system("touch %s/cps/%s" % (dirw, name))
+    def output(self):
+        return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
+class shortread6Check(luigi.Task):
+    name = luigi.Parameter(default="shortread6Check")
+    dirw = luigi.Parameter()
+    paired = luigi.BoolParameter()
+    ilist = luigi.Parameter(default="00.3.tophat.tsv")
+    olist = luigi.Parameter(default="00.5.htseq.tsv")
+    def requires(self):
+        return [shortread5Htseq(), WaitJob("%s/cps/shortread5HtseqJob" % self.dirw)]
+    def run(self):
+        name, dirw, paired, ilist, olist = self.name, self.dirw, self.paired, self.ilist, self.olist
+        os.chdir(dirw)
+        assert op.isfile(ilist), "%s not exist" % ilist
+        ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
+        cols = list(ary.dtype.names)
+        d32 = op.abspath("32.htseq")
+        fho = open(olist, "w")
+        print >>fho, "\t".join(cols + ["HtseqFile"])
+        for row in ary:
+            row = list(row)
+            sid = row[0]
+            fhts = "%s/%s.txt" % (d32, sid)
+            assert op.isfile(fhts), "%s not there" % fhts
+            if paired:
+                f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
+            else:
+                fr, rc, ft, rrc = row[5:9]
+            print >>fho, "\t".join(row + [fhts])
+        os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
 

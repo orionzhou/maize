@@ -7,7 +7,7 @@ import numpy as np
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description = 'check fastq files and generate 11.tsv'
+        description = 'check fastq files and generate 00.1.read.tsv'
     )
     parser.add_argument(
         'dirw', help = 'working directory'
@@ -20,27 +20,28 @@ if __name__ == "__main__":
     dirw, paired = args.dirw, args.paired
     os.chdir(dirw)
 
-    assert op.isfile("01.srr.tsv"), "no 01.srr.tsv in %s" % dirw
-    ary = np.genfromtxt("01.srr.tsv", names = True, dtype = None, delimiter = "\t")
+    fi, fo = "00.0.srr.tsv", "00.1.read.tsv"
+    assert op.isfile(fi), "no %s in %s" % (fi, dirw)
+    ary = np.genfromtxt(fi, names = True, dtype = object, delimiter = "\t")
     cols = list(ary.dtype.names)
     d05 = op.abspath("05.reads")
     assert op.isdir(d05), "no 05.reads in %s" % dirw
-    fho = open("06.tsv", "w")
+    fho = open(fo, "w")
     if paired:
-        print >>fho, "\t".join([cols[0], "dirf", "read1", "read2"]+cols[1:len(cols)])
+        print >>fho, "\t".join(cols + ["ReadFile1", "ReadFile2"])
     else:
-        print >>fho, "\t".join([cols[0], "dirf", "read1"]+cols[1:len(cols)])
+        print >>fho, "\t".join(cols + ["ReadFile"])
     for row in ary:
         row = list(row)
-        rid = row[0]
-        read1, read2 = "%s_1.fastq.gz" % rid, "%s_2.fastq.gz" % rid
+        sid = row[0]
+        read1, read2 = "%s_1.fastq.gz" % sid, "%s_2.fastq.gz" % sid
         f1 = "%s/%s" % (d05, read1)
         f2 = "%s/%s" % (d05, read2)
         if paired:
             assert op.isfile(f1), "%s not there" % f1
             assert op.isfile(f2), "%s not there" % f2
-            print >>fho, "\t".join([rid, d05, read1, read2] + row[1:len(row)])
+            print >>fho, "\t".join(row + [f1, f2])
         else:
             assert op.isfile(f1), "%s not there" % f1
-            print >>fho, "\t".join([rid, d05, read1] + row[1:len(row)])
+            print >>fho, "\t".join(row + [f1])
     fho.close()

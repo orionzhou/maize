@@ -16,7 +16,7 @@ if __name__ == "__main__":
         'dirw', default = "/scratch.global/zhoux379/shortread/test", help = 'working directory (default: /scratch.global/zhoux379/shortread/test)'
     )
     parser.add_argument(
-            'sralist', default = "/scratch.global/zhoux379/shortread/test/01.srr.tsv", help = 'list file of SRA IDs (default: /scratch.global/zhoux379/shortread/test/01.srr.tsv)'
+        'sralist', default = "00.0.srr.tsv", help = 'list file of SRA IDs (default: 00.0.srr.tsv)'
     )
     args = parser.parse_args()
 
