@@ -27,9 +27,9 @@ if __name__ == "__main__":
     
     fhi = open(fi, "r")
     fho = open(fo, "w")
-    print >>fho, "\t".join(["id", "n1", "n2"])
+    fho.write("\t".join(["id", "n1", "n2"]) + "\n")
     
-    offset = 200
+    offset = 500
     next(fhi)
     for line in fhi:
         line = line.strip("\n")
@@ -44,5 +44,5 @@ if __name__ == "__main__":
                 n1 += 1
             if(x.pos+1 < qend - offset and x.aend > qend + offset):
                 n2 += 1
-        print >>fho, "%s\t%d\t%d" % (id, n1, n2)
+        fho.write("%s\t%d\t%d\n" % (id, n1, n2))
     bam.close()
