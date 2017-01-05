@@ -26,4 +26,4 @@ if __name__ == "__main__":
       id = seq.id
       desc = seq.description
       genus = desc.split(" ")[0]
-      print "\t".join([seq.id, genus])
+      print("\t".join([seq.id, genus]))

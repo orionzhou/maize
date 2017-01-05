@@ -8,9 +8,11 @@ import sys
 import time
 import argparse
 import itertools
-import pysam
-from fadapa import Fadapa
 import luigi
+from fadapa import Fadapa
+from string import Template
+import pysam
+from colorama import init, Fore, Back, Style
 
 def run_cmds_ssh(cmds):
     username = 'zhou379'
@@ -25,7 +27,7 @@ def run_cmds_ssh(cmds):
     for cmd in cmds:
         stdin, stdout, stderr = s.exec_command(cmd)
         for line in stdout:
-            print "... " + line.strip("\n")
+            print("... " + line)
     s.close()
 def read_config(fcfg):
     cfg = dict()
@@ -83,6 +85,11 @@ class shortread1Trim(luigi.Task):
     seqlist = luigi.Parameter()
     adapter = luigi.Parameter()
     trimmomatic = luigi.Parameter()
+    pbs_template = luigi.Parameter()
+    pbs_queue = luigi.Parameter()
+    pbs_walltime = luigi.Parameter()
+    pbs_ppn = luigi.Parameter()
+    pbs_email = luigi.Parameter()
     def run(self):
         name, dirw, seqlist, paired, f_adp, trimm = self.name, self.dirw, self.seqlist, self.paired, self.adapter, self.trimmomatic
         if not op.isdir(dirw): os.makedirs(dirw)
@@ -94,12 +101,12 @@ class shortread1Trim(luigi.Task):
         fo1, fo2, fo3 = "12.1.fastqc.sh", "12.2.trim.sh", "12.3.fastqc.sh"
         d13, d14, d15 = "13.fastqc", "14.trim", "15.fastqc"
         fho1, fho2, fho3 = open(fo1, "w"), open(fo2, "w"), open(fo3, "w")
-        assert op.isdir(trimm), "%s is not there" % trimm
+        assert op.isfile(trimm), "%s is not there" % trimm
         for diro in [d13, d14, d15]:
             if not op.isdir(diro): 
                 os.makedirs(diro)
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             if paired:
                 f1, f2 = row[5:7]
@@ -109,23 +116,49 @@ class shortread1Trim(luigi.Task):
                 f12 = "%s/%s_1.SE.fastq.gz" % (d14, sid)
                 f21 = "%s/%s_2.PE.fastq.gz" % (d14, sid)
                 f22 = "%s/%s_2.SE.fastq.gz" % (d14, sid)
-                print >>fho1, "fastqc -o %s --extract -f fastq %s %s" % (d13, f1, f2)
-                print >>fho2, "java -Xmx2500M -jar %s/trimmomatic.jar PE -threads 4 %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36" % (trimm, f1, f2, f11, f12, f21, f22, f_adp)
-                print >>fho3, "fastqc -o %s --extract -f fastq %s %s %s %s" % (d15, f11, f12, f21, f22)
+                fho1.write("fastqc -o %s --extract -f fastq %s %s\n" % (d13, f1, f2))
+                fho2.write("java -Xmx2500M -jar %s PE -threads 4 %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36\n" % (trimm, f1, f2, f11, f12, f21, f22, f_adp))
+                fho3.write("fastqc -o %s --extract -f fastq %s %s %s %s\n" % (d15, f11, f12, f21, f22))
             else:
                 f1 = row[5]
                 assert op.isfile(f1), "%s not there" % f1
-                print >>fho1, "fastqc -o %s --noextract -f fastq %s" % (d13, f1)
+                fho1.write("fastqc -o %s --noextract -f fastq %s\n" % (d13, f1))
                 fo = "%s/%s.fastq.gz" % (d14, sid)
                 fob = "%s/%s_1.fastq.gz" % (d14, sid)
                 if op.isfile(fob):
                     os.system("mv %s %s" % (fob, fo))
-                print >>fho2, "java -Xmx2500M -jar %s/trimmomatic.jar SE -threads 4 %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36" % (trimm, f1, fo, f_adp)
-                print >>fho3, "fastqc -o %s --noextract -f fastq %s" % (d15, fo)
-        os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
-        jname = name + "Job"
-        assert op.isfile(name), "no %s in pbs" % name
-        os.system("qsub %s -v JOB=%s,DIR=%s" % (name, jname, dirw))
+                fho2.write("java -Xmx2500M -jar %s SE -threads 4 %s %s ILLUMINACLIP:%s:2:30:10:8:no LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36\n" % (trimm, f1, fo, f_adp))
+                fho3.write("fastqc -o %s --noextract -f fastq %s\n" % (d15, fo))
+        
+        cmds = []
+        cmds.append("module load fastqc/0.11.2")
+        cmds.append("cd %s" % dirw)
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo1))
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo2))
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo3))
+        cmds.append("touch cps/%s" % (name + "Job"))
+        cmd = "\n".join(cmds)
+        
+        temdict = {
+                "queue": self.pbs_queue,
+                "walltime": self.pbs_walltime,
+                "ppn": self.pbs_ppn,
+                "email": self.pbs_email,
+                "cmds": cmd
+        }
+        fo = "12.pbs"
+        fho = open(fo, "w")
+        assert op.isfile(self.pbs_template), "cannot read template: %s" % self.pbs_template
+        fht = open(self.pbs_template, "r")
+        src = Template(fht.read())
+        fho.write(src.substitute(temdict))
+        
+        init()
+        print(Fore.GREEN)
+        print("A job script has been generated: %s" % fo)
+        print("Please check, make necessary changes , then type:")
+        print(Fore.RED + "qsub %s" % fo)
+        print(Style.RESET_ALL)
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -146,11 +179,11 @@ class shortread2Check(luigi.Task):
         do1, do2, do3 = "13.fastqc", "14.trim", "15.fastqc"
         fho = open(olist, "w")
         if paired:
-            print >>fho, "\t".join(cols + ["ReadPairCount", "TrimmedReadFile1Paired", "TrimmedReadFile1Unpaired", "TrimmedReadFile2Paired", "TrimmedReadFile2Unpaired", "RetainedReadPairCount", "RetainedRead1Count", "RetainedRead2Count"])
+            fho.write("\t".join(cols + ["ReadPairCount", "TrimmedReadFile1Paired", "TrimmedReadFile1Unpaired", "TrimmedReadFile2Paired", "TrimmedReadFile2Unpaired", "RetainedReadPairCount", "RetainedRead1Count", "RetainedRead2Count"]) + "\n")
         else:
-            print >>fho, "\t".join(cols + ["ReadCount", "TrimmedReadFile", "TrimmedReadCount"])
+            fho.write("\t".join(cols + ["ReadCount", "TrimmedReadFile", "TrimmedReadCount"]) + "\n")
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             if paired:
                 f1, f2 = row[5:7]
@@ -179,7 +212,7 @@ class shortread2Check(luigi.Task):
                 q32 = "%s/%s_2.SE_fastqc/fastqc_data.txt" % (do3, sid)
                 r31, r32 = parse_fastqc(q31), parse_fastqc(q32)
                 rc31, rc32 = r31['Total Sequences'], r32['Total Sequences']
-                print >>fho, "\t".join(row + [rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32])
+                fho.write("\t".join(row + [rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32]) + "\n")
             else:
                 f1 = row[5]
                 p1 = op.abspath("%s/%s.fastq.gz" % (do2, sid))
@@ -189,7 +222,7 @@ class shortread2Check(luigi.Task):
                 q2 = "%s/%s_fastqc/fastqc_data.txt" % (do3, sid)
                 r1, r2 = parse_fastqc(q1), parse_fastqc(q2)
                 rc1, rc2 = r1['Total Sequences'], r2['Total Sequences']
-                print >>fho, "\t".join(row + [rc1, p1, rc2])
+                fho.write("\t".join(row + [rc1, p1, rc2]) + "\n")
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -200,15 +233,21 @@ class shortread3Tophat(luigi.Task):
     dirw = luigi.Parameter()
     paired = luigi.BoolParameter()
     ilist = luigi.Parameter(default="00.2.trim.tsv")
-    db = luigi.Parameter()
+    db_bowtie2 = luigi.Parameter()
+    tophat2 = luigi.Parameter()
     samstat = luigi.Parameter()
+    pbs_template = luigi.Parameter()
+    pbs_queue = luigi.Parameter()
+    pbs_walltime = luigi.Parameter()
+    pbs_ppn = luigi.Parameter()
+    pbs_email = luigi.Parameter()
     def requires(self):
         return shortread2Check()
     def run(self):
-        name, species, dirw, paired, ilist, db, samstat = self.name, self.species, self.dirw, self.paired, self.ilist, self.db, self.samstat
+        name, species, dirw, paired, ilist, db_bowtie2 = self.name, self.species, self.dirw, self.paired, self.ilist, self.db_bowtie2
         os.chdir(dirw)
         assert op.isfile(ilist), "%s not exist" % ilist
-        assert op.isfile(samstat), "%s not exist" % samstat
+        assert op.isfile(self.samstat), "%s not exist" % self.samstat
         ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
         fo1, fo2, fo3, fo4 = "21.1.tophat.sh", "21.2.index.sh", "21.3.samtools.sh", "21.4.samstat.sh"
         d22 = "22.tophat"
@@ -219,25 +258,54 @@ class shortread3Tophat(luigi.Task):
         min_intron_len = 60000
         if species == 'rice': min_intron_len = 20000
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             fbam = "%s/%s/accepted_hits.bam" % (d22, row[0])
             exist_fbam = check_bam(fbam)
             if paired:
                 f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
                 if not exist_fbam:
-                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s %s" % (min_intron_len, d22, sid, db, f1p, f2p)
+                    fho1.write("tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s %s\n" % (min_intron_len, d22, sid, db_bowtie2, f1p, f2p))
             else:
                 fr, rc, ft, rrc = row[5:9]
                 if not exist_fbam:
-                    print >>fho1, "tophat2 --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s" % (min_intron_len, d22, sid, db, ft)
-            print >>fho2, "samtools index %s/%s/accepted_hits.bam" % (d22, sid)
-            print >>fho3, "samtools stats %s/%s/accepted_hits.bam > %s/%s/samtools.stat" % (d22, sid, d22, sid)
-            print >>fho4, "%s %s/%s/accepted_hits.bam" % (samstat, d22, sid)
-        os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
-        jname = name + "Job"
-        assert op.isfile(name), "no %s in pbs" % name
-        os.system("qsub %s -v JOB=%s,DIR=%s" % (name, jname, dirw))
+                    fho1.write("%s --num-threads 24 --max-multihits 20 --min-intron-length 5 --max-intron-length %d -o %s/%s %s %s\n" % (self.tophat2, min_intron_len, d22, sid, db_bowtie2, ft))
+            fho2.write("samtools index %s/%s/accepted_hits.bam\n" % (d22, sid))
+            fho3.write("samtools stats %s/%s/accepted_hits.bam > %s/%s/samtools.stat\n" % (d22, sid, d22, sid))
+            fho4.write("%s %s/%s/accepted_hits.bam\n" % (self.samstat, d22, sid))
+
+        cmds = []
+        cmds.append("module load bowtie2/2.2.4")
+        cmds.append("module load samtools")
+        cmds.append("module load parallel")
+        cmds.append("cd %s" % dirw)
+        cmds.append("bash %s" % fo1)
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo2))
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo3))
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo4))
+        cmds.append("touch cps/%s" % (name + "Job"))
+        cmd = "\n".join(cmds)
+        
+        temdict = {
+                "queue": self.pbs_queue,
+                "walltime": self.pbs_walltime,
+                "ppn": self.pbs_ppn,
+                "email": self.pbs_email,
+                "cmds": cmd
+        }
+        fo = "21.pbs"
+        fho = open(fo, "w")
+        assert op.isfile(self.pbs_template), "cannot read template: %s" % self.pbs_template
+        fht = open(self.pbs_template, "r")
+        src = Template(fht.read())
+        fho.write(src.substitute(temdict))
+        
+        init()
+        print(Fore.GREEN)
+        print("A job script has been generated: %s" % fo)
+        print("Please check, make necessary changes , then type:")
+        print(Fore.RED + "qsub %s" % fo)
+        print(Style.RESET_ALL)
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -259,11 +327,11 @@ class shortread4Check(luigi.Task):
         d22 = op.abspath(d22)
         fho = open(olist, "w")
         if paired:
-            print >>fho, "\t".join(cols + ["BamFile", "MappedPairs", "OrphanPairs", "UnmappedPairs", "UniquelyMappedPairs", "UniquelyMappedOrphans", "InsertSizeMean", "insertSizeStd"])
+            fho.write("\t".join(cols + ["BamFile", "MappedPairs", "OrphanPairs", "UnmappedPairs", "UniquelyMappedPairs", "UniquelyMappedOrphans", "InsertSizeMean", "insertSizeStd"]) + "\n")
         else:
-            print >>fho, "\t".join(cols + ["BamFile", "Mapped", "Unmapped", "UniquelyMapped"])
+            fho.write("\t".join(cols + ["BamFile", "Mapped", "Unmapped", "UniquelyMapped"]) + "\n")
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             fbam = "%s/%s/accepted_hits.bam" % (d22, sid)
             assert check_bam(fbam), "%s not exist" % fbam
@@ -281,7 +349,7 @@ class shortread4Check(luigi.Task):
                 mapped = r1['Mapped']
                 unmapped = str(int(rrc) - int(mapped))
                 uni = str(int(mapped) - int(r1['of these']))
-                print >>fho, "\t".join(row + [fbam, mapped, unmapped, uni])
+                fho.write("\t".join(row + [fbam, mapped, unmapped, uni])+"\n")
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -292,6 +360,11 @@ class shortread5Htseq(luigi.Task):
     stranded = luigi.BoolParameter()
     ilist = luigi.Parameter(default="00.3.tophat.tsv")
     annotation = luigi.Parameter()
+    pbs_template = luigi.Parameter()
+    pbs_queue = luigi.Parameter()
+    pbs_walltime = luigi.Parameter()
+    pbs_ppn = luigi.Parameter()
+    pbs_email = luigi.Parameter()
     def requires(self):
         return shortread4Check()
     def run(self):
@@ -300,26 +373,52 @@ class shortread5Htseq(luigi.Task):
         assert op.isfile(ilist), "%s not exist" % ilist
         assert op.isfile(annotation), "%s not exist" % annotation
         ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-        f31 = "31.htseq.sh"
+        fo1 = "31.1.htseq.sh"
         d32 = "32.htseq"
-        fho1 = open(f31, "w")
+        fho1 = open(fo1, "w")
         for diro in [d32]:
             if not op.isdir(diro): 
                 os.makedirs(diro)
         srd = 'no'
         if stranded: srd = 'yes'
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             if paired:
                 fbam = row[15]
             else:
                 fbam = row[9]
-            print >>fho1, "htseq-count -s %s -t gene -i ID -m union -a 20 -f bam %s %s > %s/%s.txt" % (srd, fbam, annotation, d32, sid)
-        os.chdir("%s/pbs" % op.dirname(op.realpath(__file__)))
-        jname = name + "Job"
-        assert op.isfile(name), "no %s in pbs" % name
-        os.system("qsub %s -v JOB=%s,DIR=%s" % (name, jname, dirw))
+            fho1.write("samtools view %s | htseq-count -s %s -t gene -i ID -m union -a 20 - %s > %s/%s.txt\n" % (fbam, srd, annotation, d32, sid))
+        
+        cmds = []
+        cmds.append("module load parallel")
+        cmds.append("module load samtools")
+        cmds.append("module load htseq/0.5.3") # requires python2
+        cmds.append("cd %s" % dirw)
+        cmds.append("parallel -j %s < %s" % (self.pbs_ppn, fo1))
+        cmds.append("touch cps/%s" % (name + "Job"))
+        cmd = "\n".join(cmds)
+        
+        temdict = {
+                "queue": self.pbs_queue,
+                "walltime": self.pbs_walltime,
+                "ppn": self.pbs_ppn,
+                "email": self.pbs_email,
+                "cmds": cmd
+        }
+        fo = "31.pbs"
+        fho = open(fo, "w")
+        assert op.isfile(self.pbs_template), "cannot read template: %s" % self.pbs_template
+        fht = open(self.pbs_template, "r")
+        src = Template(fht.read())
+        fho.write(src.substitute(temdict))
+        
+        init()
+        print(Fore.GREEN)
+        print("A job script has been generated: %s" % fo)
+        print("Please check, make necessary changes , then type:")
+        print(Fore.RED + "qsub %s" % fo)
+        print(Style.RESET_ALL)
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))
@@ -339,9 +438,9 @@ class shortread6Check(luigi.Task):
         cols = list(ary.dtype.names)
         d32 = op.abspath("32.htseq")
         fho = open(olist, "w")
-        print >>fho, "\t".join(cols + ["HtseqFile"])
+        fho.write("\t".join(cols + ["HtseqFile"])+"\n")
         for row in ary:
-            row = list(row)
+            row = [str(x, 'utf-8') for x in list(row)]
             sid = row[0]
             fhts = "%s/%s.txt" % (d32, sid)
             assert op.isfile(fhts), "%s not there" % fhts
@@ -349,7 +448,7 @@ class shortread6Check(luigi.Task):
                 f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
             else:
                 fr, rc, ft, rrc = row[5:9]
-            print >>fho, "\t".join(row + [fhts])
+            fho.write("\t".join(row + [fhts]) + "\n")
         os.system("touch %s/cps/%s" % (dirw, name))
     def output(self):
         return luigi.LocalTarget("%s/cps/%s" % (self.dirw, self.name))

@@ -23,4 +23,4 @@ if __name__ == "__main__":
         sys.stdout = open(args.fo, "w")
 
     for seq in SeqIO.parse(sys.stdin, "fasta") :
-        print "\t".join([seq.id, str(len(seq.seq))])
+        print("\t".join([seq.id, str(len(seq.seq))]))

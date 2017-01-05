@@ -32,8 +32,8 @@ class GenomeFas(luigi.Task):
     org = luigi.Parameter()
     name = luigi.Parameter(default="GenomeFas")
     species = luigi.Parameter(default="maize")
-    dirg = luigi.Parameter(default="/home/springer/zhoux379/Data/genome")
-    dird = luigi.Parameter(default="/home/springer/zhoux379/Data/db")
+    dirg = luigi.Parameter(default="/home/springer/zhoux379/data/genome")
+    dird = luigi.Parameter(default="/home/springer/zhoux379/data/db")
     ref = luigi.IntParameter(default=0)
     def run(self):
         org, name, dirg, dird = self.org, self.name, self.dirg, self.dird

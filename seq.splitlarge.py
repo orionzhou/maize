@@ -38,13 +38,13 @@ if __name__ == "__main__":
     else:
         npieces = 10 * 24 
         piecesize = int((totalsize / npieces) / 100000) * 100000
-    print "  total size: %d, size per piece: %d" % (totalsize, piecesize)
+    print("  total size: %d, size per piece: %d" % (totalsize, piecesize))
     
     fhi = open(args.fi, "r")
     for seq in SeqIO.parse(fhi, "fasta") :
         size = len(seq.seq)
         if(float(size) / piecesize > 1.3) :
-            print "    splitting %s: %d" %(seq.id, size)
+            print("    splitting %s: %d" %(seq.id, size))
             ary = seq.id.split("-")
             [id, bbeg] = [ary[0], int(ary[1])]
 

@@ -33,7 +33,7 @@ if __name__ == "__main__":
     for line in fhi:
         line = line.strip("\n")
         if line.startswith("#"):
-            print >>fho, line
+            fho.write(line + "\n")
             continue
         ary = line.split("\t")
         if len(ary) < 9:
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         if not seqid in ["%d" % x for x in range(1, 11)]:
             continue
         if featype == "transcript":
-            if rdic.has_key('biotype') and rdic['biotype'] == 'protein_coding':
+            if 'biotype' in rdic and rdic['biotype'] == 'protein_coding':
                 featype = "mRNA"
             else:
                 continue
@@ -52,6 +52,6 @@ if __name__ == "__main__":
             continue
         desc = ";".join(["=".join(x) for x in zip(keys, vals)])
         ary = [seqid, src, featype, beg, end, score, srd, phase, desc]
-        print >>fho, "\t".join(ary) 
+        fho.write("\t".join(ary) + "\n")
     fhi.close()
     fho.close()

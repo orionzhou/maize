@@ -25,5 +25,5 @@ if __name__ == "__main__":
         labels.append(leaf.name)
     fho = open(fo, "w")
     for label in reversed(labels):
-        print >>fho, label
+        fho.write(label + "\n")
     fho.close()

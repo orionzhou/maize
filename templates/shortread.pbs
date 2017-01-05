@@ -1,0 +1,7 @@
+#PBS -l nodes=1:ppn=$ppn,walltime=$walltime
+#PBS -m ae
+#PBS -M $email
+#PBS -q $queue
+
+$cmds
+
