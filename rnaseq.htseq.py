@@ -9,8 +9,8 @@ import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
 
-def htseq(dirw, ilist, olist, diro, paired, srd, annotation,
-        samtools, parallel,
+def run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
+        htseq, samtools, parallel,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -28,13 +28,20 @@ def htseq(dirw, ilist, olist, diro, paired, srd, annotation,
             fbam = row[15]
         else:
             fbam = row[9]
-        fho1.write("%s view %s | htseq-count -s %s \
-                -t gene -i ID -m union -a 20 - %s > %s/%s.txt\n" % 
-                (samtools, fbam, srd, annotation, diro, sid))
+        fsen = "%s/%s.txt" % (diro, sid)
+        fant = "%s/%s.as.txt" % (diro, sid)
+        if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
+            fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
+                    -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
+                    (samtools, fbam, htseq, 'reverse', annotation, diro, sid))
+        if not op.isfile(fant) or os.stat(fant).st_size == 0:
+            fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
+                    -t exon -i gene_id -m union -a 20 - %s > %s/%s.as.txt\n" % 
+                    (samtools, fbam, htseq, 'yes', annotation, diro, sid))
 
     cmds = []
     cmds.append("cd %s" % dirw)
-    cmds.append("module load htseq/0.5.3") # requires python2
+    cmds.append("module load python2")
     cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo1))
     cmd = "\n".join(cmds)
     
@@ -94,14 +101,14 @@ if __name__ == "__main__":
             cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['outdir']
     paired = cfg.getboolean('paired')
     srd, annotation = cfg['stranded'], cfg['annotation']
-    samtools, parallel = cfg['samtools'], cfg['parallel']
+    htseq, samtools, parallel = cfg['htseq'], cfg['samtools'], cfg['parallel']
     pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
             cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
             cfg['pbs_ppn'], cfg['pbs_email']
     if args.check:
         htseq_check(dirw, ilist, olist, diro)
         sys.exit(0)
-    htseq(dirw, ilist, olist, diro, paired, srd, annotation,
-            samtools, parallel,
+    run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
+            htseq, samtools, parallel,
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 

@@ -6,10 +6,17 @@ import numpy as np
 from string import Template
 import sys
 import time
+import subprocess
 import argparse
 import configparser
+import traceback
 from colorama import init, Fore, Back, Style
 
+def runcmd(cmd):
+    try:
+        subprocess.check_call(cmd)
+    except OSError:
+        sys.exit(1)
 def fq_download(dirw, ilist, olist, diro, paired):
     assert op.isfile(ilist), "%s is not a file" % ilist 
     if not op.isdir(diro): os.makedirs(diro)
@@ -26,20 +33,29 @@ def fq_download(dirw, ilist, olist, diro, paired):
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
-        print(Fore.GREEN + "working on %s" % sid + Style.RESET_ALL)
-        cmd = "%s --gzip --split-files -outdir %s %s\n" % \
+        cmd = "%s --gzip --split-files -outdir %s %s" % \
                 (fastq_dump, diro, sid)
-        os.system(cmd)
         read1, read2 = "%s_1.fastq.gz" % sid, "%s_2.fastq.gz" % sid
         f1 = "%s/%s" % (diro, read1)
         f2 = "%s/%s" % (diro, read2)
         if paired:
+            if op.isfile(f1) and op.isfile(f2):
+                print(Fore.GREEN + "%s: skipped" % sid)
+            else:
+                print(Fore.RED + "%s: working..." % sid)
+                subprocess.run(cmd.split(" "))
             assert op.isfile(f1), "%s not there" % f1
             assert op.isfile(f2), "%s not there" % f2
             fho.write("\t".join(row + [f1, f2])+"\n")
         else:
+            if op.isfile(f1):
+                print(Fore.GREEN + "%s: skipped" % sid)
+            else:
+                print(Fore.RED + "%s: working..." % sid)
+                subprocess.run(cmd.split(" "))
             assert op.isfile(f1), "%s not there" % f1
             fho.write("\t".join(row + [f1])+"\n")
+    print(Style.RESET_ALL)
     fho.close()
 def fq_download_check(dirw, ilist, olist, diro, paired):
     assert op.isfile(ilist), "%s is not a file" % ilist 

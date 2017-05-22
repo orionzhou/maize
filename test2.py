@@ -22,8 +22,7 @@ def seqret(f_seq, id, beg, end, strand=1):
     return seq_str
 
 if __name__ == "__main__":
-   
-    seq_db = "/project/youngn/zhoup/Data/misc3/spada.crp/Athaliana/01_genome/01_refseq.fa"
+    seq_db = "/home/youngn/zhoux379/data/misc3/spada.crp/Athaliana/01_genome/01_refseq.fa"
     seq_id = "Chr3"
     itv = 100000
     seq_beg = itv * 1 + 1

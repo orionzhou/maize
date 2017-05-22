@@ -28,4 +28,4 @@ if __name__ == "__main__":
             desc = eles[1]
         else:
             desc = ''
-        print "\t".join([seq.id, desc])
+        print("\t".join([seq.id, desc]))

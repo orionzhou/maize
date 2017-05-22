@@ -38,6 +38,27 @@ def parse_tophat_alignsum(fi):
         val = row[1].strip(" \n").split(" ")[0]
         r[key] = val
     return r
+def parse_tophat_alignsum_pe(fi):
+    assert op.isfile(fi), "%s not exist" % fi
+    r = dict()
+    for line in open(fi, "r"):
+        row = line.split(":")
+        if len(row) < 2:
+            continue
+        key = row[0].strip(" \n")
+        val = row[1].strip(" \n").split(" ")[0]
+        if key in r:
+            key += "2"
+        r[key] = val
+    assert r["Input"] == r["Input2"], "non-equal pairs"
+    pairs = int(r["Input"])
+    pairs_a = int(r['Aligned pairs'])
+    pairs_ua = pairs_a - int(r["of these"])
+    orphan_l = int(r["Mapped"]) - pairs_a
+    orphan_r = int(r["Mapped2"]) - pairs_a
+    orphan = orphan_l + orphan_r
+    unmap = pairs - pairs_a - orphan 
+    return [pairs, pairs_a, orphan, unmap, pairs_ua] 
 
 def tophat(dirw, ilist, olist, diro, species, paired, 
         db_bowtie2, tophat2, samtools, samstat, parallel,
@@ -82,6 +103,7 @@ def tophat(dirw, ilist, olist, diro, species, paired,
         fho4.write("%s %s/%s/accepted_hits.bam\n" % (samstat, diro, sid))
 
     cmds = []
+    cmds.append("module load bowtie2/2.2.4")
     cmds.append("cd %s" % dirw)
     cmds.append("bash %s" % fo1)
     cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo2))
@@ -131,6 +153,10 @@ def tophat_check(dirw, ilist, olist, diro, paired):
         if paired:
             f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
             fsum = "%s/%s/align_summary.txt" % (diro, sid)
+            pairs, pairs_a, orphan, unmap, pairs_ua = \
+                map(lambda x: str(x), parse_tophat_alignsum_pe(fsum))
+            fho.write("\t".join(row + [fbam, pairs_a, orphan, unmap, 
+                pairs_ua, "", "", ""])+"\n")
         else:
             fr, rc, ft, rrc = row[5:9]
             fsum = "%s/%s/align_summary.txt" % (diro, sid)
@@ -146,7 +172,7 @@ def tophat_check(dirw, ilist, olist, diro, paired):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description = 'Map a list of Fastq sequences to genome using Tophapt2'
+        description = 'Map fastq to genome using tophapt2'
     )
     parser.add_argument(
             'config', nargs = '?', default = "config.ini", \

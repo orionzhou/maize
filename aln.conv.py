@@ -37,7 +37,7 @@ if __name__ == "__main__":
     elif fmt == 4:
        AlignIO.write(alns, fho, "stockholm")
     else:
-        print "unknown fmt: ", fmt
+        print("unknown fmt: %s" % fmt)
         sys.exit(1)
 
     fhi.close()

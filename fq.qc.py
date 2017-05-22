@@ -26,10 +26,10 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
     assert op.isfile(f_adp), "%s not exist" % f_adp 
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo3 = "12.1.fastqc.sh", "12.2.trim.sh", "12.3.fastqc.sh"
+    fo1, fo2, fo3 = "10.1.fastqc.sh", "10.2.trim.sh", "10.3.fastqc.sh"
     fho1, fho2, fho3 = open(fo1, "w"), open(fo2, "w"), open(fo3, "w")
     assert op.isfile(trimm), "%s is not there" % trimm
-    for diro in [diro1, diro2, diro3]:
+    for diro in [do1, do2, do3]:
         if not op.isdir(diro): 
             os.makedirs(diro)
     for row in ary:
@@ -47,30 +47,33 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
                     (fastqc, do1, f1, f2))
             fho2.write("java -Xmx2500M -jar %s PE -threads 4 \
                     %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no \
-                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36\n" % \
+                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35\n" % \
                     (trimm, f1, f2, f11, f12, f21, f22, f_adp))
             fho3.write("%s -o %s --extract -f fastq %s %s %s %s\n" % \
                     (fastqc, do3, f11, f12, f21, f22))
         else:
             f1 = row[5]
             assert op.isfile(f1), "%s not there" % f1
-            fho1.write("%s -o %s --noextract -f fastq %s\n" % \
-                    (fastqc, diro1, f1))
+            fho1.write("%s -o %s --extract -f fastq %s\n" % \
+                    (fastqc, do1, f1))
             fo = "%s/%s.fastq.gz" % (do2, sid)
-            fob = "%s/%s_1.fastq.gz" % (do2, sid)
-            if op.isfile(fob):
-                os.system("mv %s %s" % (fob, fo))
+            #fob = "%s/%s_1.fastq.gz" % (do2, sid)
+            #if op.isfile(fob):
+            #    os.system("mv %s %s" % (fob, fo))
             fho2.write("java -Xmx2500M -jar %s SE -threads 4 \
                     %s %s ILLUMINACLIP:%s:2:30:10:8:no \
-                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36\n" % \
+                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35\n" % \
                     (trimm, f1, fo, f_adp))
-            fho3.write("%s -o %s --noextract -f fastq %s\n" % \
+            fho3.write("%s -o %s --extract -f fastq %s\n" % \
                     (fastqc, do3, fo))
     cmds = []
     cmds.append("cd %s" % dirw)
     cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo1))
     cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo2))
     cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo3))
+    #cmds.append("bash %s" % (fo1))
+    #cmds.append("bash %s" % (fo2))
+    #cmds.append("bash %s" % (fo3))
     cmd = "\n".join(cmds)
     
     temdict = {
@@ -80,7 +83,7 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
             "email": pbs_email,
             "cmds": cmd
     }
-    fo = "12.pbs"
+    fo = "10.pbs"
     fho = open(fo, "w")
     assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
     fht = open(pbs_template, "r")
@@ -117,7 +120,7 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
             f1s = "%s_1.SE.fastq.gz" % (sid)
             f2p = "%s_2.PE.fastq.gz" % (sid)
             f2s = "%s_2.SE.fastq.gz" % (sid)
-            p1p, p1s, p2p, p2s = [op.abspath("%s/%s" % (do2, x)) for x in [f1p, f1s, f2p, f2s]]
+            p1p, p1s, p2p, p2s = ["%s/%s" % (do2, x) for x in [f1p, f1s, f2p, f2s]]
             assert op.isfile(p1p), "%s not exist" % p1p
             assert op.isfile(p1s), "%s not exist" % p1s
             assert op.isfile(p2p), "%s not exist" % p2p
@@ -144,7 +147,7 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
                     rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32]) + "\n")
         else:
             f1 = row[5]
-            p1 = op.abspath("%s/%s.fastq.gz" % (do2, sid))
+            p1 = "%s/%s.fastq.gz" % (do2, sid)
             assert op.isfile(p1), "%s not exist" % p1
             pre1 = op.basename(f1).rstrip(".fastq.gz")
             q1 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)

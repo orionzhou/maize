@@ -29,13 +29,13 @@ if __name__ == '__main__':
         #cmd = "clustalw2 -INFILE=%s -ALIGN -TYPE=DNA -OUTORDER=INPUT -OUTFILE=%s.aln" % (fi, fo)
         cmd = "muscle -in %s -out %s.aln -clw" % (fi, fo)
     else:
-        print "unknown seqtype: %s" % seqtype
+        print("unknown seqtype: %s" % seqtype)
         sys.exit(1)
-    print cmd
+    print(cmd)
     os.system(cmd)
     ##os.system("trimal -in %s.aln -out %s.trimmed.aln -automated1" % (fo, fo))
     os.system("aln.conv.py --fmt 2 %s.aln %s.phy" % (fo, fo))
-    #os.system("phyml -i %s.phy -d %s -o tlr --quiet" % (fo, seqtype))
-    #os.system("mv %s.phy_phyml_tree.txt %s.nwk" % (fo, fo))
-    #os.system("rm %s.phy %s.phy_phyml*" % (fo, fo))
+    os.system("phyml -i %s.phy -d %s -o tlr --quiet" % (fo, seqtype))
+    os.system("mv %s.phy_phyml_tree.txt %s.nwk" % (fo, fo))
+    os.system("rm %s.phy %s.phy_phyml*" % (fo, fo))
  
