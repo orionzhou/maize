@@ -30,6 +30,7 @@ if __name__ == "__main__":
     
     fhi = open(args.fi, "r")
     fho = open(args.fo, "w")
+    seqids1 = ["%d" % x for x in range(1, 11)]
     for line in fhi:
         line = line.strip("\n")
         if line.startswith("#"):
@@ -40,8 +41,7 @@ if __name__ == "__main__":
             continue
         seqid, src, featype, beg, end, score, srd, phase, desc = ary
         keys, vals, rdic = parse_desc(desc)
-#        if type in ["contig", "match", "match_part", "protein_match", "expressed_sequence_match"]:
-        if not seqid in ["%d" % x for x in range(1, 11)]:
+        if seqid not in seqids1 and not seqid.startswith("chr"):
             continue
         if featype == "transcript":
             if 'biotype' in rdic and rdic['biotype'] == 'protein_coding':

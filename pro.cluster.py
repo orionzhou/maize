@@ -77,14 +77,14 @@ def cdhit2tbl(fi, fo):
 def usearch2tbl(fi, fo):
     fhi = open(fi, "r")
     fho = open(fo, "w")
-    print >>fho, "grp\tid"
+    fho.write("grp\tid\n")
 
     for line in fhi:
         line = line.strip("\n")
         (tag, grp, len_size, idty, srd, ign1, ign2, cigar, id, tgt) = line.split("\t")
         grp = int(grp) + 1
         if tag == "H" or tag == "S":
-            print >>fho, "%d\t%s" % (grp, id)
+            fho.write("%d\t%s\n" % (grp, id))
     fhi.close()
     fho.close()
 
@@ -130,11 +130,11 @@ if __name__ == '__main__':
     f21 = op.join(dirw, "21.cdhit")
     f22 = op.join(dirw, "22.tbl")
     cmd = "$git/cdhit/cd-hit -c %g -T 0 -aL 0.5 -n 2 -M 0 -d 0 -i %s -o %s" % (idty, fi, f21)
-    os.system(cmd)
-    cdhit2tbl(f21 + ".clstr", f22)
+#    os.system(cmd)
+#    cdhit2tbl(f21 + ".clstr", f22)
 
     f31 = op.join(dirw, "31.uc")
     f32 = op.join(dirw, "32.tbl")
     cmd = "usearch -cluster_fast %s -sort length -id %g -uc %s" % (fi, idty, f31)
-#    os.system(cmd)
-#    usearch2tbl(f31, f32)
+    os.system(cmd)
+    usearch2tbl(f31, f32)

@@ -27,10 +27,10 @@ if __name__ == '__main__':
     G.add_edges_from(edges)
     conn = nx.connected_components(G)
     
-    print >>fho, "clu\tid"
+    fho.write("clu\tid\n")
     cluster = 1
     for names in conn:
         for name in names:
-            print >>fho, "%d\t%s" % (cluster, name)
+            fho.write("%d\t%s\n" % (cluster, str(name, 'utf-8')))
         cluster += 1
 
