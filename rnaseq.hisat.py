@@ -33,9 +33,9 @@ def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo3 = "21.1.hisat.sh", "21.2.bam.sh", "21.3.stat.sh"
+    fo1, fo2, fo2b, fo3 = "21.1.hisat.sh", "21.2.bam.sh", "21.2.bamidx.sh", "21.3.stat.sh"
     fjob_pre = "21"
-    fho1, fho2, fho3 = [open(x, "w") for x in [fo1, fo2, fo3]]
+    fho1, fho2, fho2b, fho3 = [open(x, "w") for x in [fo1, fo2, fo2b, fo3]]
     for diro in [diro1, diro2]:
         if not op.isdir(diro): 
             os.makedirs(diro)
@@ -61,10 +61,12 @@ def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
                         (hisat, db_hisat, ft, sid, sid, pre1))
         if not exist_fbam:
-            fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
-                    O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
-            fho2.write("$PTOOL/picard.jar BuildBamIndex INPUT=%s.bam\n" \
-                    % pre1)
+            #fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
+            #        O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
+            #fho2.write("$PTOOL/picard.jar BuildBamIndex INPUT=%s.bam\n" \
+            #        % pre1)
+            fho2.write("%s sort -m 2500M -O bam -o %s.bam %s.sam\n" % (samtools, pre1, pre1))
+            fho2b.write("%s index %s.bam\n" % (samtools, pre1))
         pre2 = "%s/%s" % (diro2, sid)
         #fho3.write("%s -T IndelRealigner -R %s \
         #        -I %s.bam -U ALLOW_N_CIGAR_READS \
@@ -87,10 +89,9 @@ def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
         "cd %s" % dirw,
         "bash %s" % fo1
     ], [
-        "module load picard/2.3.0",
-        "export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir,
         "cd %s" % dirw,
-        "bash %s" % fo2
+        "%s -j %s < %s" % (parallel, pbs_ppns[1], fo2),
+        "%s -j %s < %s" % (parallel, pbs_ppns[1], fo2b)
     ], [
         "module load picard/2.3.0",
         "export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir,
@@ -130,7 +131,8 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
             "Pair", "Pair_Map", "Pair_Orphan", "Pair_Unmap", \
             "Pair_Map_Hq", "Unpair", "Unpair_Map", "Unpair_Map_Hq"])+"\n")
     else:
-        fho.write("\t".join(cols + ["BAM"]) + "\n")
+        fho.write("\t".join(cols + ["BAM",
+            "Total", "Mapped", "Mapped_Hq"]) + "\n")
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
@@ -138,6 +140,7 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
         assert check_bam(bam), "%s not exist" % bam
         fs = "%s/%s.sum.txt" % (diro2, sid)
         rs1 = picard.parse(fs)['metrics']['contents']
+        if type(rs1) == dict: rs1 = [rs1]
         rs = { rs1[i]['CATEGORY']: rs1[i] for i in list(range(len(rs1))) }
         if paired:
             f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
@@ -160,7 +163,11 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
             fho.write("\t".join(row + [bam] + list(stats)) + "\n")
         else:
             fr, rc, ft, rrc = row[5:9]
-            fho.write("\t".join(row + [bam]) + "\n")
+            unpair = rs['UNPAIRED']['TOTAL_READS']
+            unpair_map = rs['UNPAIRED']['PF_READS_ALIGNED']
+            unpair_map_hq = rs['UNPAIRED']['PF_HQ_ALIGNED_READS']
+            stats = map(str, [unpair, unpair_map, unpair_map_hq])
+            fho.write("\t".join(row + [bam] + list(stats)) + "\n")
 
 
 if __name__ == "__main__":

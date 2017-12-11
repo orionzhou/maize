@@ -26,7 +26,7 @@ def check_sam(fsam):
         exist_sam = 0
     return exist_sam
 
-def run_ase(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
+def run_ase1(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
         gatk, samtools, parallel, temp_dir,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)
@@ -126,6 +126,67 @@ def run_ase(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
     print("Please check, make necessary changes, then type:")
     print(Fore.RED + "qsub -W depend=afterany:??? %s" % fjobs[1])
     print(Style.RESET_ALL)
+def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+        samtools, bcftools, parallel,
+        pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+    assert op.isfile(ilist), "%s not exist" % ilist
+    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
+    fo1 = "24.1.bcftools.sh"
+    fjob_pre = "24"
+    fho1 = open(fo1, "w")
+    #fho1 = [open(x, "w") for x in [fo1]]
+    for diro in [diro]:
+        if not op.isdir(diro): 
+            os.makedirs(diro)
+    for row in ary:
+        row = [str(x, 'utf-8') for x in list(row)]
+        sid = row[0]
+        #if sid > 'BR041':
+        #    continue
+        if paired:
+            fbam = row[15]
+        else:
+            fbam = row[9]
+        fho1.write("%s mpileup -Ou -f %s %s | \
+                %s call -C alleles -m -T %s -O v | vcf2ase.py - %s/%s.tsv\n" % 
+                (bcftools, f_fas, fbam, bcftools, target_vcf, diro, sid))
+    
+    assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
+    fht = open(pbs_template, "r")
+    src = Template(fht.read())
+    
+    pbs_walltimes = pbs_walltime.split(",")
+    pbs_ppns = pbs_ppn.split(",")
+    pbs_queues = pbs_queue.split(",")
+    cmds = [[
+        "cd %s" % dirw,
+        "%s -j %s < %s" % (parallel, pbs_ppns[0], fo1)
+    ]
+    ]
+    njob = len(cmds)
+    assert len(pbs_walltimes) == njob, "not %d jobs" % njob
+    assert len(pbs_ppns) == njob, "not %d jobs" % njob
+
+    fjobs = ["%s.%s.pbs" % (fjob_pre, chr(97+i)) for i in range(njob)]
+    for i in range(njob):
+        temdict = {
+                "queue": pbs_queues[i],
+                "walltime": pbs_walltimes[i],
+                "ppn": pbs_ppns[i],
+                "email": pbs_email,
+                "cmds": "\n".join(cmds[i])
+        }
+        fho = open(fjobs[i], "w")
+        fho.write(src.substitute(temdict))
+
+    init()
+    print(Fore.GREEN)
+    print("%s job scripts has been generated: %s" % (njob, ", ".join(fjobs)))
+    print("Please check, make necessary changes, then type:")
+    #print(Fore.RED + "qsub -W depend=afterany:??? %s" % fjobs[1])
+    print(Style.RESET_ALL)
 def ase_check(dirw, ilist, olist, diro, paired):
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
@@ -190,19 +251,18 @@ if __name__ == "__main__":
     cfg = cfg['ase']
     dirw, ilist, olist, diro = \
             cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['outdir']
-    paired = cfg.getboolean('paired')
-    temp_dir = cfg['temp_dir']
     f_fas = cfg['genome']
-    ref_gatk = cfg['ref_gatk']
-    gatk, samtools, parallel = \
-            cfg['gatk'], cfg['samtools'], cfg['parallel']
+    paired = cfg.getboolean('paired')
+    samtools, bcftools, parallel = \
+            cfg['samtools'], cfg['bcftools'], cfg['parallel']
+    target_vcf = cfg['targetvcf']
     pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
             cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
             cfg['pbs_ppn'], cfg['pbs_email']
     if args.check:
         ase_check(dirw, ilist, olist, diro, paired)
         sys.exit(0)
-    run_ase(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
-            gatk, samtools, parallel, temp_dir, 
+    run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+            samtools, bcftools, parallel, 
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 

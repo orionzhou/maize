@@ -39,9 +39,12 @@ if __name__ == '__main__':
     cmds.append("htb.filter.pl -i %s.3.htb -l 10 -e 0.01 -o %s.4.htb" % (pre, pre))
     cmds.append("cut -f2-4,6,7-9,11-13 %s.4.htb > %s.5.tsv" % (pre, pre))
     cmds.append("gtb.addpfam.pl -i %s -p %s.5.tsv -o %s.6.gtb" % (fi, pre, pre))
-    cmds.append("gtb2bed.s.pl -i %s.6.gtb -o %s.7.bed" % (pre, pre))
-    cmds.append("intersectBed -wao -a %s.7.bed -b %s > %s.8.bed" % (pre, fr, pre))
-    cmds.append("gtb.addrm.pl -i %s.6.gtb -b %s.8.bed -o %s" % (pre, pre, fo))
+    if fr:
+        cmds.append("gtb2bed.s.pl -i %s.6.gtb -o %s.7.bed" % (pre, pre))
+        cmds.append("intersectBed -wao -a %s.7.bed -b %s > %s.8.bed" % (pre, fr, pre))
+        cmds.append("gtb.addrm.pl -i %s.6.gtb -b %s.8.bed -o %s" % (pre, pre, fo))
+    else:
+        cmds.append("cp %s.6.gtb %s" % (pre, fo))
     init()
     print(Fore.RED)
     print("Please copy the following lines into your job script:")

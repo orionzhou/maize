@@ -13,7 +13,7 @@ if __name__ == "__main__":
         'fi', help = 'input file (VCF)'
     )
     parser.add_argument(
-        'fo', nargs = '?', help = 'output file (Tbl)'
+        'fo', nargs = '?', help = 'output file (tsv)'
     )
     args = parser.parse_args()
 

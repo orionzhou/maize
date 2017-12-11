@@ -11,7 +11,7 @@ from Bio.SeqRecord import SeqRecord
 
 def digitof_number(num):
     if num < 1:
-        print "no digits: %g", num
+        print("no digits: %g" % num)
         sys.exit(1)
     digit = 0 
     while num >= 1:
@@ -34,12 +34,12 @@ if __name__ == "__main__":
     parser.add_argument(
         'dirw', help = 'output directory'
     )
-    parser.add_argument(
-        '--pieces', dest = "n", default = 24, type = int, help = '# pieces to partition [24]'
-    )
     nproc = int(os.environ['nproc'])
     parser.add_argument(
-        '--cpu', dest = "cpu", default = nproc, type = int, help = 'number processors to use (default: all/%d)' % nproc
+        '--n', default = 24, type = int, help = '# pieces to partition [%d]' % nproc
+    )
+    parser.add_argument(
+        '--cpu', default = nproc, type = int, help = '# CPUs to use [%d]' % nproc
     )
     args = parser.parse_args()
     (fi, dirw) = (args.fi, args.dirw)
@@ -66,5 +66,5 @@ if __name__ == "__main__":
         fp = fmt % i
         sizes.append(os.stat(fp).st_size)
     sizes.sort()
-    print "size range: %s - %s" % (sizeof_fmt(sizes[0]), sizeof_fmt(sizes[n-1]))
+    print("size range: %s - %s" % (sizeof_fmt(sizes[0]), sizeof_fmt(sizes[n-1])))
 

@@ -27,10 +27,18 @@ if __name__ == "__main__":
         'fo', help = 'output gff'
     )
     args = parser.parse_args()
+   
+    chr_types = set(["chromosome", "contig"])
+    gene_types = set(["gene"]) 
+    rna_types = set(["mRNA", "rRNA", "tRNA", 
+            "miRNA", "lnc_RNA", "ncRNA", "snRNA", "snoRNA", 
+            "pre_miRNA", "SRP_RNA", "RNase_MRP_RNA"])
+    mrna_subtypes = set(['exon', 'CDS', 'five_prime_UTR', 'three_prime_UTR'])
+    allowed_types = gene_types | rna_types | mrna_subtypes
     
     fhi = open(args.fi, "r")
     fho = open(args.fo, "w")
-    seqids1 = ["%d" % x for x in range(1, 11)]
+    chrids = ["%d" % x for x in range(1, 11)]
     for line in fhi:
         line = line.strip("\n")
         if line.startswith("#"):
@@ -41,15 +49,19 @@ if __name__ == "__main__":
             continue
         seqid, src, featype, beg, end, score, srd, phase, desc = ary
         keys, vals, rdic = parse_desc(desc)
-        if seqid not in seqids1 and not seqid.startswith("chr"):
+        if seqid not in chrids and not seqid.startswith("B73V4"):
             continue
+        if featype in chr_types:
+            continue
+        if featype == "ncRNA_gene":
+            featype = "gene"
         if featype == "transcript":
             if 'biotype' in rdic and rdic['biotype'] == 'protein_coding':
                 featype = "mRNA"
             else:
                 continue
-        if featype not in ["gene", "mRNA", "CDS", 'five_prime_UTR', 'three_prime_UTR']:
-            continue
+        if featype not in allowed_types:
+            print("type[%s] not allowed" % featype)
         desc = ";".join(["=".join(x) for x in zip(keys, vals)])
         ary = [seqid, src, featype, beg, end, score, srd, phase, desc]
         fho.write("\t".join(ary) + "\n")

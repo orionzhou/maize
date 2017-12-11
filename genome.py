@@ -50,27 +50,28 @@ def genome_fas(org, rename):
     if op.isdir("12.rm"): os.system("rm -rf 12.rm")
     os.makedirs("12.rm")
     
-def genome_db(org):
-    dirw = op.joih("/home/springer/zhoux379/data/genome", org)
-    fg = "%s/11_genome.fas" % dirw
-    dird = "/home/springer/zhoux379/data/db"
-    if not op.isdir(dird): os.makedirs(dird)
-    dird1 = op.join(dird, "blat")
-    if not op.isdir(dird1): os.makedirs(dird1)
-    os.chdir(dird1)
-    os.system("faToTwoBit %s %s.2bit" % (fg, org))
-    os.system("blat %s.2bit tmp.fas tmp.out -makeOoc=%s.2bit.tile11.ooc" % (org, org))
+def build_blat(org):
+    dirg = op.join("/home/springer/zhoux379/data/genome", org)
+    fg = "%s/11_genome.fas" % dirg
+    dirw = op.join(dirg, "21.blat")
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+    
+    os.system("faToTwoBit %s db.2bit" % fg)
+    os.system("blat db.2bit tmp.fas tmp.out -makeOoc=db.2bit.tile11.ooc")
     if op.isfile("tmp.out"): os.remove("tmp.out")
-
-    dird2 = op.join(dird, 'bowtie2')
-    if not op.isdir(dird2): os.makedirs(dird2)
-    os.chdir(dird2)
-    fd = "%s.fas" % org
-    if op.isfile(fd): os.system("rm %s" % fd)
-    fd = "%s.fa" % org
-    os.system("ln -sf %s %s" % (fg, fd))
-    os.system("module load bowtie2")
-    os.system("bowtie2-build %s %s" % (fd, org))
+    
+def build_bowtie2(org):
+    dirg = op.join("/home/springer/zhoux379/data/genome", org)
+    fg = "%s/11_genome.fas" % dirg
+    dirw = op.join(dirg, "21.bowtie2")
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+    
+    if op.isfile("db.fas"): os.system("rm db.fas")
+    os.system("ln -sf %s db.fas" % fg)
+    # need to "module load bowtie2"
+    os.system("bowtie2-build db.fas db")
         
 def repeatmasker_parse(org):
     dirw = op.join(os.environ['genome'], org)
@@ -89,7 +90,13 @@ if __name__ == "__main__":
             'org', help = 'species name / prefix'
     )
     parser.add_argument(
-            '--rename', default = False, type = bool, help = 'rename scaffold IDs (Default: False)'
+            '--rename', action='store_true', default=False, help = 'rename scaffold IDs (Default: False)'
+    )
+    parser.add_argument(
+            '--blat', action='store_true', default=True, help='built BLAT DB (Default: True)'
+    )
+    parser.add_argument(
+            '--bowtie2', action='store_true', default=False, help='built Bowtie2 DB (Default: False)'
     )
     args = parser.parse_args()
     org = args.org
@@ -97,3 +104,5 @@ if __name__ == "__main__":
     dirg = op.join("/home/springer/zhoux379/data/genome", org)
     dird = "/home/springer/zhoux379/data/db"
     genome_fas(org, args.rename)
+    if args.blat: build_blat(org)
+    if args.bowtie2: build_bowtie2(org)

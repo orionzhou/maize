@@ -24,20 +24,24 @@ def run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
-        if paired:
-            fbam = row[15]
-        else:
-            fbam = row[9]
         fsen = "%s/%s.txt" % (diro, sid)
         fant = "%s/%s.as.txt" % (diro, sid)
-        if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
-            fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
-                    -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
-                    (samtools, fbam, htseq, 'reverse', annotation, diro, sid))
-        if not op.isfile(fant) or os.stat(fant).st_size == 0:
-            fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
-                    -t exon -i gene_id -m union -a 20 - %s > %s/%s.as.txt\n" % 
-                    (samtools, fbam, htseq, 'yes', annotation, diro, sid))
+        if paired:
+            fbam = row[15]
+            if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
+                fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
+                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
+                        (samtools, fbam, htseq, 'reverse', annotation, diro, sid))
+            if not op.isfile(fant) or os.stat(fant).st_size == 0:
+                fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
+                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.as.txt\n" % 
+                        (samtools, fbam, htseq, 'yes', annotation, diro, sid))
+        else:
+            fbam = row[9]
+            if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
+                fho1.write("%s view -F 256 %s | %s -r pos -s no \
+                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
+                        (samtools, fbam, htseq, annotation, diro, sid))
 
     cmds = []
     cmds.append("cd %s" % dirw)
