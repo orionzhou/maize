@@ -26,6 +26,74 @@ def check_sam(fsam):
         exist_sam = 0
     return exist_sam
 
+def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+        samtools, bcftools, parallel,
+        pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
+    gene_bed = '/home/springer/zhoux379/data/genome/Zmays_v4/v37/gene.bed'
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+    assert op.isfile(ilist), "%s not exist" % ilist
+    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
+    dirj = "24"
+    fjob_pre = "24"
+    #fho1 = [open(x, "w") for x in [fo1]]
+    for do in [diro, dirj]:
+        if not op.isdir(do): 
+            os.makedirs(do)
+    fdic = dict()
+    i = 1
+    for row in ary:
+        row = [str(x, 'utf-8') for x in list(row)]
+        sid = row[0]
+        gt = row[3]
+        if paired:
+            fbam = row[15]
+        else:
+            fbam = row[9]
+        pre = "%s/%s" % (diro, sid)
+        fj = "%s/%03d.sh" % (dirj, i)
+        fhj = open(fj, "w")
+        cmds = [
+            "bam2bed.py %s %s.1.bed" % (fbam, pre),
+            "sort -k1,1 -k2,2n %s.1.bed > %s.2.sorted.bed" % (pre, pre),
+            "intersectBed -wa -wb -a %s.2.sorted.bed -b %s > %s.3.bed" % (pre, target_vcf, pre),
+            "sort -k4,4 -k1,1 -k2,2n %s.3.bed > %s.4.sorted.bed" % (pre, pre),
+            "bed.ase.py %s.4.sorted.bed %s.tsv %s.5.bed" % (pre, pre, pre),
+            "sort -k1,1 -k2,2n %s.5.bed > %s.6.sorted.bed" % (pre, pre),
+            "intersectBed -wa -wb -a %s -b %s.6.sorted.bed > %s.bed" % (gene_bed, pre, pre),
+        ]
+        fhj.write("\n".join(cmds) + "\n")
+        fhj.close()
+        i += 1
+
+    assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
+    fht = open(pbs_template, "r")
+    src = Template(fht.read())
+    
+    cmds = [
+        "printf -v pre '%03d' \"$PBS_ARRAYID\"",
+        "cd %s" % dirw,
+        "bash %s/$pre.sh" % (dirj)
+    ]
+    fjob = "%s.pbs" % (fjob_pre)
+    temdict = {
+            "queue": pbs_queue,
+            "walltime": pbs_walltime,
+            "ppn": pbs_ppn,
+            "email": pbs_email,
+            "cmds": "\n".join(cmds)
+    }
+    fho = open(fjob, "w")
+    fho.write(src.substitute(temdict))
+    fho.close()
+
+    init()
+    print(Fore.GREEN)
+    print("One job script has been generated: %s" % fjob)
+    print("Please check, make necessary changes, then type:")
+    print(Fore.RED + "qsub -t 1-%d %s" % (i-1, fjob))
+    print(Style.RESET_ALL)
+
 def run_ase1(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
         gatk, samtools, parallel, temp_dir,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
@@ -126,7 +194,7 @@ def run_ase1(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
     print("Please check, make necessary changes, then type:")
     print(Fore.RED + "qsub -W depend=afterany:??? %s" % fjobs[1])
     print(Style.RESET_ALL)
-def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+def run_ase2(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
         samtools, bcftools, parallel,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)

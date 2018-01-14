@@ -60,7 +60,6 @@ def build_blat(org):
     os.system("faToTwoBit %s db.2bit" % fg)
     os.system("blat db.2bit tmp.fas tmp.out -makeOoc=db.2bit.tile11.ooc")
     if op.isfile("tmp.out"): os.remove("tmp.out")
-    
 def build_bowtie2(org):
     dirg = op.join("/home/springer/zhoux379/data/genome", org)
     fg = "%s/11_genome.fas" % dirg
@@ -72,7 +71,13 @@ def build_bowtie2(org):
     os.system("ln -sf %s db.fas" % fg)
     # need to "module load bowtie2"
     os.system("bowtie2-build db.fas db")
-        
+def build_bwa(org):
+    dirg = op.join("/home/springer/zhoux379/data/genome", org)
+    fg = "%s/11_genome.fas" % dirg
+    dirw = op.join(dirg, "21.bwa")
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+    os.system("bwa index -p %s/db %s" % (dirw, fg))
 def repeatmasker_parse(org):
     dirw = op.join(os.environ['genome'], org)
     os.chdir(dirw)
@@ -84,25 +89,32 @@ def repeatmasker_parse(org):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-            description = 'process genome files'
+            description = 'process genome files and build genome DB'
     )
     parser.add_argument(
             'org', help = 'species name / prefix'
     )
     parser.add_argument(
-            '--rename', action='store_true', default=False, help = 'rename scaffold IDs (Default: False)'
+            '--fasta', action='store_true', help = 'process Fasta [No]'
     )
     parser.add_argument(
-            '--blat', action='store_true', default=True, help='built BLAT DB (Default: True)'
+            '--rename', action='store_true', help = 'rename scaffold IDs [No]'
     )
     parser.add_argument(
-            '--bowtie2', action='store_true', default=False, help='built Bowtie2 DB (Default: False)'
+            '--blat', action='store_true', help='built BLAT DB [No]'
+    )
+    parser.add_argument(
+            '--bowtie2', action='store_true', help='built Bowtie2 DB [No]'
+    )
+    parser.add_argument(
+            '--bwa', action='store_true', help='built BWA DB [No]'
     )
     args = parser.parse_args()
     org = args.org
 
     dirg = op.join("/home/springer/zhoux379/data/genome", org)
     dird = "/home/springer/zhoux379/data/db"
-    genome_fas(org, args.rename)
+    if args.fasta: genome_fas(org, args.rename)
     if args.blat: build_blat(org)
     if args.bowtie2: build_bowtie2(org)
+    if args.bwa: build_bwa(org)
