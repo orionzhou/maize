@@ -4,7 +4,6 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
 import configparser
 from fadapa import Fadapa
 from string import Template
@@ -18,7 +17,7 @@ def parse_fastqc(fqc):
         r[ary[0]] = ary[1]
     return r
 
-def fq_trim(dirw, ilist, olist, do1, do2, do3, 
+def fq_trim(dirw, ilist, olist, jobpre, do1, do2, do3, 
         paired, f_adp, fastqc, trimm, parallel,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)
@@ -26,8 +25,8 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
     assert op.isfile(f_adp), "%s not exist" % f_adp 
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo3 = "10.1.fastqc.sh", "10.2.trim.sh", "10.3.fastqc.sh"
-    fho1, fho2, fho3 = open(fo1, "w"), open(fo2, "w"), open(fo3, "w")
+    fo1, fo2, fo3 = ["%s.%d.fastqc.sh" % (jobpre, i) for i in range(1,4)]
+    fho1, fho2, fho3 = [open(fo, "w") for fo in [fo1, fo2, fo3]]
     assert op.isfile(trimm), "%s is not there" % trimm
     for diro in [do1, do2, do3]:
         if not op.isdir(diro): 
@@ -35,6 +34,8 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
+        if sid not in ['BR003','BR004','BR006','BR007','BR032','BR029']:
+            continue
         if paired:
             f1, f2 = row[5:7]
             assert op.isfile(f1), "%s not there" % f1
@@ -83,7 +84,7 @@ def fq_trim(dirw, ilist, olist, do1, do2, do3,
             "email": pbs_email,
             "cmds": cmd
     }
-    fo = "10.pbs"
+    fo = "%s.pbs" % jobpre
     fho = open(fo, "w")
     assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
     fht = open(pbs_template, "r")
@@ -157,8 +158,10 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
             fho.write("\t".join(row + [rc1, p1, rc2]) + "\n")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'Trimming and QC on a list of Fastq files'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'Trimming and QC on a list of Fastq files'
     )
     parser.add_argument(
             'config', nargs = '?', default = "config.ini", \
@@ -174,8 +177,8 @@ if __name__ == "__main__":
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
     cfg = cfg['fastq_trim']
-    dirw, ilist, olist, do1, do2, do3 = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], \
+    dirw, ilist, olist, jobpre, do1, do2, do3 = \
+            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
             cfg['outdir1'], cfg['outdir2'], cfg['outdir3']
     paired = cfg.getboolean('paired')
     f_adp, fastqc, trimm, parallel = \
@@ -186,7 +189,7 @@ if __name__ == "__main__":
     if args.check:
         fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired)
         sys.exit(0)
-    fq_trim(dirw, ilist, olist, do1, do2, do3,
+    fq_trim(dirw, ilist, olist, jobpre, do1, do2, do3,
             paired, f_adp, fastqc, trimm, parallel,
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 

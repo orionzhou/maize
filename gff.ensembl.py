@@ -49,7 +49,9 @@ if __name__ == "__main__":
             continue
         seqid, src, featype, beg, end, score, srd, phase, desc = ary
         keys, vals, rdic = parse_desc(desc)
-        if seqid not in chrids and not seqid.startswith("B73V4"):
+        if seqid not in chrids and not seqid.startswith("B73V4") \
+                and not seqid.startswith("chr") \
+                and not seqid.startswith("scaffold"):
             continue
         if featype in chr_types:
             continue

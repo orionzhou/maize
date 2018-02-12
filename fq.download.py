@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 import numpy as np
@@ -7,7 +8,6 @@ from string import Template
 import sys
 import time
 import subprocess
-import argparse
 import configparser
 import traceback
 from colorama import init, Fore, Back, Style
@@ -85,16 +85,18 @@ def fq_download_check(dirw, ilist, olist, diro, paired):
     fho.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Download and extract Fastq sequences from NCBI-SRA'
     )
     parser.add_argument(
-            'config', nargs = '?', default = "config.ini", \
-                    help = 'config file (default: config.ini)'
+            'config', nargs = '?', default = "config.ini", 
+             help = 'config file (default: config.ini)'
     )
     parser.add_argument(
-            '--check', action = "store_true", \
-                    help = 'run the script in check mode (default: no)'
+            '--check', action = "store_true",
+             help = 'run the script in check mode (default: no)'
     )
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config

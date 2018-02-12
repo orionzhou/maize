@@ -4,7 +4,6 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
 import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
@@ -182,16 +181,18 @@ def vntcall_check(dirw, ilist, olist, do1, do2):
         fho.write("\t".join(row + [fhts]) + "\n")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Variant calling'
     )
     parser.add_argument(
-            'config', nargs = '?', default = "config.ini", \
-                    help = 'config file (default: config.ini)'
+            'config', nargs = '?', default = "config.ini",
+            help = 'config file'
     )
     parser.add_argument(
-            '--check', action = "store_true", \
-                    help = 'run the script in check mode (default: no)'
+            '--check', action = "store_true",
+            help = 'run the script in check mode'
     )
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config

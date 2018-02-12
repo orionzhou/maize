@@ -16,6 +16,9 @@ if __name__ == "__main__":
     parser.add_argument(
             'fo', help = 'output file (tsv)'
     )
+    parser.add_argument(
+        '--paired', action = "store_true", help = 'paired end input [No]'
+    )
     args = parser.parse_args()
     fi, fo = args.fi, args.fo
     sMatch, sMisMatch, sGapOpen, sGapExtend = 2, -3, -5, -2
@@ -33,24 +36,35 @@ if __name__ == "__main__":
         tBeg += 1
         qBeg += 1
         if x.is_reverse: qSrd = "-"
-        if x.is_read2:
-            qId += ".1"
-        else:
-            qId += ".2"
-        alnLen, match, misMatch, baseN = 0,0,0,0
+        if args.paired:
+            if x.is_read2:
+                qId += ".2"
+            else:
+                qId += ".1"
+        alnLen, match, misMatch, baseN, qLen = 0,0,0,0,0
         qNumIns, tNumIns, qBaseIns, tBaseIns = 0,0,0,0
         for op, nt in x.cigartuples:
-            if op == 0 or op == 7 or op == 8:
+            if op == 0 or op == 7 or op == 8: # M=X
                 alnLen += nt
-            elif op == 1:
+                qLen += nt
+            elif op == 1: # I
                 qNumIns += 1
                 qBaseIns += nt
-            elif op == 2 or op == 3:
+                qLen += nt
+            elif op == 4: # S
+                qLen += nt
+            elif op == 2 or op == 3: # DN
                 tNumIns += 1
                 tBaseIns += nt
+            elif op == 5:
+                print("hard clipping: %s -> %s:%d" % (qId, tId, tBeg))
+                exit(1)
         if x.has_tag("NM"):
             misMatch = x.get_tag("NM")
         match = alnLen - misMatch
+        if qSize == 0:
+            qSize = qLen
+        #assert qSize == qEnd, "error qSize: %d > %d" % (qSize, qEnd)
         
         score_match = match * sMatch
         score_misMatch = misMatch * sMisMatch

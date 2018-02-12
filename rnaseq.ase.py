@@ -3,8 +3,6 @@
 import os
 import os.path as op
 import sys
-import numpy as np
-import argparse
 import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
@@ -26,22 +24,20 @@ def check_sam(fsam):
         exist_sam = 0
     return exist_sam
 
-def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+def run_ase(dirw, ilist, olist, jobpre, diro, 
+        paired, f_fas, target_vcf, gene_bed,
         samtools, bcftools, parallel,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
-    gene_bed = '/home/springer/zhoux379/data/genome/Zmays_v4/v37/gene.bed'
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    dirj = "24"
-    fjob_pre = "24"
-    #fho1 = [open(x, "w") for x in [fo1]]
-    for do in [diro, dirj]:
+    fo1 = "%s.1.sh" % jobpre
+    fho1 = open(fo1, "w")
+    for do in [diro]:
         if not op.isdir(do): 
             os.makedirs(do)
     fdic = dict()
-    i = 1
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
@@ -51,8 +47,6 @@ def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
         else:
             fbam = row[9]
         pre = "%s/%s" % (diro, sid)
-        fj = "%s/%03d.sh" % (dirj, i)
-        fhj = open(fj, "w")
         cmds = [
             "bam2bed.py %s %s.1.bed" % (fbam, pre),
             "sort -k1,1 -k2,2n %s.1.bed > %s.2.sorted.bed" % (pre, pre),
@@ -62,9 +56,9 @@ def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
             "sort -k1,1 -k2,2n %s.5.bed > %s.6.sorted.bed" % (pre, pre),
             "intersectBed -wa -wb -a %s -b %s.6.sorted.bed > %s.bed" % (gene_bed, pre, pre),
         ]
-        fhj.write("\n".join(cmds) + "\n")
-        fhj.close()
-        i += 1
+        if not op.isfile("%s.bed" % pre) or not op.isfile("%s.tsv" % pre):
+            fho1.write("\n".join(cmds) + "\n")
+    fho1.close()
 
     assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
     fht = open(pbs_template, "r")
@@ -73,9 +67,9 @@ def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
     cmds = [
         "printf -v pre '%03d' \"$PBS_ARRAYID\"",
         "cd %s" % dirw,
-        "bash %s/$pre.sh" % (dirj)
+        "bash %s" % fo1
     ]
-    fjob = "%s.pbs" % (fjob_pre)
+    fjob = "%s.pbs" % jobpre
     temdict = {
             "queue": pbs_queue,
             "walltime": pbs_walltime,
@@ -91,7 +85,7 @@ def run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
     print(Fore.GREEN)
     print("One job script has been generated: %s" % fjob)
     print("Please check, make necessary changes, then type:")
-    print(Fore.RED + "qsub -t 1-%d %s" % (i-1, fjob))
+    print(Fore.RED + "qsub %s" % fjob)
     print(Style.RESET_ALL)
 
 def run_ase1(dirw, ilist, olist, diro, paired, f_fas, ref_gatk,
@@ -300,16 +294,18 @@ def ase_check(dirw, ilist, olist, diro, paired):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'Allele-specific Expression calculation'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'Allele-specific Expression calculation'
     )
     parser.add_argument(
-            'config', nargs = '?', default = "config.ini", \
-                    help = 'config file (default: config.ini)'
+            'config', nargs = '?', default = "config.ini", 
+            help = 'config file'
     )
     parser.add_argument(
             '--check', action = "store_true", \
-                    help = 'run the script in check mode (default: no)'
+            help = 'run the script in check mode'
     )
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config
@@ -317,20 +313,22 @@ if __name__ == "__main__":
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
     cfg = cfg['ase']
-    dirw, ilist, olist, diro = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['outdir']
+    dirw, ilist, olist, jobpre, diro = \
+            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
+            cfg['outdir']
     f_fas = cfg['genome']
     paired = cfg.getboolean('paired')
     samtools, bcftools, parallel = \
             cfg['samtools'], cfg['bcftools'], cfg['parallel']
-    target_vcf = cfg['targetvcf']
+    target_vcf, gene_bed = cfg['targetvcf'], cfg['gene_bed']
     pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
             cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
             cfg['pbs_ppn'], cfg['pbs_email']
     if args.check:
         ase_check(dirw, ilist, olist, diro, paired)
         sys.exit(0)
-    run_ase(dirw, ilist, olist, diro, paired, f_fas, target_vcf,
+    run_ase(dirw, ilist, olist, jobpre, diro, 
+            paired, f_fas, target_vcf, gene_bed,
             samtools, bcftools, parallel, 
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 

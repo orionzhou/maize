@@ -4,7 +4,6 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
 import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
@@ -26,15 +25,15 @@ def check_sam(fsam):
         exist_sam = 0
     return exist_sam
 
-def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
+def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
         db_hisat, hisat, samtools, gatk, parallel, temp_dir,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo2b, fo3 = "21.1.hisat.sh", "21.2.bam.sh", "21.2.bamidx.sh", "21.3.stat.sh"
-    fjob_pre = "21"
+    fo1, fo2, fo2b, fo3 = ["%s.%s.sh" % (jobpre, i) for i in \
+            ['1.hisat','2.bam','2.bamidx','3.stat']]
     fho1, fho2, fho2b, fho3 = [open(x, "w") for x in [fo1, fo2, fo2b, fo3]]
     for diro in [diro1, diro2]:
         if not op.isdir(diro): 
@@ -46,21 +45,21 @@ def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
         pre1= "%s/%s" % (diro1, sid)
-        exist_fsam = check_sam("%s.sam" % pre1)
-        exist_fbam = check_bam("%s.bam" % pre1)
+        fsam = "%s.sam" % pre1
+        fbam = "%s.bam" % pre1
         if paired:
             f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
-            if not exist_fsam:
+            if not op.isfile(fsam):
                 fho1.write("%s -p 24 -x %s -q -1 %s -2 %s -U %s,%s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
                         (hisat, db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
         else:
             fr, rc, ft, rrc = row[5:9]
-            if not exist_fsam:
+            if not op.isfile(fsam):
                 fho1.write("%s -p 24 -x %s -q -U %s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
                         (hisat, db_hisat, ft, sid, sid, pre1))
-        if not exist_fbam:
+        if not op.isfile(fbam):
             #fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
             #        O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
             #fho2.write("$PTOOL/picard.jar BuildBamIndex INPUT=%s.bam\n" \
@@ -102,7 +101,7 @@ def run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
     assert len(pbs_walltimes) == njob, "not %d jobs" % njob
     assert len(pbs_ppns) == njob, "not %d jobs" % njob
 
-    fjobs = ["%s.%s.pbs" % (fjob_pre, chr(97+i)) for i in range(njob)]
+    fjobs = ["%s.%s.pbs" % (jobpre, chr(97+i)) for i in range(njob)]
     for i in range(njob):
         temdict = {
                 "queue": pbs_queues[i],
@@ -171,16 +170,18 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'Map fastq seqs to genome using hisat2'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'Map fastq seqs to genome using hisat2'
     )
     parser.add_argument(
             'config', nargs = '?', default = "config.ini", \
-                    help = 'config file (default: config.ini)'
+            help = 'config file'
     )
     parser.add_argument(
             '--check', action = "store_true", \
-                    help = 'run the script in check mode (default: no)'
+            help = 'run the script in check mode'
     )
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config
@@ -188,9 +189,9 @@ if __name__ == "__main__":
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
     cfg = cfg['hisat']
-    dirw, ilist, olist, diro1, diro2 = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['outdir1'], \
-            cfg['outdir2']
+    dirw, ilist, olist, jobpre, diro1, diro2 = \
+            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
+            cfg['outdir1'], cfg['outdir2']
     paired = cfg.getboolean('paired')
     temp_dir = cfg['temp_dir']
     ref_gatk = cfg['ref_gatk']
@@ -203,7 +204,7 @@ if __name__ == "__main__":
     if args.check:
         hisat_check(dirw, ilist, olist, diro1, diro2, paired)
         sys.exit(0)
-    run_hisat(dirw, ilist, olist, diro1, diro2, paired, ref_gatk,
+    run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
             db_hisat, hisat, samtools, gatk, parallel, temp_dir, 
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 

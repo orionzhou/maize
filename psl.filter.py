@@ -28,7 +28,6 @@ if __name__ == '__main__':
         '--best', action = 'store_true', help='only keep best hit(s) [N]'
     )
     args = parser.parse_args()
-    args = parser.parse_args()
     
     if args.fi and args.fi != '-' and args.fi != 'stdin':
         sys.stdin = open(args.fi, "r")
@@ -47,6 +46,8 @@ if __name__ == '__main__':
         alnLen, match, misMatch, baseN, \
         qNumIns, tNumIns, qBaseIns, tBaseIns, \
         ident, score, qLoc, tLoc = line.split("\t")
+        #print(line)
+        #print(qSize)
         if float(ident) < args.ident: continue
         if int(alnLen)/int(qSize) < args.cov: continue
         if int(match) < args.match: continue

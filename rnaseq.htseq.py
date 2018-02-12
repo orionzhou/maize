@@ -4,19 +4,18 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
 import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
 
-def run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
+def run_htseq(dirw, ilist, olist, jobpre, diro, paired, srd, annotation,
         htseq, samtools, parallel,
         pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1 = "31.1.htseq.sh"
+    fo1 = "%s.1.htseq.sh" % jobpre
     fho1 = open(fo1, "w")
     for diro in [diro]:
         if not op.isdir(diro): 
@@ -56,7 +55,7 @@ def run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
             "email": pbs_email,
             "cmds": cmd
     }
-    fo = "31.pbs"
+    fo = "%s.pbs" % jobpre
     fho = open(fo, "w")
     assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
     fht = open(pbs_template, "r")
@@ -84,16 +83,18 @@ def htseq_check(dirw, ilist, olist, diro):
         fho.write("\t".join(row + [fhts]) + "\n")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'Quantify gene expression using htseq'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'Quantify gene expression using htseq'
     )
     parser.add_argument(
             'config', nargs = '?', default = "config.ini", 
-            help = 'config file (default: config.ini)'
+            help = 'config file'
     )
     parser.add_argument(
             '--check', action = "store_true", 
-            help = 'run the script in check mode (default: no)'
+            help = 'run the script in check mode'
     )
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config
@@ -101,8 +102,9 @@ if __name__ == "__main__":
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
     cfg = cfg['htseq']
-    dirw, ilist, olist, diro = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['outdir']
+    dirw, ilist, olist, jobpre, diro = \
+            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
+            cfg['outdir']
     paired = cfg.getboolean('paired')
     srd, annotation = cfg['stranded'], cfg['annotation']
     htseq, samtools, parallel = cfg['htseq'], cfg['samtools'], cfg['parallel']
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     if args.check:
         htseq_check(dirw, ilist, olist, diro)
         sys.exit(0)
-    run_htseq(dirw, ilist, olist, diro, paired, srd, annotation,
+    run_htseq(dirw, ilist, olist, jobpre, diro, paired, srd, annotation,
             htseq, samtools, parallel,
             pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
 
