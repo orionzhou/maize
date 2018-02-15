@@ -6,7 +6,7 @@ common tasks related to maize assembly, annotation, and comparative genomics.
 | | |
 | --- | --- |
 | Authors | Peng Zhou ([orionzhou](http://github.com/orionzhou)) |
-| Email   | <tanghaibao@gmail.com> |
+| Email   | <zhoupenggeni@gmail.com> |
 | License | [BSD](http://creativecommons.org/licenses/BSD/) |
 
 ## Contents
