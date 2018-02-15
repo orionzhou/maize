@@ -19,6 +19,7 @@ def summary(args):
     print("seqid\tsize\tdesc")
     for seq in SeqIO.parse(sys.stdin, "fasta") :
         print("\t".join([seq.id, str(len(seq.seq)), seq.description]))
+
 def fas2aln(args):
     from Bio import AlignIO
     fhi = open(args.fi, "r")
@@ -27,6 +28,7 @@ def fas2aln(args):
     AlignIO.write(alns, fho, "clustal")
     fhi.close()
     fho.close()
+
 def rmdot(args):
     from string import maketrans
     tt = maketrans(".", "-")
@@ -39,6 +41,7 @@ def rmdot(args):
             fho.write(line.translate(tt))
     fhi.close()
     fho.close()
+
 def cleanid(args):
     fhi = open(args.fi, "r")
     fho = open(args.fo, "w")
@@ -49,6 +52,7 @@ def cleanid(args):
             fho.write(line)
     fhi.close()
     fho.close()
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(__doc__,

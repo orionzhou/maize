@@ -20,11 +20,9 @@ Following modules are available as generic Bioinformatics handling methods.
   - Wrapper for BLAST+, LASTZ, LAST, BWA, BOWTIE2, CLC, CDHIT, CAP3, etc.
 
 - `formats`
-
-    Currently supports `.ace` format (phrap, cap3, etc.), `.agp`
-    (goldenpath), `.bed` format, `.blast` output,
-    `.coords` format (`nucmer` output), `.fasta` format, `.fastq`
-    format, `.gff` format, `obo` format (ontology),
+    Currently supports `.agp` (goldenpath), `.bed` format, `.blast` output,
+    `.coords` format (`nucmer` output), `.fasta` format, `.fastq` format,
+    `.gff` format, `obo` format (ontology),
     `.psl` format (UCSC blat, GMAP, etc.), `.sam` format (read mapping), etc.
 
 - `graphics`
@@ -41,16 +39,11 @@ Following modules are available as generic Bioinformatics handling methods.
 
 Then there are modules that contain domain-specific methods.
 
-- `assembly`
-  - K-mer histogram analysis.
-
 - `annotation`
   - Calculate gene, exon and intron statistics.
 
 - `compara`
-  - C-score based BLAST filter.
   - Synteny scan (de-novo) and lift over (find nearby anchors).
-  - Ancestral genome reconstruction using Sankoff's and PAR method.
   - Ortholog and tandem gene duplicates finder.
 
 ## Applications
@@ -66,6 +59,7 @@ since they are only used by a few modules.
 
 - [Biopython](http://www.biopython.org)
 - [numpy](http://numpy.scipy.org)
+- [pysam](http://pysam.readthedocs.io/en/latest)
 
 There are other Python modules here and there in various scripts. The
 best way is to install them via `pip install` when you see `ImportError`.
@@ -100,14 +94,16 @@ In addition, a few module might ask for locations of external programs,
 if the extended cannot be found in your `PATH`. The external programs
 that are often used are:
 
-- [BEDTOOLS](http://code.google.com/p/bedtools/)
+- [bedtools](https://github.com/arq5x/bedtools2)
+- [samtools](https://github.com/samtools/samtools)
+- [bcftools](https://github.com/samtools/bcftools)
 - [Kent tools](http://hgdownload.cse.ucsc.edu/admin/jksrc.zip)
 
 Most of the scripts in this package contains multiple actions. To use
 the `fasta` example:
 
 ```bash
-usage: fasta.py [-h] {summary,fas2aln,rmdot,cleanid} ...
+usage: python -m maize.fasta [-h] {summary,fas2aln,rmdot,cleanid} ...
 
 fasta utilities
 

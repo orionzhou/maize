@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-basic support for running library as script
-"""
-
 import errno
 import os
 import time
@@ -16,9 +12,7 @@ import logging
 import fnmatch
 import argparse
 
-from httplib import HTTPSConnection
-from urllib import urlencode
-from socket import gethostname
+from urllib.parse import urlencode
 from subprocess import PIPE, call
 
 def get_abs_path(link_name):
@@ -201,7 +195,7 @@ def iglob(pathname, patterns):
 def symlink(target, link_name):
     try:
         os.symlink(target, link_name)
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.EEXIST:
             os.remove(link_name)
             os.symlink(target, link_name)
@@ -293,9 +287,9 @@ def ls_ftp(dir):
     files = []
     try:
         files = ftp.nlst()
-    except error_perm, resp:
+    except error_perm as resp:
         if str(resp) == "550 No files found":
-            print "no files in this directory"
+            print("no files in this directory")
         else:
             raise
     return files
@@ -361,7 +355,7 @@ def debug():
     """
     Turn on the debugging
     """
-    from jcvi.apps.console import magenta, yellow
+    from maize.apps.console import magenta, yellow
 
     format = yellow("%(asctime)s [%(module)s]")
     format += magenta(" %(message)s")
@@ -372,50 +366,21 @@ def debug():
 debug()
 
 
-def mdownload(args):
-    """
-    %prog mdownload links.txt
-
-    Multiple download a list of files. Use formats.html.links() to extract the
-    links file.
-    """
-    from jcvi.apps.grid import Jobs
-
-    p = OptionParser(mdownload.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    linksfile, = args
-    links = [(x.strip(),) for x in open(linksfile)]
-    j = Jobs(download, links)
-    j.run()
-
-
 def expand(args):
     """
     %prog expand */*
 
-    Move files in subfolders into the current folder. Use --symlink to create a
-    link instead.
+    Move files in subfolders into the current folder. Use --symlink to 
+    create a link instead.
     """
-    p = OptionParser(expand.__doc__)
-    p.add_option("--symlink", default=False, action="store_true",
-                 help="Create symbolic link [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) < 1:
-        sys.exit(not p.print_help())
-
     seen = set()
-    for a in args:
+    for a in args.dirs:
         oa = a.replace("/", "_")
         if oa in seen:
             logging.debug("Name collision `{0}`, ignored.".format(oa))
             continue
 
-        cmd = "cp -s" if opts.symlink else "mv"
+        cmd = "cp -s" if args.symlink else "mv"
         cmd += " {0} {1}".format(a, oa)
         sh(cmd)
         seen.add(oa)
@@ -441,18 +406,12 @@ def timestamp(args):
 
     This file can be used later to recover previous timestamps through touch().
     """
-    p = OptionParser(timestamp.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    path, = args
+    path = args.dir
     for root, dirs, files in os.walk(path):
         for f in files:
             filename = op.join(root, f)
             atime, mtime = get_times(filename)
-            print filename, atime, mtime
+            print(filename, atime, mtime)
 
 
 def touch(args):
@@ -464,13 +423,7 @@ def touch(args):
     """
     from time import ctime
 
-    p = OptionParser(touch.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    info, = args
+    info = args.dir
     fp = open(info)
     for row in fp:
         path, atime, mtime = row.split()
@@ -491,9 +444,8 @@ def touch(args):
 
 
 def snapshot(fp, p, fsize, counts=None):
-
     pos = int(p * fsize)
-    print "==>> File `{0}`: {1} ({2}%)".format(fp.name, pos, int(p * 100))
+    print("==>> File `{0}`: {1} ({2}%)".format(fp.name, pos, int(p * 100)))
     fp.seek(pos)
     fp.next()
     for i, row in enumerate(fp):
@@ -520,13 +472,7 @@ def less(args):
     """
     from jcvi.formats.base import must_open
 
-    p = OptionParser(less.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    filename, pos = args
+    filename, pos = args.fi, args.pos
     fsize = getfilesize(filename)
 
     if pos == "all":
@@ -606,7 +552,7 @@ def pid_exists(pid):
     import errno
     try:
         os.kill(pid, 0)
-    except OSError, e:
+    except OSError as e:
         return e.errno == errno.EPERM
     else:
         return True
@@ -647,7 +593,7 @@ def _waitpid(pid, interval=None, timeout=None):
     while 1:
         try:
             retpid, status = waitcall()
-        except OSError, err:
+        except OSError as err:
             if err.errno == errno.EINTR:
                 delay = check_timeout(delay)
                 continue
@@ -794,18 +740,26 @@ def sample_N(a, N):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(__doc__,
+    parser = argparse.ArgumentParser(prog = 'python -m maize.apps.base',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'basic support for running library as script'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp_mdown = sp.add_parser("mdownload",
-            help = "multiple download a list of files"
-    )
-    sp_sum.add_argument('fi', help = 'link file')
-    sp_sum.set_defaults(func = mdownload)
+    sp1 = sp.add_parser("less", help = "enhanced version of the unix `less` command")
+    sp1.add_argument('fi', help = 'input file')
+    sp1.add_argument('pos', help = 'file position')
+    sp1.set_defaults(func = less)
 
+    sp2 = sp.add_parser("timestamp", help = "record timestamps for all files in the current folder")
+    sp2.add_argument('dir', help = 'directory path')
+    sp2.set_defaults(func = timestamp)
+   
+    sp3 = sp.add_parser("expand", help = "move files in subfolders into the current folder")
+    sp3.add_argument('subdir', nargs = "+", help = 'sub-directory path')
+    sp3.add_argument("--symlink", action="store_true", help="create symlink")
+    sp3.set_defaults(func = expand)
+    
     args = parser.parse_args()
     if args.command:
         args.func(args)
