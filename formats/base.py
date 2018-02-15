@@ -531,14 +531,13 @@ def flatten(args):
     """
     from itertools import izip_longest
 
-    tabfile = args.fi
-    zipsep = args.zipsep
+    tabfile, sep, zipsep = args.file, args.sep, args.zipsep
 
     fp = must_open(tabfile)
     for row in fp:
         if zipsep:
             row = row.rstrip()
-            atoms = row.split(opts.sep)
+            atoms = row.split(sep)
             frows = []
             for atom in atoms:
                 frows.append(atom.split(zipsep))
@@ -683,25 +682,11 @@ def split(args):
     3. optimal - try to make split file of roughly similar sizes, using LPT
     algorithm. This is the default.
     """
-    p = OptionParser(split.__doc__)
-    mode_choices = ("batch", "cycle", "optimal")
-    p.add_option("--all", default=False, action="store_true",
-            help="split all records [default: %default]")
-    p.add_option("--mode", default="optimal", choices=mode_choices,
-            help="Mode when splitting records [default: %default]")
-    p.add_option("--format", choices=("fasta", "fastq", "txt", "clust"),
-            help="input file format [default: %default]")
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    filename, outdir, N = args
+    filename, outdir, N = args.file, args.outdir, args.N
     fs = FileSplitter(filename, outputdir=outdir,
-                      format=opts.format, mode=opts.mode)
+                      format=args.format, mode=args.mode)
 
-    if opts.all:
+    if args.all:
         logging.debug("option -all override N")
         N = fs.num_records
     else:
@@ -962,15 +947,19 @@ if __name__ == '__main__':
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
     sp1 = sp.add_parser("split", help = "split large file into N chunks")
-    sp1.add_argument('fi', help = 'input file')
-    sp1.add_argument('pos', help = 'file position')
+    sp1.add_argument('file', help = 'input file')
+    sp1.add_argument('outdir', help = 'output directory')
+    sp1.add_argument('N', type = int, help = 'number of pieces')
+    sp1.add_argument('--all', action = 'store_true', help = 'split all records')
+    sp1.add_argument('--mode', choices = ['batch','cycle','optimal'], help = 'mode when splitting records')
+    sp1.add_argument('--format', choices = ["fasta", "fastq", "txt", "clust"], help = 'input file format')
     sp1.set_defaults(func = split)
 
-    p.set_sep(sep=",")
-    p.add_option("--zipflatten", default=None, dest="zipsep",
-                 help="Specify if columns of the file should be zipped before" +
-                 " flattening. If so, specify delimiter separating column elements" +
-                 " [default: %default]")
+    sp2 = sp.add_parser("flatten", help = "convert a list of IDs into one per line")
+    sp2.add_argument('file', help = 'input file')
+    sp2.add_argument('--sep', default = ',', help = 'input file separator')
+    sp2.add_argument('--zipflatten', default = None, help = 'specify if columns should be zipped before flattening - if yes, specify output separator')
+                
     args = parser.parse_args()
     if args.command:
         args.func(args)
@@ -979,10 +968,7 @@ if __name__ == '__main__':
         parser.print_help()
 
 """
-        ('pairwise', 'convert a list of IDs into all pairs'),
-        ('split', 'split large file into N chunks'),
         ('reorder', 'reorder columns in tab-delimited files'),
-        ('flatten', 'convert a list of IDs into one per line'),
         ('group', 'group elements in a table based on key (groupby) column'),
         ('setop', 'set operations on files'),
         ('join', 'join tabular-like files based on common column'),

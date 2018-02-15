@@ -10,7 +10,6 @@ import signal
 import sys
 import logging
 import fnmatch
-import argparse
 
 from urllib.parse import urlencode
 from subprocess import PIPE, call
