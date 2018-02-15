@@ -2,18 +2,19 @@
 import os
 import os.path as op
 import sys
-import argparse
 import vcf
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'convert vcf to tsv'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'convert vcf to tsv'
     )
     parser.add_argument(
-        'fi', help = 'input file (.vcf)'
+            'fi', help = 'input file (.vcf)'
     )
     parser.add_argument(
-        'fo', help = 'output file (.tsv)'
+            'fo', help = 'output file (.tsv)'
     )
     args = parser.parse_args()
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 import sys
 import numpy as np
-import configparser
 from string import Template
 from colorama import init, Fore, Back, Style
 import pysam
@@ -182,6 +182,7 @@ def vntcall_check(dirw, ilist, olist, do1, do2):
 
 if __name__ == "__main__":
     import argparse
+    import configparser
     parser = argparse.ArgumentParser(__doc__,
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Variant calling'

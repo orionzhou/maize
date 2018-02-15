@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 import sys
-import argparse
 import re
 from pyfaidx import Fasta
 
@@ -24,20 +25,22 @@ def read_bed(fb):
         locs.append(rs)
     return locs
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'random retrieve fasta sequences'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'random retrieve fasta sequences'
     )
     parser.add_argument(
-        'db', help = 'sequence database (fasta file or genome ID)'
+            'db', help = 'sequence database (fasta file or genome ID)'
     )
     parser.add_argument(
-        'loc', help = 'location string(s) or BED file(s) (separated by ",")'
+            'loc', help = 'location string(s) or BED file(s) (separated by ",")'
     )
     parser.add_argument(
-        'out', nargs = "?", help = 'output file [stdout]'
+            'out', nargs = "?", help = 'output file [stdout]'
     )
     parser.add_argument(
-        '--padding', action = "store_true", help = 'padding to size [No]'
+            '--padding', action = "store_true", help = 'padding to size [No]'
     )
     args = parser.parse_args()
 

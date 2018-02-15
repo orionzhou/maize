@@ -2,29 +2,27 @@
 import os
 import os.path as op
 import sys
-import argparse
-import numpy as np
-import math
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description = 'split large fasta record to even pieces'
+    import argparse
+    parser = argparse.ArgumentParser(__doc__,
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'split large fasta record to even pieces'
     )
     parser.add_argument(
-        'fi', help = 'input file (fasta)'
+            'fi', help = 'input file (fasta)'
     )
     parser.add_argument(
-        'fo', help = 'output file (fasta)'
+            'fo', help = 'output file (fasta)'
     )
     parser.add_argument(
-        '--opt', dest='opt', type=int, default=1, help='1: 100kb chunks (default); 2: 240 pieces'
+            '--opt', type = int, default = 1, 
+            help = 'Split option: 1 [100kb chunks], 2 [240 pieces]'
     )
     args = parser.parse_args()
-
-    fho = open(args.fo, "w")
 
     ary = []
     fhi = open(args.fi, "r")
@@ -41,6 +39,7 @@ if __name__ == "__main__":
     print("  total size: %d, size per piece: %d" % (totalsize, piecesize))
     
     fhi = open(args.fi, "r")
+    fho = open(args.fo, "w")
     for seq in SeqIO.parse(fhi, "fasta") :
         size = len(seq.seq)
         if(float(size) / piecesize > 1.3) :

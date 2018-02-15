@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 import sys
-import numpy as np
-import configparser
 from fadapa import Fadapa
 from string import Template
 from colorama import init, Fore, Back, Style
@@ -159,6 +158,7 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
 
 if __name__ == "__main__":
     import argparse
+    import configparser
     parser = argparse.ArgumentParser(__doc__,
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Trimming and QC on a list of Fastq files'

@@ -3,13 +3,10 @@
 
 import os
 import os.path as op
-import numpy as np
 from string import Template
 import sys
+import numpy as np
 import time
-import subprocess
-import configparser
-import traceback
 from colorama import init, Fore, Back, Style
 
 def runcmd(cmd):
@@ -86,6 +83,7 @@ def fq_download_check(dirw, ilist, olist, diro, paired):
 
 if __name__ == "__main__":
     import argparse
+    import configparser
     parser = argparse.ArgumentParser(__doc__,
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Download and extract Fastq sequences from NCBI-SRA'

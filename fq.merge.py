@@ -65,6 +65,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(__doc__,
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'merge two fasta files into one'
     )
     parser.add_argument(
             'fi1', help = 'input fasta 1'
