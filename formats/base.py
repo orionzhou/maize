@@ -597,7 +597,8 @@ if __name__ == '__main__':
     sp2 = sp.add_parser("flatten", help = "convert a list of IDs into one per line")
     sp2.add_argument('file', help = 'input file')
     sp2.add_argument('--sep', default = ',', help = 'input file separator')
-    sp2.add_argument('--zipflatten', default = None, help = 'specify if columns should be zipped before flattening - if yes, specify output separator')
+    sp2.add_argument('--zipflatten', default = None, dest = 'zipsep',
+            help = 'specify if columns should be zipped before flattening - if yes, specify output separator')
                 
     args = parser.parse_args()
     if args.command:

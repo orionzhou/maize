@@ -55,39 +55,32 @@ def cleanid(args):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(__doc__,
+    parser = argparse.ArgumentParser(
+            prog = "python -m maize.formats.fasta",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'fasta utilities'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp_sum = sp.add_parser("summary",
-            help = "Report length and description for each sequence"
-    )
-    sp_sum.add_argument('fi', nargs = '?', help = 'input file (fasta)')
-    sp_sum.add_argument('fo', nargs = '?', help = 'output file (tsv)')
-    sp_sum.set_defaults(func = summary)
+    sp1 = sp.add_parser("summary", help = "Report length and description for each sequence")
+    sp1.add_argument('fi', nargs = '?', help = 'input file (fasta)')
+    sp1.add_argument('fo', nargs = '?', help = 'output file (tsv)')
+    sp1.set_defaults(func = summary)
 
-    sp_fas2aln = sp.add_parser("fas2aln",
-            help = 'convert fasta alignment file to clustal format'
-    )
-    sp_fas2aln.add_argument('fi', help = 'input alignment (.fas)')
-    sp_fas2aln.add_argument('fo', help = 'output alignment (.aln)')
-    sp_fas2aln.set_defaults(func = fas2aln)
+    sp11 = sp.add_parser("fas2aln", help = 'convert fasta alignment file to clustal format')
+    sp11.add_argument('fi', help = 'input alignment (.fas)')
+    sp11.add_argument('fo', help = 'output alignment (.aln)')
+    sp11.set_defaults(func = fas2aln)
 
-    sp_rmdot = sp.add_parser("rmdot",
-            help = 'replace periods (.) in an alignment fasta by dashes (-)'
-    )
-    sp_rmdot.add_argument('fi', help = 'input fasta file')
-    sp_rmdot.add_argument('fo', help = 'output fasta file')
-    sp_rmdot.set_defaults(func = rmdot)
+    sp31 = sp.add_parser("rmdot", help = 'replace periods (.) in an alignment fasta by dashes (-)')
+    sp31.add_argument('fi', help = 'input fasta file')
+    sp31.add_argument('fo', help = 'output fasta file')
+    sp31.set_defaults(func = rmdot)
     
-    sp_cleanid = sp.add_parser("cleanid",
-            help = 'clean sequence IDs in a fasta file'
-    )
-    sp_cleanid.add_argument('fi', help = 'input fasta file')
-    sp_cleanid.add_argument('fo', help = 'output fasta file')
-    sp_cleanid.set_defaults(func = cleanid)
+    sp32 = sp.add_parser("cleanid", help = 'clean sequence IDs in a fasta file')
+    sp32.add_argument('fi', help = 'input fasta file')
+    sp32.add_argument('fo', help = 'output fasta file')
+    sp32.set_defaults(func = cleanid)
     
     args = parser.parse_args()
     if args.command:
