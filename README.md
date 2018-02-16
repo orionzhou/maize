@@ -103,7 +103,7 @@ Most of the scripts in this package contains multiple actions. To use
 the `fasta` example:
 
 ```bash
-usage: python -m maize.fasta [-h] {summary,fas2aln,rmdot,cleanid} ...
+usage: python -m maize.formats.fasta [-h] {summary,fas2aln,rmdot,cleanid} ...
 
 fasta utilities
 
@@ -122,7 +122,7 @@ available commands:
 Then you need to use one action, you can just do:
 
 ```bash
-python -m jcvi.fasta summary
+python -m maize.formats.fasta size
 ```
 
 This will tell you the options and arguments it expects.

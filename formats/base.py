@@ -10,7 +10,7 @@ import logging
 from itertools import groupby, islice, cycle
 
 from Bio import SeqIO
-from maize.apps.base import sh, debug, mkdir, popen
+from maize.apps.base import eprint, sh, debug, mkdir, popen
 debug()
 
 
@@ -506,6 +506,23 @@ def flexible_cast(s):
         return float(s)
     return s
 
+def digitof_number(num):
+    if num < 1:
+        eprint("no digits: %g" % num)
+        sys.exit(1)
+    digit = 0 
+    while num >= 1:
+        num /= 10.0
+        digit += 1
+    return digit
+
+def sizeof_fmt(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
 
 def flatten(args):
     """
@@ -546,7 +563,6 @@ def flatten(args):
             print(row.strip().replace(opts.sep, "\n"))
 
 
-
 def split(args):
     """
     %prog split file outdir N
@@ -585,7 +601,10 @@ if __name__ == '__main__':
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("split", help = "split large file into N chunks")
+    sp1 = sp.add_parser("split", 
+            help = "split large file into N chunks",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    )
     sp1.add_argument('file', help = 'input file')
     sp1.add_argument('outdir', help = 'output directory')
     sp1.add_argument('N', type = int, help = 'number of pieces')
@@ -594,7 +613,10 @@ if __name__ == '__main__':
     sp1.add_argument('--format', choices = ["fasta", "fastq", "txt", "clust"], help = 'input file format')
     sp1.set_defaults(func = split)
 
-    sp2 = sp.add_parser("flatten", help = "convert a list of IDs into one per line")
+    sp2 = sp.add_parser("flatten", 
+            help = "convert a list of IDs into one per line",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    )
     sp2.add_argument('file', help = 'input file')
     sp2.add_argument('--sep', default = ',', help = 'input file separator')
     sp2.add_argument('--zipflatten', default = None, dest = 'zipsep',

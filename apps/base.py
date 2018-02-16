@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 import errno
 import os
 import time
@@ -13,6 +14,10 @@ import fnmatch
 
 from urllib.parse import urlencode
 from subprocess import PIPE, call
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 
 def get_abs_path(link_name):
     source = link_name
