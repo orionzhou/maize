@@ -5,14 +5,12 @@ import os
 import os.path as op
 import sys
 
-from itertools import groupby
-
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils.CheckSum import seguid
 
-from maize.apps.base import eprint, sh
+from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open, digitof_number, sizeof_fmt
 
 def size(args):
@@ -110,17 +108,16 @@ def split(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
     n = args.N
     if not op.exists(dirw):
-        os.makedirs(dirw)
+        makedir(dirw)
     else:
-        os.system("rm -rf %s/*" % dirw)
+        sh("rm -rf %s/*" % dirw)
     
     cdir = os.path.dirname(os.path.realpath(__file__))
     cwd = os.getcwd()
     os.chdir(dirw)
 
     sh("ln -sf %s part.fas" % fi)
-    cmd = "pyfasta split -n %d part.fas" % n
-    sh(cmd)
+    sh("pyfasta split -n %d part.fas" % n)
     sh("rm part.fas part.fas.*")
 
     digit = digitof_number(n)
@@ -131,6 +128,33 @@ def split(args):
         sizes.append(os.stat(fp).st_size)
     sizes.sort()
     print("size range: %s - %s" % (sizeof_fmt(sizes[0]), sizeof_fmt(sizes[n-1])))
+
+def tile(args):
+    fhi = must_open(args.fi)
+    winstep, winsize = args.winstep, args.winsize
+    for seq in SeqIO.parse(fhi, "fasta") :
+        size = len(seq.seq)
+        if(float(size) / winstep > 1.3) :
+            ary = seq.id.split("-")
+            [id, bbeg] = [ary[0], int(ary[1])]
+
+            seqstr = str(seq.seq)
+            nf = int(math.ceil(float(size) / piecesize))
+            rcds = []
+            for i in range(0, nf) :
+                rbeg = i * piecesize
+                rend = min((i+1) * piecesize, size)
+                sseqstr = seqstr[rbeg:rend]
+                sid = "%s-%d-%d" % (id, bbeg+rbeg, bbeg+rend-1)
+                rcd = SeqRecord(Seq(sseqstr), id = sid, description = '')
+                rcds.append(rcd)
+                #print "      " + sid
+            SeqIO.write(rcds, sys.stdout, "fasta")
+        else:
+            SeqIO.write(seq, sys.stdout, "fasta")
+    fhi.close()
+
+   
 
 def splitlong(args):
     ary = []
@@ -172,6 +196,42 @@ def splitlong(args):
             SeqIO.write(seq, fho, "fasta")
     fhi.close()
     fho.close()
+
+def merge(args):
+    cfg = args.cfg
+    for line in must_open(cfg):
+        line = line.strip("\n")
+        line = line.strip("\r")
+        if line == "":
+            break
+        (org, fi) = line.split(",")
+        if not os.access(fi, os.R_OK):
+            print "no access to input file: %s" % fi
+            print os.access(fi, os.F_OK)
+            sys.exit(1)
+        orgs.append(org)
+        fis.append(fi)
+    fhc.close()
+    return (orgs, fis)
+def merge_seqs(fis, fids, fo):
+    print "  merging input files to %s" % fo
+    seqs = []
+    for i in range(0,len(fids)):
+        handle = 0
+        if (fis[i].endswith(".gz")):
+            handle = gzip.open(fis[i], "rb")
+        else:
+            handle = open(fis[i], "rU")
+        seq_it = SeqIO.parse(handle, "fasta")
+        handle.close
+
+        seqs1 = [SeqRecord(rcd.seq, id = fids[i] + "|" + rcd.id,
+            description = '') for rcd in seq_it]
+        seqs += seqs1
+    fho = open(fo, "w")
+    SeqIO.write(seqs, fho, "fasta")
+    fho.close()
+
 
 def gaps(args):
     import re
@@ -220,7 +280,6 @@ def cleanid(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(
-            prog = "python -m maize.formats.fasta",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'fasta utilities'
     )
@@ -266,6 +325,10 @@ if __name__ == "__main__":
     )
     sp3.set_defaults(func = splitlong)
 
+    sp3 = sp.add_parser("merge", help = 'merge multiple fasta files and update IDs')
+    sp3.add_argument('cfg', help = 'config file (a text file with identifier followed by the absolute path of fasta in each line)'
+    sp3.set_defaults(func = merge)
+ 
     sp9 = sp.add_parser("gaps",
             help = "report gap ('N's) locations in fasta sequences",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter
