@@ -13,11 +13,10 @@ import logging
 import fnmatch
 
 from urllib.parse import urlencode
-from subprocess import PIPE, call
+from subprocess import PIPE, run
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
-
 
 def get_abs_path(link_name):
     source = link_name
@@ -34,7 +33,6 @@ def get_abs_path(link_name):
     else:
         return get_abs_path(source)
 
-
 def splitall(path):
     allparts = []
     while True:
@@ -45,7 +43,6 @@ def splitall(path):
     allparts = allparts[::-1]
     return allparts
 
-
 def get_module_docstring(filepath):
     "Get module-level docstring of Python module at filepath, e.g. 'path/to/file.py'."
     co = compile(open(filepath).read(), filepath, 'exec')
@@ -54,7 +51,6 @@ def get_module_docstring(filepath):
     else:
         docstring = None
     return docstring
-
 
 def dmain(mainfile, type="action"):
     cwd = op.dirname(mainfile)
@@ -77,7 +73,6 @@ def dmain(mainfile, type="action"):
     a = ActionDispatcher(actions)
     a.print_help()
 
-
 def backup(filename):
     bakname = filename + ".bak"
     if op.exists(filename):
@@ -85,10 +80,9 @@ def backup(filename):
         sh("mv {0} {1}".format(filename, bakname))
     return bakname
 
-
 def sh(cmd, grid=False, infile=None, outfile=None, errfile=None,
         append=False, background=False, threaded=None, log=True,
-        grid_opts=None, silent=False, shell="/bin/bash"):
+        grid_opts=None, silent=False):
     """
     simple wrapper for system calls
     """
@@ -97,7 +91,7 @@ def sh(cmd, grid=False, infile=None, outfile=None, errfile=None,
     if silent:
         outfile = errfile = "/dev/null"
     if grid:
-        from jcvi.apps.grid import GridProcess
+        from maize.apps.grid import GridProcess
         pr = GridProcess(cmd, infile=infile, outfile=outfile, errfile=errfile,
                          threaded=threaded, grid_opts=grid_opts)
         pr.start()
@@ -124,29 +118,10 @@ def sh(cmd, grid=False, infile=None, outfile=None, errfile=None,
 
         if log:
             logging.debug(cmd)
-        return call(cmd, shell=True, executable=shell)
-
-
-def Popen(cmd, stdin=None, stdout=PIPE, debug=False, shell="/bin/bash"):
-    """
-    Capture the cmd stdout output to a file handle.
-    """
-    from subprocess import Popen as P
-    if debug:
-        logging.debug(cmd)
-    # See: <https://blog.nelhage.com/2010/02/a-very-subtle-bug/>
-    proc = P(cmd, bufsize=1, stdin=stdin, stdout=stdout, \
-             shell=True, executable=shell)
-    return proc
-
-
-def popen(cmd, debug=True, shell="/bin/bash"):
-    return Popen(cmd, debug=debug, shell=shell).stdout
-
+        return run(cmd, shell=True)
 
 def is_exe(fpath):
     return op.isfile(fpath) and os.access(fpath, os.X_OK)
-
 
 def which(program):
     """
@@ -168,7 +143,6 @@ def which(program):
 
     return None
 
-
 def glob(pathname, pattern=None):
     """
     Wraps around glob.glob(), but return a sorted list.
@@ -177,7 +151,6 @@ def glob(pathname, pattern=None):
     if pattern:
         pathname = op.join(pathname, pattern)
     return natsorted(gl.glob(pathname))
-
 
 def iglob(pathname, patterns):
     """
@@ -195,7 +168,6 @@ def iglob(pathname, patterns):
             matches.append(op.join(root, filename))
     return natsorted(matches)
 
-
 def symlink(target, link_name):
     try:
         os.symlink(target, link_name)
@@ -203,7 +175,6 @@ def symlink(target, link_name):
         if e.errno == errno.EEXIST:
             os.remove(link_name)
             os.symlink(target, link_name)
-
 
 def mkdir(dirname, overwrite=False):
     """
@@ -225,7 +196,6 @@ def mkdir(dirname, overwrite=False):
 
     return True
 
-
 def is_newer_file(a, b):
     """
     Check if the file a is newer than file b
@@ -236,7 +206,6 @@ def is_newer_file(a, b):
     bm = os.stat(b).st_mtime
     return am > bm
 
-
 def parse_multi_values(param):
     values = None
     if param:
@@ -246,17 +215,14 @@ def parse_multi_values(param):
             values = list(set(param.split(",")))
     return values
 
-
 def listify(a):
     return a if (isinstance(a, list) or isinstance(a, tuple)) else [a]
-
 
 def last_updated(a):
     """
     Check the time since file was last updated.
     """
     return time.time() - op.getmtime(a)
-
 
 def need_update(a, b):
     """
@@ -270,14 +236,12 @@ def need_update(a, b):
            all((os.stat(x).st_size == 0 for x in b)) or \
            any(is_newer_file(x, y) for x in a for y in b)
 
-
 def get_today():
     """
     Returns the date in 2010-07-14 format
     """
     from datetime import date
     return str(date.today())
-
 
 def ls_ftp(dir):
     from urlparse import urlparse
@@ -297,7 +261,6 @@ def ls_ftp(dir):
         else:
             raise
     return files
-
 
 def download(url, filename=None, debug=True, cookies=None):
     from urlparse import urlsplit
@@ -327,7 +290,6 @@ def download(url, filename=None, debug=True, cookies=None):
 
     return filename
 
-
 def getfilesize(filename, ratio=None):
     rawsize = op.getsize(filename)
     if not filename.endswith(".gz"):
@@ -354,11 +316,7 @@ def getfilesize(filename, ratio=None):
 
     return size
 
-
 def debug():
-    """
-    Turn on the debugging
-    """
     from maize.apps.console import magenta, yellow
 
     format = yellow("%(asctime)s [%(module)s]")
@@ -368,7 +326,6 @@ def debug():
             datefmt="%H:%M:%S")
 
 debug()
-
 
 def expand(args):
     """
@@ -389,17 +346,14 @@ def expand(args):
         sh(cmd)
         seen.add(oa)
 
-
 def fname():
     return sys._getframe().f_back.f_code.co_name
-
 
 def get_times(filename):
     st = os.stat(filename)
     atime = st.st_atime
     mtime = st.st_mtime
     return (atime, mtime)
-
 
 def timestamp(args):
     """
@@ -416,7 +370,6 @@ def timestamp(args):
             filename = op.join(root, f)
             atime, mtime = get_times(filename)
             print(filename, atime, mtime)
-
 
 def touch(args):
     """
@@ -446,7 +399,6 @@ def touch(args):
         print >> sys.stderr, msg
         os.utime(path, (atime, mtime))
 
-
 def snapshot(fp, p, fsize, counts=None):
     pos = int(p * fsize)
     print("==>> File `{0}`: {1} ({2}%)".format(fp.name, pos, int(p * 100)))
@@ -459,7 +411,6 @@ def snapshot(fp, p, fsize, counts=None):
             sys.stdout.write(row)
         except IOError:
             break
-
 
 def less(args):
     """
@@ -496,7 +447,6 @@ def less(args):
     for p in pos:
         snapshot(fp, p, fsize, counts=counts)
 
-
 def send_email(fromaddr, toaddr, subject, message):
     """
     Send an email message
@@ -513,7 +463,6 @@ def send_email(fromaddr, toaddr, subject, message):
     server = SMTP(SERVER)
     server.sendmail(fromaddr, toaddr, _message.as_string())
     server.quit()
-
 
 def is_valid_email(email):
     """
@@ -548,7 +497,6 @@ def is_valid_email(email):
         return True
     return False
 
-
 def pid_exists(pid):
     """Check whether pid exists in the current process table."""
     if pid < 0:
@@ -561,10 +509,8 @@ def pid_exists(pid):
     else:
         return True
 
-
 class TimeoutExpired(Exception):
     pass
-
 
 def _waitpid(pid, interval=None, timeout=None):
     """
@@ -632,7 +578,6 @@ def _waitpid(pid, interval=None, timeout=None):
         else:
             # should never happen
             raise RuntimeError("unknown process exit status")
-
 
 def waitpid(args):
     """
@@ -704,7 +649,6 @@ def waitpid(args):
         bg = False if opts.grid else True
         sh(cmd, grid=opts.grid, background=bg)
 
-
 def inspect(object):
     """ A better dir() showing attributes and values
     """
@@ -720,7 +664,6 @@ def inspect(object):
             details = e
 
         print >> sys.stderr, "{}: {}".format(k, details)
-
 
 def sample_N(a, N):
     """ When size of N is >= size of a, random.sample() will emit an error:
@@ -740,7 +683,6 @@ def sample_N(a, N):
         return random.sample(a, N)
 
     return [random.choice(a) for x in range(N)]
-
 
 if __name__ == '__main__':
     import argparse

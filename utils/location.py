@@ -35,6 +35,30 @@ def locAryLen(locA):
     except:
          print("invalid locAry: ", locA)
 
+def maketile(beg, end, winsize, winstep):
+    import math
+    size = end - beg + 1
+    nwin = math.ceil((size - winsize) / winstep) + 1
+    
+    mergelast = False
+    if nwin > 1:
+        size_last = end - (beg + winstep * (nwin-2) + winsize) + 1
+        #print(size_last)
+        if float(size_last) / winsize < 0.5:
+            mergelast = True
+
+    wins = []
+    for i in range(0, nwin):
+        wbeg = beg + winstep * i
+        wend = beg + winstep * i + winsize - 1
+        wend = min(end, wend)
+        if i == nwin - 2 and mergelast:
+            wend = end
+        elif i == nwin - 1 and mergelast:
+            continue
+        wins.append([wbeg, wend])
+    return wins
+
 if __name__ == '__main__':
     print(locStr2Ary("7-10,8-19"))
     locStr2Ary(7)

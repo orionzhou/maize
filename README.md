@@ -103,7 +103,9 @@ Most of the scripts in this package contains multiple actions. To use
 the `fasta` example:
 
 ```bash
-usage: python -m maize.formats.fasta [-h] {summary,fas2aln,rmdot,cleanid} ...
+usage: fasta [-h]
+             {size,desc,clean,extract,split,splitlong,tile,merge,gaps,rename,rmdot,cleanid,fas2aln}
+             ...
 
 fasta utilities
 
@@ -111,12 +113,20 @@ optional arguments:
   -h, --help            show this help message and exit
 
 available commands:
-  {summary,fas2aln,rmdot,cleanid}
-    summary             Report length and description for each sequence
-    fas2aln             convert fasta alignment file to clustal format
+  {size,desc,clean,extract,split,splitlong,tile,merge,gaps,rename,rmdot,cleanid,fas2aln}
+    size                Report length for each sequence
+    desc                Report description for each sequence
+    clean               Remove irregular chararacters
+    extract             retrieve fasta sequences
+    split               run pyfasta to split a set of fasta records evenly
+    tile                create sliding windows that tile the entire sequence
+    merge               merge multiple fasta files and update IDs
+    gaps                report gap ('N's) locations in fasta sequences
+    rename              rename / normalize sequence IDs
     rmdot               replace periods (.) in an alignment fasta by dashes
                         (-)
     cleanid             clean sequence IDs in a fasta file
+    fas2aln             convert fasta alignment file to clustal format
 ```
 
 Then you need to use one action, you can just do:

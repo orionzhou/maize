@@ -4,6 +4,7 @@
 import os
 import os.path as op
 import sys
+import logging
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -11,29 +12,56 @@ from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils.CheckSum import seguid
 
 from maize.apps.base import eprint, sh, mkdir
-from maize.formats.base import must_open, digitof_number, sizeof_fmt
+from maize.formats.base import must_open, ndigit, prettysize
+
+FastaExt = ("fasta", "fa", "fas", "fna", "cds", "pep", "faa", "fsa", "seq", "nt", "aa")
 
 def size(args):
-    from pyfaidx import Fasta
-    fas = Fasta(args.fi)
     if args.header:
         print("seqid\tsize")
-    for sid in fas.keys():
-        size = len(fas[sid])
-        if args.bed:
-            print("%s\t%d\t%d" % (sid, 0, size))
-        else:
-            print("%s\t%d" % (sid, size))
+    fname, fext = op.splitext(args.fi)
+    if args.fi in ['stdin', '-'] or fext in ['.gz','.bz2']:
+        fh = must_open(args.fi)
+        for rcd in SeqIO.parse(fh, "fasta"):
+            sid, size = rcd.id, len(rcd)
+            if args.bed:
+                print("%s\t%d\t%d" % (sid, 0, size))
+            else:
+                print("%s\t%d" % (sid, size))
+    elif fext in [".%s" % x for x in FastaExt]:
+        from pyfaidx import Fasta
+        fas = Fasta(args.fi)
+        for sid in fas.keys():
+            size = len(fas[sid])
+            if args.bed:
+                print("%s\t%d\t%d" % (sid, 0, size))
+            else:
+                print("%s\t%d" % (sid, size))
+    else:
+        logging.error("%s is not a supported format" % fext)
 
 def desc(args):
     fh = must_open(args.fi)
     if args.header:
         print("seqid\tdesc")
-    for seqrcd in SeqIO.parse(fh, "fasta"):
-        sid, desc = seqrcd.id, seqrcd.description
+    for rcd in SeqIO.parse(fh, "fasta"):
+        sid, desc = rcd.id, rcd.description
         if sid == desc:
             desc = ''
         print("%s\t%s" % (sid, desc))
+
+def clean(args):
+    import re
+    reg = re.compile("[^ATCGN]")
+    fh = must_open(args.fi)
+    cnt = 0
+    for rcd in SeqIO.parse(fh, "fasta"):
+        sid, seq = rcd.id, str(rcd.seq).upper()
+        newseq, ncnt = reg.subn("N", seq)
+        cnt += ncnt
+        nrcd = SeqRecord(Seq(newseq), id = sid, description = "")
+        SeqIO.write(nrcd, sys.stdout, "fasta")
+    logging.debug("Total bad char: %d" % cnt)
 
 def extract(args):
     from pyfaidx import Fasta
@@ -101,8 +129,8 @@ def extract(args):
                 else:
                     seq += "N" * bp_pad
             assert len(seq) == size, "error in seq size: %s:%d-%d %d" % (sid, beg, end, bp_pad)
-        print(">%s" % oid)
-        print(seq)
+        rcd = SeqRecord(Seq(seq), id = oid, description = '')
+        SeqIO.write(rcd, sys.stdout, 'fasta')
 
 def split(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
@@ -120,41 +148,41 @@ def split(args):
     sh("pyfasta split -n %d part.fas" % n)
     sh("rm part.fas part.fas.*")
 
-    digit = digitof_number(n)
+    digit = ndigit(n)
     sizes = []
     for i in range(0,n):
         fmt = "part.%%0%dd.fas" % digit
         fp = fmt % i
         sizes.append(os.stat(fp).st_size)
     sizes.sort()
-    print("size range: %s - %s" % (sizeof_fmt(sizes[0]), sizeof_fmt(sizes[n-1])))
+    print("size range: %s - %s" % (prettysize(sizes[0]), prettysize(sizes[n-1])))
 
 def tile(args):
+    from maize.utils.location import maketile
+
     fhi = must_open(args.fi)
-    winstep, winsize = args.winstep, args.winsize
-    for seq in SeqIO.parse(fhi, "fasta") :
-        size = len(seq.seq)
-        if(float(size) / winstep > 1.3) :
-            ary = seq.id.split("-")
-            [id, bbeg] = [ary[0], int(ary[1])]
-
-            seqstr = str(seq.seq)
-            nf = int(math.ceil(float(size) / piecesize))
-            rcds = []
-            for i in range(0, nf) :
-                rbeg = i * piecesize
-                rend = min((i+1) * piecesize, size)
-                sseqstr = seqstr[rbeg:rend]
-                sid = "%s-%d-%d" % (id, bbeg+rbeg, bbeg+rend-1)
-                rcd = SeqRecord(Seq(sseqstr), id = sid, description = '')
-                rcds.append(rcd)
-                #print "      " + sid
-            SeqIO.write(rcds, sys.stdout, "fasta")
-        else:
-            SeqIO.write(seq, sys.stdout, "fasta")
+    winstep, winsize = args.step, args.size
+    for rcd in SeqIO.parse(fhi, "fasta") :
+        size = len(rcd.seq)
+        sid, beg, end = rcd.id, 1, size
+        ary = rcd.id.split("-")
+        if len(ary) >= 3:
+            sid, beg, end = ary[0], int(ary[1]), int(ary[2])
+            assert size == end - beg + 1, "size error: %s not %d" % (rcd.id, size)
+        elif len(ary) == 2:
+            sid, beg = ary[0], int(ary[1])
+            end = beg + size - 1
+       
+        wins = maketile(1, size, winsize, winstep)
+        rcds = []
+        seq = str(rcd.seq)
+        for rbeg, rend in wins:
+            abeg, aend = beg + rbeg - 1, beg + rend - 1
+            ssid = "%s-%d-%d" % (sid, abeg, aend)
+            seqstr = seq[rbeg-1:rend]
+            rcds.append(SeqRecord(Seq(seqstr), id = ssid, description = ''))
+        SeqIO.write(rcds, sys.stdout, "fasta")
     fhi.close()
-
-   
 
 def splitlong(args):
     ary = []
@@ -200,38 +228,20 @@ def splitlong(args):
 def merge(args):
     cfg = args.cfg
     for line in must_open(cfg):
-        line = line.strip("\n")
-        line = line.strip("\r")
+        line = line.strip(" \t\n\r")
         if line == "":
-            break
-        (org, fi) = line.split(",")
-        if not os.access(fi, os.R_OK):
-            print "no access to input file: %s" % fi
-            print os.access(fi, os.F_OK)
+            continue
+        (pre, fseq) = line.split(",")
+        if not os.access(fseq, os.R_OK):
+            eprint("no access to input file: %s" % fseq)
             sys.exit(1)
-        orgs.append(org)
-        fis.append(fi)
-    fhc.close()
-    return (orgs, fis)
-def merge_seqs(fis, fids, fo):
-    print "  merging input files to %s" % fo
-    seqs = []
-    for i in range(0,len(fids)):
-        handle = 0
-        if (fis[i].endswith(".gz")):
-            handle = gzip.open(fis[i], "rb")
-        else:
-            handle = open(fis[i], "rU")
-        seq_it = SeqIO.parse(handle, "fasta")
-        handle.close
-
-        seqs1 = [SeqRecord(rcd.seq, id = fids[i] + "|" + rcd.id,
+        
+        fh = must_open(fseq)
+        seq_it = SeqIO.parse(fh, "fasta")
+        seqs = [SeqRecord(rcd.seq, id = pre + "|" + rcd.id,
             description = '') for rcd in seq_it]
-        seqs += seqs1
-    fho = open(fo, "w")
-    SeqIO.write(seqs, fho, "fasta")
-    fho.close()
-
+        SeqIO.write(seqs, sys.stdout, "fasta")
+        fh.close()
 
 def gaps(args):
     import re
@@ -246,36 +256,66 @@ def gaps(args):
 
 def fas2aln(args):
     from Bio import AlignIO
-    fhi = open(args.fi, "r")
-    fho = open(args.fo, "w")
-    alns = AlignIO.parse(fhi, "fasta")
-    AlignIO.write(alns, fho, "clustal")
-    fhi.close()
-    fho.close()
+    fh = must_open(args.fi)
+    alns = AlignIO.parse(fh, "fasta")
+    AlignIO.write(alns, sys.stdout, "clustal")
+    fh.close()
+
+def rename(args):
+    import re
+    
+    sreg = re.compile("^(chr)?([0-9]{1,2})$")
+    sdic, cdic = dict(), dict()
+    i = 1
+    for rcd in SeqIO.parse(args.fi, "fasta"):
+        sid, size = rcd.id.lower(), len(rcd)
+        res = sreg.match(sid)
+        if res:
+            sdic[sid] = [size, int(res.group(2))]
+        else:
+            cdic[sid] = [size, i]
+            i += 1
+
+    sdigits = ndigit(len(sdic))
+    cdigits = ndigit(len(cdic))
+    sfmt = "chr%%0%dd" % sdigits
+    cfmt = "%s%%0%dd" % (args.prefix, cdigits)
+    logging.debug("%d chromosomes, %d scaffolds/contigs" % (len(sdic), len(cdic)))
+    if args.map:
+        fho = open(args.map, "w")
+        fho.write("oid\tnid\tsize\n")
+    for rcd in SeqIO.parse(args.fi, "fasta"):
+        sid, seq = rcd.id.lower(), str(rcd.seq)
+        if sid in sdic:
+            nsid = sfmt % sdic[sid][1]
+        else:
+            nsid = cfmt % cdic[sid][1]
+        nrcd = SeqRecord(Seq(seq), id = nsid, description = '')
+        SeqIO.write(nrcd, sys.stdout, "fasta")
+        if args.map:
+            fho.write("%s\t%s\t%d\n" % (sid, nsid, len(seq)))
 
 def rmdot(args):
     from string import maketrans
+    fh = must_open(args.fi)
     tt = maketrans(".", "-")
-    fhi = open(args.fi, "r")
-    fho = open(args.fo, "w")
-    for line in fhi:
+    for line in fh:
+        line = line.strip()
         if line.startswith('>'):
-            fho.write(line)
+            print(line)
         else:
-            fho.write(line.translate(tt))
-    fhi.close()
-    fho.close()
+            print(line.translate(tt))
+    fh.close()
 
 def cleanid(args):
-    fhi = open(args.fi, "r")
-    fho = open(args.fo, "w")
-    for line in fhi:
+    fh = must_open(args.fi)
+    for line in fh:
+        line = line.strip()
         if line.startswith(">"):
-            fho.write(line.rstrip(":.\n")+"\n")
+            print(line.rstrip(":."))
         else:
-            fho.write(line)
-    fhi.close()
-    fho.close()
+            print(line)
+    fh.close()
 
 if __name__ == "__main__":
     import argparse
@@ -296,6 +336,10 @@ if __name__ == "__main__":
     sp1.add_argument('--header', action = 'store_true', help = 'add header')
     sp1.set_defaults(func = desc)
 
+    sp1 = sp.add_parser("clean", help = "Remove irregular chararacters") 
+    sp1.add_argument('fi', help = 'input file (fasta)')
+    sp1.set_defaults(func = clean)
+    
     sp2 = sp.add_parser("extract", 
             help = 'retrieve fasta sequences',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter
@@ -324,9 +368,18 @@ if __name__ == "__main__":
             help = 'split mode: 1 [100kb chunks], 2 [240 pieces]'
     )
     sp3.set_defaults(func = splitlong)
+    
+    sp3 = sp.add_parser("tile", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'create sliding windows that tile the entire sequence'
+    )
+    sp3.add_argument('fi', help = 'input fasta file')
+    sp3.add_argument('--size', type = int, default = 100, help = 'window size')
+    sp3.add_argument('--step', type = int, default = 50, help = 'window step')
+    sp3.set_defaults(func = tile)
 
     sp3 = sp.add_parser("merge", help = 'merge multiple fasta files and update IDs')
-    sp3.add_argument('cfg', help = 'config file (a text file with identifier followed by the absolute path of fasta in each line)'
+    sp3.add_argument('cfg', help = 'config file (a text file with identifier followed by the absolute path of fasta in each line)')
     sp3.set_defaults(func = merge)
  
     sp9 = sp.add_parser("gaps",
@@ -337,21 +390,27 @@ if __name__ == "__main__":
     sp9.add_argument('--gap', type = int, default = 10, help = 'min gap size')
     sp9.set_defaults(func = gaps)
 
-    sp11 = sp.add_parser("fas2aln", help = 'convert fasta alignment file to clustal format')
-    sp11.add_argument('fi', help = 'input alignment (.fas)')
-    sp11.add_argument('fo', help = 'output alignment (.aln)')
-    sp11.set_defaults(func = fas2aln)
-
+    sp31 = sp.add_parser("rename",
+            help = 'rename / normalize sequence IDs',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter
+    )
+    sp31.add_argument('fi', help = 'input fasta file')
+    sp31.add_argument('--prefix', default = 'ctg', help = 'prefix for scaffolds/contigs')
+    sp31.add_argument('--map', default = None, help = 'create ID mapping table')
+    sp31.set_defaults(func = rename)
+    
     sp31 = sp.add_parser("rmdot", help = 'replace periods (.) in an alignment fasta by dashes (-)')
     sp31.add_argument('fi', help = 'input fasta file')
-    sp31.add_argument('fo', help = 'output fasta file')
     sp31.set_defaults(func = rmdot)
     
     sp32 = sp.add_parser("cleanid", help = 'clean sequence IDs in a fasta file')
     sp32.add_argument('fi', help = 'input fasta file')
-    sp32.add_argument('fo', help = 'output fasta file')
     sp32.set_defaults(func = cleanid)
     
+    sp11 = sp.add_parser("fas2aln", help = 'convert fasta alignment file to clustal format')
+    sp11.add_argument('fi', help = 'input alignment (.fas)')
+    sp11.set_defaults(func = fas2aln)
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

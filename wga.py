@@ -8,9 +8,16 @@ import numpy as np
 from string import Template
 from colorama import init, Fore, Back, Style
 
-def run_pblat(dirw, ilist, olist, jobpre, diro, 
-        samtools, bcftools, parallel,
-        pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
+def prepare(cfg):
+    return 1
+def run_pblat(cfg):
+    cfg = cfg['blat']
+    dirw, jobpre, diro = \
+            cfg['dirw'], cfg['job_prefix'], cfg['outdir']
+    qry, tgt = cfg['qry'], cfg['tgt']
+    samtools, bcftools, parallel = \
+            cfg['samtools'], cfg['bcftools'], cfg['parallel']
+
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
@@ -84,7 +91,7 @@ def run_pblat(dirw, ilist, olist, jobpre, diro,
 if __name__ == "__main__":
     import argparse
     import configparser
-    parser = argparse.ArgumentParser(__doc__,
+    parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'whole genome alignment pipeline'
     )
@@ -92,28 +99,19 @@ if __name__ == "__main__":
             'config', nargs = '?', default = "config.ini", 
             help = 'config file'
     )
-    parser.add_argument(
-            '--check', action = "store_true", \
-            help = 'run the script in check mode'
-    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("pre", help = "prepare sequences for align") 
+    sp1.set_defaults(func = prepare)
+    
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config
     cfg = configparser.ConfigParser()
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
-    cfg = cfg['blat']
-    dirw, jobpre, diro = \
-            cfg['dirw'], cfg['job_prefix'], cfg['outdir']
-    qry, tgt = cfg['qry'], cfg['tgt']
-    samtools, bcftools, parallel = \
-            cfg['samtools'], cfg['bcftools'], cfg['parallel']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if args.check:
-        sys.exit(0)
-    run_pblat(dirw, jobpre, diro, 
-            paired, f_fas, target_vcf, gene_bed,
-            samtools, bcftools, parallel, 
-            pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
+    if args.command:
+        args.func(cfg)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 

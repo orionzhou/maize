@@ -8,14 +8,10 @@ import xlrd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description = 'report fasta sequence lengths'
+        description = 'convert plain txt file to *.xls'
     )
-    parser.add_argument(
-        'fi', help = 'input file (*.txt)'
-    )
-    parser.add_argument(
-        'fo', help = 'output file (*.xls)'
-    )
+    parser.add_argument('fi', help = 'input file (*.txt)')
+    parser.add_argument('fo', help = 'output file (*.xls)')
     args = parser.parse_args()
     fi, fo = args.fi, args.fo
     fhi = open(fi, "r")

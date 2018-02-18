@@ -10,9 +10,8 @@ import logging
 from itertools import groupby, islice, cycle
 
 from Bio import SeqIO
-from maize.apps.base import eprint, sh, debug, mkdir, popen
+from maize.apps.base import eprint, sh, debug, mkdir
 debug()
-
 
 FastaExt = ("fasta", "fas", "fa", "fna", "cds", "pep", "faa", "fsa", "seq", "nt", "aa")
 FastqExt = ("fastq", "fq")
@@ -358,20 +357,22 @@ def must_open(filename, mode="r", checkexists=False, skipcheck=False, \
         fp = NamedTemporaryFile(delete=False)
 
     elif filename.endswith(".gz"):
-        if 'r' in mode:
-            cmd = "gunzip -c {0}".format(filename)
-            fp = popen(cmd, debug=False)
-        elif 'w' in mode:
+        if "r" in mode:
+            cmd = "gunzip -c %s" % filename
+            from subprocess import Popen, PIPE
+            fp = Popen(cmd, bufsize = 1, stdout = PIPE, shell = True, universal_newlines = True).stdout
+        elif "w" in mode:
             import gzip
             fp = gzip.open(filename, mode)
 
     elif filename.endswith(".bz2"):
-        if 'r' in mode:
-            cmd = "bzcat {0}".format(filename)
-            fp = popen(cmd, debug=False)
-        elif 'w' in mode:
+        if "r" in mode:
+            cmd = "bzcat -c %s" % filename
+            from subprocess import Popen, PIPE
+            fp = Popen(cmd, bufsize = 1, stdout = PIPE, shell = True, universal_newlines = True).stdout
+        elif "w" in mode:
             import bz2
-            fp = bz2.BZ2File(filename, mode)
+            fp = bz2.open(filename, mode)
 
     else:
         if checkexists:
@@ -506,7 +507,7 @@ def flexible_cast(s):
         return float(s)
     return s
 
-def digitof_number(num):
+def ndigit(num):
     if num < 1:
         eprint("no digits: %g" % num)
         sys.exit(1)
@@ -516,7 +517,7 @@ def digitof_number(num):
         digit += 1
     return digit
 
-def sizeof_fmt(num, suffix='B'):
+def prettysize(num, suffix='B'):
     for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
