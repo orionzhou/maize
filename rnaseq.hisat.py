@@ -187,23 +187,3 @@ if __name__ == "__main__":
     cfg = configparser.ConfigParser()
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
-    cfg = cfg['hisat']
-    dirw, ilist, olist, jobpre, diro1, diro2 = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
-            cfg['outdir1'], cfg['outdir2']
-    paired = cfg.getboolean('paired')
-    temp_dir = cfg['temp_dir']
-    ref_gatk = cfg['ref_gatk']
-    gatk = cfg['gatk']
-    db_hisat, hisat, samtools, parallel = \
-            cfg['db_hisat'], cfg['hisat'], cfg['samtools'], cfg['parallel']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if args.check:
-        hisat_check(dirw, ilist, olist, diro1, diro2, paired)
-        sys.exit(0)
-    run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
-            db_hisat, hisat, samtools, gatk, parallel, temp_dir, 
-            pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email)
-

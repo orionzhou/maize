@@ -9,26 +9,35 @@ import logging
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
+from maize.formats.pbs import PbsJob
 
-def run_cmds_ssh(cmds):
-    username = 'zhoux379'
-    hostname = 'mesabi.msi.umn.edu'
-    port = 22
-    pubkey = os.path.join(os.environ['HOME'], '.ssh', 'id_rsa')
-    
-    key = paramiko.RSAKey.from_private_key_file(pubkey)
-    s = paramiko.SSHClient()
-    s.load_system_host_keys()
-    s.connect(hostname, port, pkey=key)
-    for cmd in cmds:
-        stdin, stdout, stderr = s.exec_command(cmd)
-        for line in stdout:
-            print("... " + line.strip("\n"))
-    s.close()
+def check_genomedir(species, raw = False):
+    dirw = species
+    if species.isalnum():
+        dirw = op.join("/home/springer/zhoux379/data/genome", species)
+        logging.debug("converting species to directory: %s" % dirw)
+    if not op.isdir(dirw):
+        logging.debug("creating diretory: %s" % dirw)
+        mkdir(dirw)
+    if raw:
+        fis = ['raw.fas', 'raw.fa', 'raw.fas.gz', 'raw.fa.gz']
+        fis = [x for x in fis if op.isfile(op.join(dirw, x))]
+        if len(fis) == 0:
+            logging.error("no raw.fas found")
+            sys.exit()
+        elif len(fis) > 1:
+            logging.error(">1 raw.fas found")
+            sys.exit()
+        return dirw, fis[0]
+    else:
+        fg = "%s/11_genome.fas" % dirw
+        if not op.isfile(fg):
+            logging.error("%s not there" % fg)
+            sys.exit()
+        return dirw, fg
 
 def clean_fasta(args):
-    dirw = op.join("/home/springer/zhoux379/data/genome", args.species)
-    if not op.isdir(dirw): makedir(dirw)
+    dirw, fi = check_genomedir(args.species, raw = True)
     os.chdir(dirw)
     for fname in ["raw.fix.fas.index", "11_genome.fas.index"]:
         if op.isfile(fname):
@@ -38,19 +47,7 @@ def clean_fasta(args):
     if op.isfile("11_genome.fas") and not args.overwrite:
         logging.debug("11_genome.fas already exits: skipped")
     else:
-        fis = ['raw.fas', 'raw.fa', 'raw.fas.gz', 'raw.fa.gz']
-        fis = [x for x in fis if op.isfile(x)]
-        if len(fis) == 0:
-            eprint("no raw.fas found")
-            sys.exit(1)
-        elif len(fis) > 1:
-            eprint(">1 raw.fas found")
-            sys.exit(1)
-        fi = fis[0]
-        if fi.endswith(".gz"):
-            sh("gunzip -c %s | fasta clean - > 01.fas" % fi)
-        else:
-            sh("fasta clean %s > 01.fas" % fi)
+        sh("fasta clean %s > 01.fas" % fi)
 
         if not args.norename:
             sh("fasta rename --map 03.seqid.map 01.fas > 11_genome.fas")
@@ -77,9 +74,7 @@ def clean_fasta(args):
         sh("fasta gaps 11_genome.fas > 16.gap.bed")
 
 def build_blat(args):
-    dirg = op.join("/home/springer/zhoux379/data/genome", args.species)
-    fg = "%s/11_genome.fas" % dirg
-    assert op.isfile(fg), "%s not there" % fg
+    dirg, fg = check_genomedir(args.species)
     dirw = op.join(dirg, "21.blat")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -92,9 +87,7 @@ def build_blat(args):
     if op.isfile("tmp.out"): os.remove("tmp.out")
 
 def build_bowtie(args):
-    dirg = op.join("/home/springer/zhoux379/data/genome", args.species)
-    fg = "%s/11_genome.fas" % dirg
-    assert op.isfile(fg), "%s not there" % fg
+    dirg, fg = check_genomedir(args.species)
     dirw = op.join(dirg, "21.bowtie2")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -108,9 +101,7 @@ def build_bowtie(args):
         sh("bowtie2-build db.fas db")
 
 def build_hisat(args):
-    dirg = op.join("/home/springer/zhoux379/data/genome", args.species)
-    fg = "%s/11_genome.fas" % dirg
-    assert op.isfile(fg), "%s not there" % fg
+    dirg, fg = check_genomedir(args.species)
     dirw = op.join(dirg, "21.hisat")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -121,9 +112,7 @@ def build_hisat(args):
         sh("bwa index -p %s/db %s" % (dirw, fg))
 
 def build_bwa(args):
-    dirg = op.join("/home/springer/zhoux379/data/genome", args.species)
-    fg = "%s/11_genome.fas" % dirg
-    assert op.isfile(fg), "%s not there" % fg
+    dirg, fg = check_genomedir(args.species)
     dirw = op.join(dirg, "21.bwa")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -134,9 +123,7 @@ def build_bwa(args):
         sh("bwa index -p %s/db %s" % (dirw, fg))
 
 def repeatmasker(args):
-    from maize.formats.pbs import PbsJob
-    dirg = op.join("/home/springer/zhoux379/data/genome", args.species)
-    fg = "%s/11_genome.fas" % dirg
+    dirg, fg = check_genomedir(args.species)
     dirw = op.join(dirg, "12.repeatmasker")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -149,12 +136,13 @@ def repeatmasker(args):
     else:
         logging.error("%s not supported" % args.species)
         sys.exit(1)
-    cmds = [
-        "cd %s" % dirw,
-        "RepeatMasker -pa %d -species %s -dir %s %s" % (args.cpu, species, dirw, fg),
-        "parse.rm.pl -i 11_genome.fas.out -o 12.repeatmasker.tsv"
-    ]
-    pbsjob = PbsJob(ppn = 24, walltime = "5:00:00", cmds = "\n".join(cmds))
+    
+    cmds = []
+    cmds.append("cd %s" % dirw)
+    cmds.append("RepeatMasker -pa %d -species %s -dir %s %s" % (args.cpu, species, dirw, fg)),
+    cmds.append("parse.rm.pl -i 11_genome.fas.out -o 12.repeatmasker.tsv")
+    
+    pbsjob = PbsJob(queue = 'ram256g', ppn = 24, walltime = "10:00:00", cmds = "\n".join(cmds))
     fjob = op.join(dirg, "13.rm.pbs")
     pbsjob.write(fjob)
     logging.debug("Job script '%s' has been created" % fjob)
@@ -166,7 +154,7 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'process genome files and build genome DB'
     )
-    parser.add_argument('species', help = 'species/accession/genotype name')
+    parser.add_argument('species', help = 'species/accession/genotype or directory path')
     parser.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 

@@ -1,6 +1,5 @@
-"""
-Classes to handle the .bed files
-"""
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import os
 import os.path as op
@@ -19,7 +18,7 @@ from maize.formats.base import LineFile, must_open, is_number, get_number
 #from maize.utils.grouper import Grouper
 #from maize.utils.range import Range, range_union, range_chain, \
 #            range_distance, range_intersect
-from maize.apps.base import sh, need_update, popen
+from maize.apps.base import sh, need_update
 
 
 class BedLine(object):
@@ -105,9 +104,7 @@ class BedLine(object):
             strand, '.', 'ID=' + self.accn))
         return row
 
-
 class Bed(LineFile):
-
     def __init__(self, filename=None, key=None, juncs=False, include=None):
         super(Bed, self).__init__(filename)
 
@@ -215,9 +212,7 @@ class Bed(LineFile):
             # chromosome, extent of the chromosome
             yield seqid, ranks[0][1], ranks[-1][1]
 
-
 class BedpeLine(object):
-
     def __init__(self, sline):
         args = sline.strip().split("\t")
         self.seqid1 = args[0]
@@ -284,9 +279,7 @@ class BedpeLine(object):
         args = (self.seqid1, self.start1 - 1, self.end2, self.accn)
         return "\t".join(str(x) for x in args)
 
-
 class BedEvaluate (object):
-
     def __init__(self, TPbed, FPbed, FNbed, TNbed):
 
         self.TP = Bed(TPbed).sum(unique=True)
@@ -336,9 +329,7 @@ class BedEvaluate (object):
         return "|".join(("{0:.3f}".format(x) for x in \
                     (self.sensitivity, self.specificity, self.accuracy)))
 
-
 class BedSummary(object):
-
     def __init__(self, bed):
         mspans = [(x.span, x.accn) for x in bed]
         spans, accns = zip(*mspans)
@@ -365,6 +356,11 @@ class BedSummary(object):
     def __str__(self):
         return "\t".join(str(x) for x in (self.nfeats, self.unique_bases))
 
+def size(args):
+    size = 0
+    for b in Bed(args.fi):
+        size += b.end - b.start + 1
+    print(size)
 
 def bed_sum(beds, seqid=None, unique=True):
     if seqid:
@@ -376,43 +372,6 @@ def bed_sum(beds, seqid=None, unique=True):
     unique_sum = range_union(ranges)
     raw_sum = sum(x.span for x in beds)
     return unique_sum if unique else raw_sum
-
-
-def main():
-
-    actions = (
-        ('depth', 'calculate average depth per feature using coverageBed'),
-        ('mergebydepth', 'returns union of features beyond certain depth'),
-        ('sort', 'sort bed file'),
-        ('merge', 'merge bed files'),
-        ('index', 'index bed file using tabix'),
-        ('bins', 'bin bed lengths into each window'),
-        ('summary', 'summarize the lengths of the intervals'),
-        ('evaluate', 'make truth table and calculate sensitivity and specificity'),
-        ('pile', 'find the ids that intersect'),
-        ('pairs', 'estimate insert size between paired reads from bedfile'),
-        ('mates', 'print paired reads from bedfile'),
-        ('sizes', 'infer the sizes for each seqid'),
-        ('uniq', 'remove overlapping features with higher scores'),
-        ('longest', 'select longest feature within overlapping piles'),
-        ('bedpe', 'convert to bedpe format'),
-        ('distance', 'calculate distance between bed features'),
-        ('sample', 'sample bed file and remove high-coverage regions'),
-        ('refine', 'refine bed file using a second bed file'),
-        ('flanking', 'get n flanking features for a given position'),
-        ('some', 'get a subset of bed features given a list'),
-        ('fix', 'fix non-standard bed files'),
-        ('filter', 'filter bedfile to retain records between size range'),
-        ('filterbedgraph', 'filter bedgraph to extract unique regions'),
-        ('random', 'extract a random subset of features'),
-        ('juncs', 'trim junctions.bed overhang to get intron, merge multiple beds'),
-        ('seqids', 'print out all seqids on one line'),
-        ('alignextend', 'alignextend based on BEDPE and FASTA ref'),
-        ('clr', 'extract clear range based on BEDPE'),
-        ('chain', 'chain bed segments together'),
-        ('density', 'calculates density of features per seqid'),
-        ('tiling', 'compute the minimum tiling path'),
-            )
 
 def flanking(args):
     """
@@ -471,6 +430,57 @@ def flanking(args):
 
     return (position, flankingbed)
 
-
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'bed utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("size", help = "report total size of features")
+    sp1.add_argument('fi', help = 'input *.bed file')
+    sp1.set_defaults(func = size)
+ 
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+
+
+    
+    
+"""('depth', 'calculate average depth per feature using coverageBed'),
+        ('mergebydepth', 'returns union of features beyond certain depth'),
+        ('sort', 'sort bed file'),
+        ('merge', 'merge bed files'),
+        ('index', 'index bed file using tabix'),
+        ('bins', 'bin bed lengths into each window'),
+        ('summary', 'summarize the lengths of the intervals'),
+        ('evaluate', 'make truth table and calculate sensitivity and specificity'),
+        ('pile', 'find the ids that intersect'),
+        ('pairs', 'estimate insert size between paired reads from bedfile'),
+        ('mates', 'print paired reads from bedfile'),
+        ('sizes', 'infer the sizes for each seqid'),
+        ('uniq', 'remove overlapping features with higher scores'),
+        ('longest', 'select longest feature within overlapping piles'),
+        ('bedpe', 'convert to bedpe format'),
+        ('distance', 'calculate distance between bed features'),
+        ('sample', 'sample bed file and remove high-coverage regions'),
+        ('refine', 'refine bed file using a second bed file'),
+        ('flanking', 'get n flanking features for a given position'),
+        ('some', 'get a subset of bed features given a list'),
+        ('fix', 'fix non-standard bed files'),
+        ('filter', 'filter bedfile to retain records between size range'),
+        ('filterbedgraph', 'filter bedgraph to extract unique regions'),
+        ('random', 'extract a random subset of features'),
+        ('juncs', 'trim junctions.bed overhang to get intron, merge multiple beds'),
+        ('seqids', 'print out all seqids on one line'),
+        ('alignextend', 'alignextend based on BEDPE and FASTA ref'),
+        ('clr', 'extract clear range based on BEDPE'),
+        ('chain', 'chain bed segments together'),
+        ('density', 'calculates density of features per seqid'),
+        ('tiling', 'compute the minimum tiling path')
+"""

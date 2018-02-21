@@ -4,12 +4,48 @@
 import os
 import os.path as op
 import sys
-import numpy as np
-from string import Template
-from colorama import init, Fore, Back, Style
+import logging
+import pysam
+
+from maize.apps.base import eprint, sh, mkdir
+from maize.formats.base import must_open
+from maize.formats.pbs import PbsJob
 
 def prepare(cfg):
-    return 1
+    cfg = cfg['prepare']
+    dirw, qry, tgt = cfg['dirw'], cfg['qry'], cfg['tgt']
+    qry_fas, tgt_fas = cfg['qry_fas'], cfg['tgt_fas']
+    tmpdir = cfg['temp_dir']
+    
+    if not op.isdir(dirw):
+        logging.debug("making directory: %s" % dirw)
+        mkdir(dirw)
+    os.chdir(dirw)
+    subdirs = ['01_tgt_genome', '02_qry_genome']
+    for subdir in subdirs:
+        if not op.isdir(subdir):
+            logging.debug("making directory: %s" % subdir)
+            mkdir(subdir)
+
+    if op.isfile(tgt_fas):
+        fo = "raw.fa"
+        if tgt_fas.endswith(".fa.gz") or tgt_fas.endswith(".fas.gz"):
+            fo = "raw.fa.gz"
+        sh("ln -sf %s 01_tgt_genome/%s" % (tgt_fas, fo))
+    else:
+        logging.error("%s not exist" % qry_fas)
+    if op.isfile(qry_fas):
+        fo = "raw.fa"
+        if qry_fas.endswith(".fa.gz") or qry_fas.endswith(".fas.gz"):
+            fo = "raw.fa.gz"
+        sh("ln -sf %s 02_qry_genome/%s" % (qry_fas, fo))
+    else:
+        logging.error("%s not exist" % qry_fas)
+
+    sh("genome %s/%s fasta --norename" % (dirw, "01_tgt_genome"))
+    sh("genome %s/%s blat" % (dirw, "01_tgt_genome"))
+    sh("genome %s/%s fasta --norename" % (dirw, "02_qry_genome"))
+
 def run_pblat(cfg):
     cfg = cfg['blat']
     dirw, jobpre, diro = \
@@ -95,13 +131,10 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'whole genome alignment pipeline'
     )
-    parser.add_argument(
-            'config', nargs = '?', default = "config.ini", 
-            help = 'config file'
-    )
+    parser.add_argument('config', nargs = "?", default = "config.ini", help = 'config file')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("pre", help = "prepare sequences for align") 
+    sp1 = sp.add_parser("prepare", help = "prepare sequences for align") 
     sp1.set_defaults(func = prepare)
     
     args = parser.parse_args()

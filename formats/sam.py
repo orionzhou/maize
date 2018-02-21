@@ -156,6 +156,34 @@ def ase_read(args):
         if 1 < 2:
             exit(1)
  
+def count(args):
+    from math import ceil
+    winsize, min_qual = args.winsize, args.min_qual
+    cdic = dict()
+    bam = pysam.AlignmentFile(args.fi, "rb")
+    for aln in bam:
+        if aln.reference_id == -1:
+            seqid = 'unmapped'
+            beg = 1
+        else:
+            seqid = aln.reference_name
+            beg = aln.reference_start
+        mq = aln.mapping_quality
+        if seqid not in cdic:
+            cdic[seqid] = dict()
+        pbin = ceil(beg / winsize)
+        if pbin not in cdic[seqid]:
+            cdic[seqid][pbin] = [0, 0]
+        if mq >= min_qual:
+            cdic[seqid][pbin][0] += 1
+        else:
+            cdic[seqid][pbin][1] += 1
+    bam.close()
+
+    for seqid, idic in sorted(cdic.items()):
+        for pbin, cnts in sorted(idic.items()):
+            cntstr = "\t".join([str(x) for x in cnts])
+            print("%s\t%d\t%s" % (seqid, pbin, cntstr))
 
 if __name__ == "__main__":
     import argparse
@@ -179,6 +207,15 @@ if __name__ == "__main__":
     sp1.add_argument('--min_baseq', default = 20, help = 'min base quality')
     sp1.add_argument('--vcf', default = '/home/springer/zhoux379/data/misc2/mo17vnt/53.vnt.final/61.rna.bed', help = 'variant file')
     sp1.set_defaults(func = ase_read)
+ 
+    sp1 = sp.add_parser("count", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'count reads in bins'
+    )
+    sp1.add_argument('fi', help = 'input *.sam or *.bam file')
+    sp1.add_argument('--winsize', default = 100000, choices = [100000, 1000000], help = 'window size')
+    sp1.add_argument('--min_qual', default = 20, choices = [0, 10, 20], help = 'min read mapping quality')
+    sp1.set_defaults(func = count)
  
     args = parser.parse_args()
     if args.command:
