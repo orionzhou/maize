@@ -120,17 +120,17 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
         sid = row[0]
         if paired:
             f1, f2 = row[1:3]
-            f1p = "%s_1.PE.fastq.gz" % (sid)
-            f1s = "%s_1.SE.fastq.gz" % (sid)
-            f2p = "%s_2.PE.fastq.gz" % (sid)
-            f2s = "%s_2.SE.fastq.gz" % (sid)
+            f1p = "%s_1.PE.fq.gz" % (sid)
+            f1s = "%s_1.SE.fq.gz" % (sid)
+            f2p = "%s_2.PE.fq.gz" % (sid)
+            f2s = "%s_2.SE.fq.gz" % (sid)
             p1p, p1s, p2p, p2s = ["%s/%s" % (do2, x) for x in [f1p, f1s, f2p, f2s]]
             assert op.isfile(p1p), "%s not exist" % p1p
             assert op.isfile(p1s), "%s not exist" % p1s
             assert op.isfile(p2p), "%s not exist" % p2p
             assert op.isfile(p2s), "%s not exist" % p2s
-            pre1 = op.basename(f1).rstrip(".fastq.gz")
-            pre2 = op.basename(f1).rstrip(".fastq.gz")
+            pre1 = op.basename(f1).split(".")[0]
+            pre2 = op.basename(f2).split(".")[0]
             q11 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
             q12 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre2)
             r11, r12 = parse_fastqc(q11), parse_fastqc(q12)
@@ -151,9 +151,9 @@ def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
                     rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32]) + "\n")
         else:
             f1 = row[1]
-            p1 = "%s/%s.fastq.gz" % (do2, sid)
+            p1 = "%s/%s.fq.gz" % (do2, sid)
             assert op.isfile(p1), "%s not exist" % p1
-            pre1 = op.basename(f1).rstrip(".fastq.gz")
+            pre1 = op.basename(f1).split(".")[0]
             q1 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
             q2 = "%s/%s_fastqc/fastqc_data.txt" % (do3, sid)
             r1, r2 = parse_fastqc(q1), parse_fastqc(q2)
@@ -189,6 +189,9 @@ def hisat(cfg, check):
         if not op.isdir(diro): 
             os.makedirs(diro)
     jgatk = "java -jar %s" % gatk
+    pbs_queues = pbs_queue.split(",")
+    pbs_ppns = pbs_ppn.split(",")
+    pbs_walltimes = pbs_walltime.split(",")
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
@@ -198,15 +201,15 @@ def hisat(cfg, check):
         if paired:
             f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[1:11]
             if not op.isfile(fsam):
-                fho1.write("%s -p 24 -x %s -q -1 %s -2 %s -U %s,%s \
+                fho1.write("%s -p %s -x %s -q -1 %s -2 %s -U %s,%s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
+                        (hisat, pbs_ppns[0], db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
         else:
             fr, rc, ft, rrc = row[1:5]
             if not op.isfile(fsam):
-                fho1.write("%s -p 24 -x %s -q -U %s \
+                fho1.write("%s -p %s -x %s -q -U %s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, db_hisat, ft, sid, sid, pre1))
+                        (hisat, pbs_ppns[0], db_hisat, ft, sid, sid, pre1))
         if not op.isfile(fbam):
             #fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
             #        O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
@@ -226,9 +229,6 @@ def hisat(cfg, check):
                 INPUT=%s.bam OUTPUT=%s.ins.txt HISTOGRAM_FILE=%s.hist.pdf\n" \
                 % (pre1, pre2, pre2))
     
-    pbs_walltimes = pbs_walltime.split(",")
-    pbs_ppns = pbs_ppn.split(",")
-    pbs_queues = pbs_queue.split(",")
     cmds = [[
         "cd %s" % dirw,
         "bash %s" % fo1
@@ -259,9 +259,10 @@ def hisat(cfg, check):
         
     logging.debug("%s job scripts were created: %s" % (njob, ", ".join(fjobs)))
     logging.debug("qsub %s" % fjobs[0])
-    logging.debug("qsub -W depend=afterany:??? %s" % fjobs[1])
+    logging.debug("qsub -W depend=afterok:??? %s" % fjobs[1])
 
 def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
+    from crimson import picard
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
@@ -278,7 +279,7 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
         bam = "%s/%s.bam" % (diro1, sid)
-        assert check_bam(bam), "%s not exist" % bam
+        assert op.isfile(bam), "%s not exist" % bam
         fs = "%s/%s.sum.txt" % (diro2, sid)
         rs1 = picard.parse(fs)['metrics']['contents']
         if type(rs1) == dict: rs1 = [rs1]
@@ -422,9 +423,9 @@ def run_ase(cfg, check):
         sid = row[0]
         gt = row[3]
         if paired:
-            fbam = row[15]
+            fbam = row[11]
         else:
-            fbam = row[9]
+            fbam = row[5]
         pre = "%s/%s" % (diro, sid)
         cmds = [
             "mkdir %s" % pre,
@@ -435,7 +436,7 @@ def run_ase(cfg, check):
             "bed.ase.py %s.4.sorted.bed %s.5.tsv %s.6.bed" % (pre, pre, pre),
             "sort -T %s -k1,1 -k2,2n %s.6.bed > %s.7.sorted.bed" % (pre, pre, pre),
             "intersectBed -wa -wb -a %s -b %s.7.sorted.bed > %s.8.bed" % (gene_bed, pre, pre),
-            "bed.ase.sum.py %s.5.tsv %s.8.bed %s.tsv" (pre, pre, pre),
+            "bed.ase.sum.py %s.5.tsv %s.8.bed %s.tsv" % (pre, pre, pre),
             "rm %s.[1-8].*" % pre,
             "rm -rf %s" % pre,
         ]

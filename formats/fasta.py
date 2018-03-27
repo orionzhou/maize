@@ -101,7 +101,8 @@ def extract(args):
                         eprint("%s not in db => skipped" % sid)
                 else:
                     eprint("%s: unknown locstr => skipped" % loc)
-
+    
+    rcds = []
     for b in bed:
         sid, beg, end = b.seqid, b.start, b.end
         oid = "%s-%d-%d" % (sid, beg, end)
@@ -130,13 +131,14 @@ def extract(args):
                     seq += "N" * bp_pad
             assert len(seq) == size, "error in seq size: %s:%d-%d %d" % (sid, beg, end, bp_pad)
         rcd = SeqRecord(Seq(seq), id = oid, description = '')
-        SeqIO.write(rcd, sys.stdout, 'fasta')
+        rcds.append(rcd)
+    SeqIO.write(rcds, sys.stdout, 'fasta')
 
 def split(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
     n = args.N
     if not op.exists(dirw):
-        makedir(dirw)
+        mkdir(dirw)
     else:
         sh("rm -rf %s/*" % dirw)
     
@@ -183,47 +185,6 @@ def tile(args):
             rcds.append(SeqRecord(Seq(seqstr), id = ssid, description = ''))
         SeqIO.write(rcds, sys.stdout, "fasta")
     fhi.close()
-
-def splitlong(args):
-    ary = []
-    fhi = must_open(args.fi)
-    for seq in SeqIO.parse(fhi, "fasta") :
-        ary.append(len(seq.seq))
-    fhi.close()
-    totalsize = sum(ary)
-    
-    if args.mode == 1:
-        piecesize = 100000
-    else:
-        npieces = 10 * 24 
-        piecesize = int((totalsize / npieces) / 100000) * 100000
-    print("  total size: %d, size per piece: %d" % (totalsize, piecesize))
-    
-    fhi = must_open(args.fi)
-    fho = open(args.fo, "w")
-    for seq in SeqIO.parse(fhi, "fasta") :
-        size = len(seq.seq)
-        if(float(size) / piecesize > 1.3) :
-            print("    splitting %s: %d" %(seq.id, size))
-            ary = seq.id.split("-")
-            [id, bbeg] = [ary[0], int(ary[1])]
-
-            seqstr = str(seq.seq)
-            nf = int(math.ceil(float(size) / piecesize))
-            rcds = []
-            for i in range(0, nf) :
-                rbeg = i * piecesize
-                rend = min((i+1) * piecesize, size)
-                sseqstr = seqstr[rbeg:rend]
-                sid = "%s-%d-%d" % (id, bbeg+rbeg, bbeg+rend-1)
-                rcd = SeqRecord(Seq(sseqstr), id = sid, description = '')
-                rcds.append(rcd)
-                #print "      " + sid
-            SeqIO.write(rcds, fho, "fasta")
-        else:
-            SeqIO.write(seq, fho, "fasta")
-    fhi.close()
-    fho.close()
 
 def merge(args):
     cfg = args.cfg
@@ -359,16 +320,6 @@ if __name__ == "__main__":
     #nproc = int(os.environ['nproc'])
     sp3.set_defaults(func = split)
 
-    sp3 = sp.add_parser("splitlong",
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'break long fasta record into small pieces'
-    )
-    sp3.add_argument('fi', help = 'input file (fasta)')
-    sp3.add_argument('--mode', type = int, default = 1, choices = [1, 2],
-            help = 'split mode: 1 [100kb chunks], 2 [240 pieces]'
-    )
-    sp3.set_defaults(func = splitlong)
-    
     sp3 = sp.add_parser("tile", 
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = 'create sliding windows that tile the entire sequence'

@@ -34,7 +34,7 @@ def check_genomedir(species, raw = False):
         if not op.isfile(fg):
             logging.error("%s not there" % fg)
             sys.exit()
-        return dirw, fg
+        return op.abspath(dirw), op.abspath(fg)
 
 def clean_fasta(args):
     dirw, fi = check_genomedir(args.species, raw = True)
@@ -49,7 +49,7 @@ def clean_fasta(args):
     else:
         sh("fasta clean %s > 01.fas" % fi)
 
-        if not args.norename:
+        if args.rename:
             sh("fasta rename --map 03.seqid.map 01.fas > 11_genome.fas")
             os.remove("01.fas")
         else:
@@ -120,7 +120,7 @@ def build_bwa(args):
     if op.isfile("db.bwt") and not args.overwrite:
         logging.debug("db.bwt already exists - skipped")
     else:
-        sh("bwa index -p %s/db %s" % (dirw, fg))
+        sh("bwa index -a bwtsw -p %s/db %s" % (dirw, fg))
 
 def repeatmasker(args):
     dirg, fg = check_genomedir(args.species)
@@ -129,7 +129,7 @@ def repeatmasker(args):
     os.chdir(dirw)
 
     species = None
-    if args.species in ['Zmays', 'B73', 'PH207', 'W22', 'Mo17']:
+    if args.species in ['Zmays', 'B73', 'PH207', 'W22', 'Mo17', 'PHB47']:
         species = 'maize'
     elif args.species == 'Osativa':
         species = 'rice'
@@ -154,28 +154,38 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'process genome files and build genome DB'
     )
-    parser.add_argument('species', help = 'species/accession/genotype or directory path')
-    parser.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
     sp1 = sp.add_parser("fasta", 
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = "clean and rename fasta records, generate *.sizes and gap location files")
-    sp1.add_argument('--norename', action = 'store_true', help = 'don\'t rename seq IDs')
+    sp1.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp1.add_argument('--overwrite', action='store_true', help = 'overwrite')
+    sp1.add_argument('--rename', action = 'store_true', help = 'rename seq IDs')
     sp1.set_defaults(func = clean_fasta)
 
     sp1 = sp.add_parser("repeatmasker", 
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = "run repeatmasker and parse result"
     )
+    sp1.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp1.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp1.add_argument('--cpu', default = 24, help = 'number CPUs to use')
     sp1.set_defaults(func = repeatmasker)
 
     sp2 = sp.add_parser("blat", help = "build Blat DB")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp2.set_defaults(func = build_blat)
+    
     sp2 = sp.add_parser("bowtie", help = "build Bowtie2 DB")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp2.set_defaults(func = build_bowtie)
+    
     sp2 = sp.add_parser("bwa", help = "build bwa DB")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp2.set_defaults(func = build_bwa)
     
     args = parser.parse_args()

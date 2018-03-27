@@ -12,6 +12,7 @@ from collections import defaultdict
 from itertools import groupby
 
 from maize.formats.base import LineFile, must_open, is_number, get_number
+from maize.utils.location import make_window
 #from maize.formats.sizes import Sizes
 #from maize.utils.iter import pairwise
 #from maize.utils.cbook import SummaryStats, thousands, percentage
@@ -357,10 +358,34 @@ class BedSummary(object):
         return "\t".join(str(x) for x in (self.nfeats, self.unique_bases))
 
 def size(args):
-    size = 0
-    for b in Bed(args.fi):
-        size += b.end - b.start + 1
-    print(size)
+    sizes = [b.end - b.start + 1 for b in Bed(args.fi)]
+    sizes = np.sort(sizes)
+    total = np.sum(sizes)
+    min_sizes = " ".join(str(x) for x in sizes[0:3])
+    max_sizes = " ".join(str(x) for x in sizes[-3:])
+    logging.debug("size range: %s - %s, total size: %d" % (min_sizes, max_sizes, total))
+
+def filter(args):
+    fhi = must_open(args.fi)
+    for line in fhi:
+        ps = line.strip().split("\t")
+        seqid, start, end = ps[0], int(ps[1]) + 1, int(ps[2])
+        assert start <= end, "start={0} end={1}".format(start, end)
+        size = end - start + 1
+        if size < args.minsize or size > args.maxsize:
+            continue
+        print("\t".join(ps))
+
+def makewindow(args):
+    fhi = must_open(args.fi)
+    for line in fhi:
+        ps = line.strip().split("\t")
+        seqid, start, end = ps[0], int(ps[1]) + 1, int(ps[2])
+        assert start <= end, "start={0} end={1}".format(start, end)
+        size = end - start + 1
+        wins = make_window(start, end, args.size, args.step)
+        for wbeg, wend in wins:
+            print("%s\t%d\t%d" % (seqid, wbeg-1, wend))
 
 def bed_sum(beds, seqid=None, unique=True):
     if seqid:
@@ -442,6 +467,22 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input *.bed file')
     sp1.set_defaults(func = size)
  
+    sp1 = sp.add_parser("filter", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "filter bed file with requirements")
+    sp1.add_argument('fi', help = 'input *.bed file')
+    sp1.add_argument('--minsize', '-min', default = 0, type = int, help = 'minimum feature length')
+    sp1.add_argument('--maxsize', '-max', default = 1000000000, type = int, help = 'maximum feature length')
+    sp1.set_defaults(func = filter)
+    
+    sp1 = sp.add_parser("makewindow", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "make sliding windows with given size and step")
+    sp1.add_argument('fi', help = 'input *.bed file')
+    sp1.add_argument('--size', '-w', default = 100, type = int, help = 'window size')
+    sp1.add_argument('--step', '-s', default = 100, type = int, help = 'window step')
+    sp1.set_defaults(func = makewindow)
+    
     args = parser.parse_args()
     if args.command:
         args.func(args)

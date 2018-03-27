@@ -4,6 +4,8 @@
 import sys
 import re
 
+from maize.apps.base import eprint
+
 ptn_loc = re.compile("^([\w\-\.]+)\:([\d,]+)(\-|\.{1,2})([\d,]+)$")
 
 def locStr2Ary(locS):
@@ -35,18 +37,19 @@ def locAryLen(locA):
     except:
          print("invalid locAry: ", locA)
 
-def maketile(beg, end, winsize, winstep):
+def make_window(beg, end, winsize, winstep):
     import math
     size = end - beg + 1
     nwin = math.ceil((size - winsize) / winstep) + 1
+    nwin = max(1, nwin) 
     
     mergelast = False
     if nwin > 1:
-        size_last = end - (beg + winstep * (nwin-2) + winsize) + 1
-        #print(size_last)
-        if float(size_last) / winsize < 0.5:
+        size_lastwin = size - (nwin-1) * winstep
+        if float(size_lastwin) / winstep < 0.3:
             mergelast = True
-
+            eprint(size_lastwin)
+    
     wins = []
     for i in range(0, nwin):
         wbeg = beg + winstep * i

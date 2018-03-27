@@ -16,7 +16,6 @@ debug()
 FastaExt = ("fasta", "fas", "fa", "fna", "cds", "pep", "faa", "fsa", "seq", "nt", "aa")
 FastqExt = ("fastq", "fq")
 
-
 class BaseFile (object):
 
     def __init__(self, filename):
@@ -24,7 +23,6 @@ class BaseFile (object):
         self.filename = filename
         if filename:
             logging.debug("Load file `{0}`".format(filename))
-
 
 class LineFile (BaseFile, list):
     """
@@ -39,7 +37,6 @@ class LineFile (BaseFile, list):
             self.lines = [l.strip() for l in fp if l[0]!=comment]
             logging.debug("Load {0} lines from `{1}`.".\
                         format(len(self.lines), filename))
-
 
 class DictFile (BaseFile, dict):
     """
@@ -82,7 +79,6 @@ class DictFile (BaseFile, dict):
         logging.debug("Imported {0} records from `{1}`.".\
                     format(len(self), filename))
 
-
 class SetFile (BaseFile, set):
 
     def __init__(self, filename, column=-1, delimiter=None):
@@ -96,7 +92,6 @@ class SetFile (BaseFile, set):
                 keys = [keys[column]]
             self.update(keys)
 
-
 class FileShredder (object):
     """
     Same as rm -f *
@@ -106,7 +101,6 @@ class FileShredder (object):
         filelist = [x for x in filelist if x and op.exists(x)]
         cmd = "rm -rf {0}".format(" ".join(filelist))
         sh(cmd, log=verbose)
-
 
 class FileMerger (object):
     """
@@ -136,7 +130,6 @@ class FileMerger (object):
             sh(cmd, outfile=outfile)
 
         return outfile
-
 
 class FileSplitter (object):
 
@@ -284,7 +277,6 @@ class FileSplitter (object):
         for fw in filehandles:
             fw.close()
 
-
 def longest_unique_prefix(query, targets, remove_self=True):
     """
     Find the longest unique prefix for filename, when compared against a list of
@@ -298,7 +290,6 @@ def longest_unique_prefix(query, targets, remove_self=True):
         prefix_lengths.remove(len(query))
     longest_length = max(prefix_lengths)
     return query[:longest_length + 1]
-
 
 def check_exists(filename, oappend=False):
     """
@@ -314,11 +305,9 @@ def check_exists(filename, oappend=False):
 
     return overwrite
 
-
 def timestamp():
     from datetime import datetime as dt
     return "{0}{1:02d}{2:02d}".format(dt.now().year, dt.now().month, dt.now().day)
-
 
 def must_open(filename, mode="r", checkexists=False, skipcheck=False, \
             oappend=False):
@@ -393,11 +382,9 @@ def must_open(filename, mode="r", checkexists=False, skipcheck=False, \
 
     return fp
 
-
 bash_shebang = "#!/bin/bash"
 python_shebang = """#!/usr/bin/env python
 # -*- coding: UTF-8 -*-"""
-
 
 def write_file(filename, contents, meta=None, skipcheck=False, append=False, tee=False):
     if not meta:
@@ -436,7 +423,6 @@ def write_file(filename, contents, meta=None, skipcheck=False, append=False, tee
     if meta == "run script" and not append:
         sh("chmod u+x {0}".format(filename))
 
-
 def read_until(handle, start):
     # read each line until a certain start, then puts the start tag back
     while 1:
@@ -447,7 +433,6 @@ def read_until(handle, start):
         if line.startswith(start):
             handle.seek(pos)
             return
-
 
 def read_block(handle, signal):
     """
@@ -470,14 +455,13 @@ def read_block(handle, signal):
         if header[:signal_len] != signal:
             continue
         found_signal = True
-        seq = list(s.strip() for s in it.next())
+        seq = list(s.strip() for s in next(it))
         yield header, seq
 
     if not found_signal:
         handle.seek(0)
         seq = list(s.strip() for s in handle)
         yield None, seq
-
 
 def is_number(s, cast=float):
     """
@@ -490,7 +474,6 @@ def is_number(s, cast=float):
 
     return True
 
-
 def get_number(s, cast=int):
     """
     Try to get a number out of a string, and cast it.
@@ -498,7 +481,6 @@ def get_number(s, cast=int):
     import string
     d = "".join(x for x in str(s) if x in string.digits)
     return cast(d)
-
 
 def flexible_cast(s):
     if is_number(s, cast=int):
@@ -523,7 +505,6 @@ def prettysize(num, suffix='B'):
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
-
 
 def flatten(args):
     """
@@ -563,7 +544,6 @@ def flatten(args):
         else:
             print(row.strip().replace(opts.sep, "\n"))
 
-
 def split(args):
     """
     %prog split file outdir N
@@ -593,7 +573,6 @@ def split(args):
     fs.split(N)
 
     return fs
-
 
 if __name__ == '__main__':
     import argparse
