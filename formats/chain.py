@@ -29,7 +29,6 @@ import logging
 from maize.formats.base import BaseFile, read_block
 from maize.apps.base import need_update, which
 
-
 class ChainLine (object):
 
     def __init__(self, chain, lines):
@@ -48,7 +47,6 @@ class ChainLine (object):
         self.ungapped = sum(self.ungapped)
         self.dt = sum(self.dt)
         self.dq = sum(self.dq)
-
 
 class Chain (BaseFile):
 
@@ -225,6 +223,9 @@ def frompsl(args):
                 format(netfile, sortedchain, liftoverfile)
         sh(cmd)
 
+def fromtsv(args):
+    from maize.formats.sizes import Sizes
+ 
 def chain2bed(args):
     chainFile = Chain(args.fi)
     for c in chainFile.chains:
@@ -254,6 +255,31 @@ def chain2bed(args):
             offset_t += ungapped + dt
             offset_q += ungapped + dq
 
+def chain2tsv(args):
+    chainFile = Chain(args.fi)
+    for c in chainFile.chains:
+        c1, score, tName, tSize, tSrd, tStart, tEnd, \
+                qName, qSize, qSrd, qStart, qEnd, cid = c.chain.split()
+        assert tSrd == '+', 'tStrand is not "+"'
+        score, tStart, tEnd, tSize, qStart, qEnd, qSize = \
+                int(score), int(tStart), int(tEnd), int(tSize), \
+                int(qStart), int(qEnd), int(qSize)
+        if qSrd == '-':
+            qStart, qEnd = qSize - qEnd, qSize - qStart
+        offset_t, offset_q = 0, 0
+        for ungapped, dt, dq in c.blocks:
+            rtb, rte = offset_t, offset_t + ungapped
+            rqb, rqe = offset_q, offset_q + ungapped
+            tb, te = tStart + rtb, tStart + rte
+            if qSrd == '-':
+                qb, qe = qEnd - rqe, qEnd - rqb
+            else:
+                qb, qe = qStart + rqb, qStart + rqe
+            print("%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d" % (cid, tName, tb+1, te, qSrd, qName, qb+1, qe))
+            offset_t += ungapped + dt
+            offset_q += ungapped + dq
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
@@ -266,6 +292,10 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input chain file')
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = chain2bed)
+    
+    sp1 = sp.add_parser("2tsv", help = "convert to tsv file")
+    sp1.add_argument('fi', help = 'input chain file')
+    sp1.set_defaults(func = chain2tsv)
     
     args = parser.parse_args()
     if args.command:

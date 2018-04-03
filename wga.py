@@ -158,6 +158,24 @@ def run_blat(cfg):
         "pslCat 14.check.psl 27.check.psl > 31.1.psl",
         "pslSwap 31.1.psl 41.1.psl",
         "rm 25.nov.psl 26.psl",
+
+        "axtChain -linearGap=medium -psl 31.1.psl %s %s 31.2.chain" % (tgt_2bit, qry_2bit),
+        "chainPreNet 31.2.chain %s %s 31.3.chain" % (tgt_size, qry_size),
+        "chainSwap 31.3.chain 31.3.q.chain",
+        "chainNet 31.3.chain %s %s 31.5.net 31.5.q.net" % (tgt_size, qry_size),
+        "netChainSubset 31.5.net 31.3.chain stdout | chainSort stdin 31.5.chain",
+        "netChainSubset 31.5.q.net 31.3.q.chain stdout | chainSort stdin 31.5.q.chain",
+        "chainNet 31.5.q.chain %s %s /dev/null 31.8.net" % (qry_size, tgt_size),
+        "netChainSubset 31.8.net 31.3.chain 31.8.chain",
+        
+        "axtChain -linearGap=medium -psl 41.1.psl %s %s 41.2.chain" % (qry_2bit, tgt_2bit),
+        "chainPreNet 41.2.chain %s %s 41.3.chain" % (qry_size, tgt_size),
+        "chainSwap 41.3.chain 41.3.q.chain",
+        "chainNet 41.3.chain %s %s 41.5.net 41.5.q.net" % (qry_size, tgt_size),
+        "netChainSubset 41.5.net 41.3.chain stdout | chainSort stdin 41.5.chain",
+        "netChainSubset 41.5.q.net 41.3.q.chain stdout | chainSort stdin 41.5.q.chain",
+        "chainNet 41.5.q.chain %s %s /dev/null 41.8.net" % (tgt_size, qry_size),
+        "netChainSubset 41.8.net 41.3.chain 41.8.chain",
     ])
     jcmds.append([
         "cd %s" % dirw,
