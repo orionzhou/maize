@@ -26,7 +26,7 @@ import os.path as op
 import sys
 import logging
 
-from maize.formats.base import BaseFile, read_block
+from maize.formats.base import BaseFile, read_block, must_open
 from maize.apps.base import need_update, which
 
 class ChainLine (object):
@@ -223,13 +223,64 @@ def frompsl(args):
                 format(netfile, sortedchain, liftoverfile)
         sh(cmd)
 
-def fromtsv(args):
+def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
+    chain = "chain"
+    score = 1000
+    tStrand = "+"
+    tStart = min(x[0] for x in locs) - 1
+    tEnd = max(x[1] for x in locs)
+    qStart = min(x[2] for x in locs) - 1
+    qEnd = max(x[3] for x in locs)
+    headerline = " ".join(str(x) for x in (
+         chain, score, tName, tSize, tStrand, tStart,
+         tEnd, qName, qSize, qStrand, qStart, qEnd, cid
+    ))
+    print(headerline)
+    for i in range(len(locs)):
+        tb, te, qb, qe = locs[i]
+        size, size2 = te - tb + 1, qe - qb + 1
+        assert size == size2, "size not equal"
+        if i == len(locs) - 1:
+            print(size)
+        else:
+            dt = locs[i+1][0] - 1 - te
+            if qStrand == "-":
+                dq = qb - 1 - locs[i+1][3]
+            else:
+                dq = locs[i+1][2] - 1 - qe
+            print("%d\t%d\t%d" % (size, dt, dq))
+    print()
+
+def bed2chain(args):
     from maize.formats.sizes import Sizes
+    tdic = Sizes(args.tsize)
+    qdic = Sizes(args.qsize)
+    
+    firstline = True
+    cid0, tName0, qName0, srd0, locs = '', '', '', '', []
+    for line in must_open(args.fi):
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid = line.split()
+        tStart, tEnd, qStart, qEnd = int(tStart), int(tEnd), int(qStart), int(qEnd)
+        if firstline:
+            cid0, tName0, qName0, srd0 = cid, tName, qName, srd
+            locs.append([tStart, tEnd, qStart, qEnd])
+            firstline = False
+        elif cid0 == cid:
+            assert tName == tName0 and qName == qName0 and srd == srd0, "inconsistent info in chain"
+            locs.append([tStart, tEnd, qStart, qEnd])
+        else:
+            print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs)
+            cid0, tName0, qName0, srd0 = cid, tName, qName, srd
+            locs = [[tStart, tEnd, qStart, qEnd]]
+    print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs)
  
 def chain2bed(args):
     chainFile = Chain(args.fi)
     for c in chainFile.chains:
-        c1, score, tName, tSize, tSrd, tStart, tEnd, \
+        cid, score, tName, tSize, tSrd, tStart, tEnd, \
                 qName, qSize, qSrd, qStart, qEnd, cid = c.chain.split()
         assert tSrd == '+', 'tStrand is not "+"'
         score, tStart, tEnd, tSize, qStart, qEnd, qSize = \
@@ -249,36 +300,11 @@ def chain2bed(args):
             tstr = "%s:%d-%d" % (tName, tb, te)
             qstr = "%s:%d-%d" % (qName, qb, qe)
             if args.qry:
-                print("%s\t%d\t%d\t%s\t%s" % (qName, qb, qe, qSrd, tstr))
+                print("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s" % (qName, qb, qe, qSrd, tName, tb, te, cid))
             else:
-                print("%s\t%d\t%d\t%s\t%s" % (tName, tb, te, qSrd, qstr))
+                print("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s" % (tName, tb, te, qSrd, qName, qb, qe, cid))
             offset_t += ungapped + dt
             offset_q += ungapped + dq
-
-def chain2tsv(args):
-    chainFile = Chain(args.fi)
-    for c in chainFile.chains:
-        c1, score, tName, tSize, tSrd, tStart, tEnd, \
-                qName, qSize, qSrd, qStart, qEnd, cid = c.chain.split()
-        assert tSrd == '+', 'tStrand is not "+"'
-        score, tStart, tEnd, tSize, qStart, qEnd, qSize = \
-                int(score), int(tStart), int(tEnd), int(tSize), \
-                int(qStart), int(qEnd), int(qSize)
-        if qSrd == '-':
-            qStart, qEnd = qSize - qEnd, qSize - qStart
-        offset_t, offset_q = 0, 0
-        for ungapped, dt, dq in c.blocks:
-            rtb, rte = offset_t, offset_t + ungapped
-            rqb, rqe = offset_q, offset_q + ungapped
-            tb, te = tStart + rtb, tStart + rte
-            if qSrd == '-':
-                qb, qe = qEnd - rqe, qEnd - rqb
-            else:
-                qb, qe = qStart + rqb, qStart + rqe
-            print("%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d" % (cid, tName, tb+1, te, qSrd, qName, qb+1, qe))
-            offset_t += ungapped + dt
-            offset_q += ungapped + dq
-
 
 if __name__ == '__main__':
     import argparse
@@ -288,14 +314,16 @@ if __name__ == '__main__':
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("2bed", help = "convert to BED file")
+    sp1 = sp.add_parser("2bed", help = "convert to 8-col BED file")
     sp1.add_argument('fi', help = 'input chain file')
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = chain2bed)
     
-    sp1 = sp.add_parser("2tsv", help = "convert to tsv file")
-    sp1.add_argument('fi', help = 'input chain file')
-    sp1.set_defaults(func = chain2tsv)
+    sp1 = sp.add_parser("frombed", help = "convert from BED to chain file")
+    sp1.add_argument('fi', help = 'input tsv file')
+    sp1.add_argument('tsize', help = 'target size file')
+    sp1.add_argument('qsize', help = 'query size file')
+    sp1.set_defaults(func = bed2chain)
     
     args = parser.parse_args()
     if args.command:

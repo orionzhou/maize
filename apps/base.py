@@ -18,6 +18,21 @@ from subprocess import PIPE, run
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+def str2bool(v):
+    if not isinstance(v, str):
+        raise ValueError("invalid literal for boolean: Not a string.")
+    if v.lower() in ("yes", "true", "t", "1"):
+        return True
+    elif v.lower() in ('no', 'false', 'f', '0'):
+        return False
+    else:
+        raise ValueError('invalid literal for boolean: "%s"' % v)
+
 def get_abs_path(link_name):
     source = link_name
     if op.islink(source):

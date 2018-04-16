@@ -102,14 +102,14 @@ def build_bowtie(args):
 
 def build_hisat(args):
     dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.hisat")
+    dirw = op.join(dirg, "21.hisat2")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
    
-    if op.isfile("db.bwt") and not args.overwrite:
-        logging.debug("db.bwt already exists - skipped")
+    if op.isfile("db.1.ht2") and not args.overwrite:
+        logging.debug("db.1.ht2 already exists - skipped")
     else:
-        sh("bwa index -p %s/db %s" % (dirw, fg))
+        sh("hisat2-build -p 8 %s db" % fg)
 
 def build_bwa(args):
     dirg, fg = check_genomedir(args.species)
@@ -187,6 +187,11 @@ if __name__ == "__main__":
     sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp2.set_defaults(func = build_bwa)
+    
+    sp2 = sp.add_parser("hisat", help = "build hisat2 DB")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
+    sp2.set_defaults(func = build_hisat)
     
     args = parser.parse_args()
     if args.command:

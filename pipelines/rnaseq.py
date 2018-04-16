@@ -3,391 +3,202 @@
 
 import os
 import os.path as op
-import numpy as np
 import sys
+import re
 import logging
+from astropy.table import Table, Column
 
-from maize.apps.base import eprint, sh, mkdir
+from maize.apps.base import AttrDict, str2bool, eprint, sh, mkdir, which
 from maize.formats.base import must_open
-from maize.formats.pbs import PbsJob
+from maize.formats.pbs import PbsJob, create_job_chain
 
-from fadapa import Fadapa
-
-def parse_fastqc(fqc):
-    assert op.isfile(fqc), "%s not exist" % fqc
-    qc = Fadapa(fqc)
-    r = dict()
-    for ary in qc.clean_data('Basic Statistics'):
-        r[ary[0]] = ary[1]
-    return r
-
-def fq_trim(cfg, check):
-    cfg = cfg['fastq_trim']
-    dirw, ilist, olist, jobpre, do1, do2, do3 = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
-            cfg['outdir1'], cfg['outdir2'], cfg['outdir3']
-    paired = cfg.getboolean('paired')
-    temp_dir = cfg['temp_dir']
-    f_adp, fastqc, trimm, parallel = \
-            cfg['adapter'], cfg['fastqc'], cfg['trimmomatic'], cfg['parallel']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if check:
-        fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired)
-        sys.exit(0)
+def check_cfg_mapping(c):
+    c.outdirs = c.outdir.split(",")
+    assert len(c.outdirs) == 4, "not 4 outdirs: %s" % c.outdir
     
-    if not op.isdir(dirw): os.makedirs(dirw)
-    os.chdir(dirw)
-    assert op.isfile(f_adp), "%s not exist" % f_adp 
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo3 = ["%s.%d.sh" % (jobpre, i) for i in range(1,4)]
-    fho1, fho2, fho3 = [open(fo, "w") for fo in [fo1, fo2, fo3]]
-    assert op.isfile(trimm), "%s is not there" % trimm
-    for diro in [do1, do2, do3]:
-        if not op.isdir(diro): 
-            os.makedirs(diro)
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        if paired:
-            f1, f2 = row[1:3]
-            assert op.isfile(f1), "%s not there" % f1
-            assert op.isfile(f2), "%s not there" % f2
-            f11 = "%s/%s_1.PE.fq.gz" % (do2, sid)
-            f12 = "%s/%s_1.SE.fq.gz" % (do2, sid)
-            f21 = "%s/%s_2.PE.fq.gz" % (do2, sid)
-            f22 = "%s/%s_2.SE.fq.gz" % (do2, sid)
-            fho1.write("%s -o %s --extract -f fastq %s %s\n" % \
-                    (fastqc, do1, f1, f2))
-            fho2.write("java -Xmx2500M -jar %s PE -threads 4 \
-                    %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no \
-                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35\n" % \
-                    (trimm, f1, f2, f11, f12, f21, f22, f_adp))
-            fho3.write("%s -o %s --extract -f fastq %s %s %s %s\n" % \
-                    (fastqc, do3, f11, f12, f21, f22))
-        else:
-            f1 = row[1]
-            assert op.isfile(f1), "%s not there" % f1
-            fho1.write("%s -o %s --extract -f fastq %s\n" % \
-                    (fastqc, do1, f1))
-            fo = "%s/%s.fq.gz" % (do2, sid)
-            #fob = "%s/%s_1.fastq.gz" % (do2, sid)
-            #if op.isfile(fob):
-            #    os.system("mv %s %s" % (fob, fo))
-            fho2.write("java -Xmx2500M -jar %s SE -threads 4 \
-                    %s %s ILLUMINACLIP:%s:2:30:10:8:no \
-                    LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35\n" % \
-                    (trimm, f1, fo, f_adp))
-            fho3.write("%s -o %s --extract -f fastq %s\n" % \
-                    (fastqc, do3, fo))
+    for subdir in [c.dirw, c.temp_dir] + c.outdirs:
+        if not op.isdir(subdir):
+            mkdir(subdir)
     
-    cmds = []
-    cmds.append("export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir)
-    cmds.append("cd %s" % dirw)
-    cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo1))
-    cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo2))
-    cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo3))
-    
-    pbsjob = PbsJob(queue = pbs_queue, 
-            ppn = pbs_ppn, 
-            walltime = pbs_walltime,
-            email = pbs_email,
-            cmds = "\n".join(cmds)
-    )
-    fjob = "%s.pbs" % jobpre
-    pbsjob.write(fjob)
-    logging.debug("Job script '%s' has been created" % fjob)
+    for fn in [c.ilist, c.targetvcf, c.gene_bed]:
+        assert op.isfile(fn), "cannot read %s" % fn
 
-def fq_trim_check(dirw, ilist, olist, do1, do2, do3, paired):
-    os.chdir(dirw)
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    cols = list(ary.dtype.names)
-    fho = open(olist, "w")
-    if paired:
-        fho.write("\t".join(cols + [ \
-                "ReadPairCount", "TrimmedReadFile1Paired", \
-                "TrimmedReadFile1Unpaired", "TrimmedReadFile2Paired", \
-                "TrimmedReadFile2Unpaired", "RetainedReadPairCount", \
-                "RetainedRead1Count", "RetainedRead2Count"]) + "\n")
+    for key in 'samtools parallel sambamba htseq bcftools bedtools'.split():
+        fp = which(c[key])
+        assert fp is not None, "not executable: %s" % c[key]
+        c[key] = fp
+
+    c.paired = str2bool(c.paired)
+    
+    c.genomes = c.genomes.split(",")
+    c.ngenome = len(c.genomes)
+    logging.debug("mapping to %d genome(s)" % c.ngenome)
+    c.gffs = re.split("[\s,]+", c.gffs)
+    assert c.ngenome == len(c.gffs), "not %d gffs" % c.ngenome
+
+    if c.mapper == 'hisat2':
+        c.hisat_dbs = re.split("[\s,]+", c.hisat_dbs)
+        assert c.ngenome == len(c.hisat_dbs), "not %d hisat dbs" % c.ngenome
+        c.hisat2 = which(c.hisat2)
+        assert c.hisat2 is not None, "not executable: %s" % c.hisat2
+    elif c.mapper == 'bowtie2':
+        c.bowtie_dbs = re.split("[\s,]+", c.bowtie_dbs)
+        assert c.ngenome == len(c.bowtie_dbs), "not %d hisat dbs" % c.ngenome
+        c.bowtie2 = which(c.bowtie2)
+        assert c.bowtie2 is not None, "not executable: %s" % c.bowtie2
     else:
-        fho.write("\t".join(cols + [ \
-                "ReadCount", "TrimmedReadFile", "TrimmedReadCount"]) + "\n")
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        if paired:
-            f1, f2 = row[1:3]
-            f1p = "%s_1.PE.fq.gz" % (sid)
-            f1s = "%s_1.SE.fq.gz" % (sid)
-            f2p = "%s_2.PE.fq.gz" % (sid)
-            f2s = "%s_2.SE.fq.gz" % (sid)
-            p1p, p1s, p2p, p2s = ["%s/%s" % (do2, x) for x in [f1p, f1s, f2p, f2s]]
-            assert op.isfile(p1p), "%s not exist" % p1p
-            assert op.isfile(p1s), "%s not exist" % p1s
-            assert op.isfile(p2p), "%s not exist" % p2p
-            assert op.isfile(p2s), "%s not exist" % p2s
-            pre1 = op.basename(f1).split(".")[0]
-            pre2 = op.basename(f2).split(".")[0]
-            q11 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
-            q12 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre2)
-            r11, r12 = parse_fastqc(q11), parse_fastqc(q12)
-            rc11, rc12 = r11['Total Sequences'], r12['Total Sequences']
-            assert rc11 == rc12, "%s: read1 %d != read2 %d" % \
-                    (sid, rc11, rc12)
-            q21 = "%s/%s_1.PE_fastqc/fastqc_data.txt" % (do3, sid)
-            q22 = "%s/%s_2.PE_fastqc/fastqc_data.txt" % (do3, sid)
-            r21, r22 = parse_fastqc(q21), parse_fastqc(q22)
-            rc21, rc22 = r21['Total Sequences'], r22['Total Sequences']
-            assert rc21 == rc22, "%s: read1 %d != read2 %d" % \
-                    (sid, rc21, rc22)
-            q31 = "%s/%s_1.SE_fastqc/fastqc_data.txt" % (do3, sid)
-            q32 = "%s/%s_2.SE_fastqc/fastqc_data.txt" % (do3, sid)
-            r31, r32 = parse_fastqc(q31), parse_fastqc(q32)
-            rc31, rc32 = r31['Total Sequences'], r32['Total Sequences']
-            fho.write("\t".join(row + [ \
-                    rc11, p1p, p1s, p2p, p2s, rc21, rc31, rc32]) + "\n")
-        else:
-            f1 = row[1]
-            p1 = "%s/%s.fq.gz" % (do2, sid)
-            assert op.isfile(p1), "%s not exist" % p1
-            pre1 = op.basename(f1).split(".")[0]
-            q1 = "%s/%s_fastqc/fastqc_data.txt" % (do1, pre1)
-            q2 = "%s/%s_fastqc/fastqc_data.txt" % (do3, sid)
-            r1, r2 = parse_fastqc(q1), parse_fastqc(q2)
-            rc1, rc2 = r1['Total Sequences'], r2['Total Sequences']
-            fho.write("\t".join(row + [rc1, p1, rc2]) + "\n")
+        logging.error("unsupported mapper: %s" % c.mapper)
+        sys.exit(1)
+    
+    njob = 3
+    c.pbs_walltimes = c.pbs_walltime.split(",")
+    c.pbs_ppns = c.pbs_ppn.split(",")
+    c.pbs_queues = c.pbs_queue.split(",")
+    assert njob == len(c.pbs_queues) == len(c.pbs_walltimes) == len(c.pbs_ppns), "not %d jobs: %s" % (njob, c.pbs_queue)
+    c.njob = njob
 
-def hisat(cfg, check):
-    cfg = cfg['hisat']
-    dirw, ilist, olist, jobpre, diro1, diro2 = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
-            cfg['outdir1'], cfg['outdir2']
-    paired = cfg.getboolean('paired')
-    temp_dir = cfg['temp_dir']
-    ref_gatk = cfg['ref_gatk']
-    gatk = cfg['gatk']
-    db_hisat, hisat, samtools, parallel = \
-            cfg['db_hisat'], cfg['hisat'], cfg['samtools'], cfg['parallel']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if check:
-        hisat_check(dirw, ilist, olist, diro1, diro2, paired)
-        sys.exit(0)
-    
-    if not op.isdir(dirw): os.makedirs(dirw)
-    os.chdir(dirw)
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1, fo2, fo2b, fo3 = ["%s.%s.sh" % (jobpre, i) for i in \
-            ['1.hisat','2.bam','2.bamidx','3.stat']]
-    fho1, fho2, fho2b, fho3 = [open(x, "w") for x in [fo1, fo2, fo2b, fo3]]
-    for diro in [diro1, diro2]:
-        if not op.isdir(diro): 
-            os.makedirs(diro)
-    jgatk = "java -jar %s" % gatk
-    pbs_queues = pbs_queue.split(",")
-    pbs_ppns = pbs_ppn.split(",")
-    pbs_walltimes = pbs_walltime.split(",")
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        pre1= "%s/%s" % (diro1, sid)
-        fsam = "%s.sam" % pre1
-        fbam = "%s.bam" % pre1
-        if paired:
-            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[1:11]
-            if not op.isfile(fsam):
-                fho1.write("%s -p %s -x %s -q -1 %s -2 %s -U %s,%s \
-                        --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, pbs_ppns[0], db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
-        else:
-            fr, rc, ft, rrc = row[1:5]
-            if not op.isfile(fsam):
-                fho1.write("%s -p %s -x %s -q -U %s \
-                        --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, pbs_ppns[0], db_hisat, ft, sid, sid, pre1))
-        if not op.isfile(fbam):
-            #fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
-            #        O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
-            #fho2.write("$PTOOL/picard.jar BuildBamIndex INPUT=%s.bam\n" \
-            #        % pre1)
-            fho2.write("%s sort -m 2500M -O bam -o %s.bam %s.sam\n" % (samtools, pre1, pre1))
-            fho2b.write("%s index %s.bam\n" % (samtools, pre1))
-        pre2 = "%s/%s" % (diro2, sid)
-        #fho3.write("%s -T IndelRealigner -R %s \
-        #        -I %s.bam -U ALLOW_N_CIGAR_READS \
-        #        -targetIntervals %s -known %s -o %s.bam\n" % \
-        #        (jgatk, ref_gatk, pre1, frta, fvcf, pre2))
-        fho3.write("$PTOOL/picard.jar CollectAlignmentSummaryMetrics \
-                R=%s I=%s.bam O=%s.sum.txt\n" % \
-                (ref_gatk, pre1, pre2))
-        fho3.write("$PTOOL/picard.jar CollectInsertSizeMetrics \
-                INPUT=%s.bam OUTPUT=%s.ins.txt HISTOGRAM_FILE=%s.hist.pdf\n" \
-                % (pre1, pre2, pre2))
-    
-    cmds = [[
-        "cd %s" % dirw,
-        "bash %s" % fo1
+    return c
+
+def mapping(cfg, args):
+    c = AttrDict(cfg['mapping'])
+    c = check_cfg_mapping(c)
+    if args.check:
+        mapping_check(c)
+        return 0
+    os.chdir(c.dirw)
+
+    jcmds = [[
+        "module load bowtie2",
+        "cd %s" % c.dirw,
     ], [
-        "cd %s" % dirw,
-        "%s -j %s < %s" % (parallel, pbs_ppns[1], fo2),
-        "%s -j %s < %s" % (parallel, pbs_ppns[1], fo2b)
+        "cd %s" % c.dirw,
     ], [
-        "module load picard/2.3.0",
-        "export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir,
-        "cd %s" % dirw,
-        "%s -j %s < %s" % (parallel, pbs_ppns[2], fo3)
+        "module load python2",
+        #"module load picard/2.3.0",
+        #"export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir,
+        "cd %s" % c.dirw,
     ]]
-    njob = len(cmds)
-    assert len(pbs_walltimes) == njob, "not %d jobs" % njob
-    assert len(pbs_ppns) == njob, "not %d jobs" % njob
-
-    fjobs = ["%s.%s.pbs" % (jobpre, chr(97+i)) for i in range(njob)]
-    for i in range(njob):
-        pbsjob = PbsJob(queue = pbs_queues[i],
-                ppn = pbs_ppns[i],
-                walltime = pbs_walltimes[i],
-                email = pbs_email,
-                cmds = "\n".join(cmds[i])
-        )
-        fjob = "%s.pbs" % jobpre
-        pbsjob.write(fjobs[i])
-        
-    logging.debug("%s job scripts were created: %s" % (njob, ", ".join(fjobs)))
-    logging.debug("qsub %s" % fjobs[0])
-    logging.debug("qsub -W depend=afterok:??? %s" % fjobs[1])
-
-def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
-    from crimson import picard
-    os.chdir(dirw)
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    cols = list(ary.dtype.names)
-    fho = open(olist, "w")
-    if paired:
-        fho.write("\t".join(cols + ["BAM",
-            "Pair", "Pair_Map", "Pair_Orphan", "Pair_Unmap", \
-            "Pair_Map_Hq", "Unpair", "Unpair_Map", "Unpair_Map_Hq"])+"\n")
-    else:
-        fho.write("\t".join(cols + ["BAM",
-            "Total", "Mapped", "Mapped_Hq"]) + "\n")
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        bam = "%s/%s.bam" % (diro1, sid)
-        assert op.isfile(bam), "%s not exist" % bam
-        fs = "%s/%s.sum.txt" % (diro2, sid)
-        rs1 = picard.parse(fs)['metrics']['contents']
-        if type(rs1) == dict: rs1 = [rs1]
-        rs = { rs1[i]['CATEGORY']: rs1[i] for i in list(range(len(rs1))) }
-        if paired:
-            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[1:11]
-            pair = rs['FIRST_OF_PAIR']['TOTAL_READS']
-            pair_map = rs['FIRST_OF_PAIR']['READS_ALIGNED_IN_PAIRS']
-            pair_map1 = rs['FIRST_OF_PAIR']['PF_READS_ALIGNED']
-            pair_map_hq1 = rs['FIRST_OF_PAIR']['PF_HQ_ALIGNED_READS']
-            pair_map2 = rs['SECOND_OF_PAIR']['PF_READS_ALIGNED']
-            pair_map_hq2 = rs['SECOND_OF_PAIR']['PF_HQ_ALIGNED_READS']
-            unpair = rs['UNPAIRED']['TOTAL_READS']
-            unpair_map = rs['UNPAIRED']['PF_READS_ALIGNED']
-            unpair_map_hq = rs['UNPAIRED']['PF_HQ_ALIGNED_READS']
-            pair_orphan = pair_map1 + pair_map2 - pair_map * 2
-            pair_unmap = pair - pair_map - pair_orphan
-            pair_map_hq = int((pair_map_hq1+pair_map_hq2)/2)
-            assert pair == int(rrc), "error 1: %d %s" % (pair, rrc)
-            assert int(rc1)+int(rc2) == unpair, "error 2"
-            stats = map(str, [pair, pair_map, pair_orphan, pair_unmap, \
-                    pair_map_hq, unpair, unpair_map, unpair_map_hq])
-            fho.write("\t".join(row + [bam] + list(stats)) + "\n")
-        else:
-            fr, rc, ft, rrc = row[1:5]
-            unpair = rs['UNPAIRED']['TOTAL_READS']
-            unpair_map = rs['UNPAIRED']['PF_READS_ALIGNED']
-            unpair_map_hq = rs['UNPAIRED']['PF_HQ_ALIGNED_READS']
-            stats = map(str, [unpair, unpair_map, unpair_map_hq])
-            fho.write("\t".join(row + [bam] + list(stats)) + "\n")
-
-def htseq(cfg, check):
-    cfg = cfg['htseq']
-    dirw, ilist, olist, jobpre, diro = \
-            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
-            cfg['outdir']
-    paired = cfg.getboolean('paired')
-    srd, annotation = cfg['stranded'], cfg['annotation']
-    htseq, samtools, parallel = cfg['htseq'], cfg['samtools'], cfg['parallel']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if check:
-        htseq_check(dirw, ilist, olist, diro)
-        sys.exit(0)
+    bcfgs = [
+        [dict(opt = 'bash')], 
+        [dict(opt = 'parallel', thread = c.pbs_ppns[1])],
+        [dict(opt = 'bash'),
+        dict(opt = 'parallel', thread = c.pbs_ppns[2]),
+        dict(opt = 'parallel', thread = c.pbs_ppns[2])
+        ],
+    ]
     
-    if not op.isdir(dirw): os.makedirs(dirw)
-    os.chdir(dirw)
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    fo1 = "%s.1.htseq.sh" % jobpre
-    fho1 = open(fo1, "w")
-    for diro in [diro]:
-        if not op.isdir(diro): 
-            os.makedirs(diro)
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        fsen = "%s/%s.txt" % (diro, sid)
-        fant = "%s/%s.as.txt" % (diro, sid)
-        if paired:
-            fbam = row[11]
-            if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
-                fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
-                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
-                        (samtools, fbam, htseq, 'reverse', annotation, diro, sid))
-            if not op.isfile(fant) or os.stat(fant).st_size == 0:
-                fho1.write("%s view -f 1 -F 256 %s | %s -r pos -s %s \
-                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.as.txt\n" % 
-                        (samtools, fbam, htseq, 'yes', annotation, diro, sid))
+    assert c.njob == len(bcfgs) == len(jcmds), "not %d jobs" % c.njob
+    jobs = []
+    for i in range(c.njob):
+        prefix = "%s.%d" % (c.job_prefix, i+1)
+        jcfg = {
+            'queue': c.pbs_queues[i],
+            'ppn': c.pbs_ppns[i], 
+            'walltime': c.pbs_walltimes[i],
+            'email': c.pbs_email,
+        }
+        job = PbsJob.from_cfg(jcfg = jcfg, jcmds = jcmds[i], bcfgs = bcfgs[i],
+                prefix = prefix, njob = len(bcfgs[i]), 
+                bash = c.bash, parallel = c.parallel)
+        jobs.append(job)
+ 
+    t = Table.read(c.ilist, format = 'ascii.tab')
+    nrow = len(t)
+    for i in range(nrow):
+        sid = t['sid'][i]
+        for j in range(c.ngenome):
+            pre1= "%s/%s_%s" % (c.outdirs[0], sid, c.genomes[j])
+            fsam = "%s.sam" % pre1
+            input_str = ''
+            if c.paired:
+                f1p = t["TrimmedReadFile1Paired"][i]
+                f1u = t["TrimmedReadFile1Unpaired"][i]
+                f2p = t["TrimmedReadFile2Paired"][i]
+                f2u = t["TrimmedReadFile2Unpaired"][i]
+                if c.mapper == 'hisat2' or c.mapper == 'bowtie2':
+                    input_str = "-1 %s -2 %s -U %s,%s" % (f1p, f2p, f1u, f2u)
+            else:
+                ft = t["TrimmedReadFile"][i]
+                if c.mapper == 'hisat2' or c.mapper == 'bowtie2':
+                    input_str = "-U %s" % ft
+            if c.mapper == 'hisat2':
+                jobs[0].subjobs[0].add_cmd("%s -p %s -x %s -q %s \
+                        --rg-id %s --rg SM:%s -S %s.sam" % \
+                        (c.hisat2, c.pbs_ppns[0], c.hisat_dbs[j], input_str, \
+                        sid, sid, pre1))
+            elif c.mapper == 'bowtie2':
+                jobs[0].subjobs[0].add_cmd("%s -p %s -x %s -q %s \
+                        --rg-id %s --rg SM:%s --sensitive -S %s.sam" % \
+                        (c.bowtie2, c.pbs_ppns[0], c.bowtie_dbs[j], input_str, \
+                        sid, sid, pre1))
+            
+            fbam = "%s.bam" % pre1
+            jobs[1].subjobs[0].add_cmd("%s view -Sb %s.sam -o %s.raw.bam" % \
+                    (c.samtools, pre1, pre1))
+            jobs[2].subjobs[0].add_cmd("%s sort -t %s -m 60GB %s.raw.bam -o %s.bam" % \
+                    (c.sambamba, c.pbs_ppns[2], pre1, pre1))
+            #bcmds[2].append("%s index -t %s %s.bam" % (sambamba, pbs_ppns[2], pre1))
+        
+            pre2 = "%s/%s_%s" % (c.outdirs[1], sid, c.genomes[j])
+            jobs[2].subjobs[1].add_cmd("bam stat %s.bam --isize %s.ins.tsv > %s.tsv" % \
+                    (pre1, pre2, pre2))
+        
+            fsen = "%s/%s.txt" % (c.outdirs[2], sid)
+            fant = "%s/%s.as.txt" % (c.outdirs[2], sid)
+            #if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
+            sam_filter_tag = "-f 1" if c.paired else ""
+            jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+                        -t exon -i gene_id -m union -a 20 - %s > %s" % \
+                        (c.samtools, sam_filter_tag, fbam, \
+                        c.htseq, 'reverse', c.gffs[j], fsen))
+            #if not op.isfile(fant) or os.stat(fant).st_size == 0:
+            jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+                        -t exon -i gene_id -m union -a 20 - %s > %s" % \
+                        (c.samtools, sam_filter_tag, fbam, \
+                        c.htseq, 'yes', c.gffs[j], fant))
+   
+    for job in jobs:
+        job.write()
+    fj = "%s.sh" % c.job_prefix
+    create_job_chain([job.fname for job in jobs], fj)
+    logging.debug("job chain with %s jobs was created: %s" % (c.njob, fj))
+
+def mapping_check(cfg):
+    t = Table.read(ilist, format = 'ascii.tab')
+    nrow = len(t)
+    newcols = ''
+    if c.paired:
+        newcols = '''BAM Pair Pair_Map Pair_Orphan Pair_Unmap
+            Pair_Map_Hq Unpair Unpair_Map Unpair_Map_Hq'''.split()
+    else: 
+        newcols = '''BAM Total Mapped Mapped_Hq'''.split()
+    for newcol in newcols:
+        t.add_column(Column(name = newcol, length = nrow, dtype = object))
+    
+    for i in range(nrow):
+        sid = t['sid'][i]
+        bam = "%s/%s.bam" % (c.outdirs[0], sid)
+        assert op.isfile(bam), "%s not exist" % bam
+        fs = "%s/%s.tsv" % (c.outdirs[1], sid)
+        assert op.isfile(fs), "%s not exist" % fs
+        if c.paired:
+            t['BAM'][i] = 0#bam
+            t['Pair'][i] = 0#pair
+            t['Pair_Map'][i] = 0#pair_map
+            t['Pair_Orphan'][i] = 0#pair_orphan
+            t['Pair_Unmap'][i] = 0#pair_unmap
+            t['Pair_Map_Hq'][i] = 0#pair_map_hq
+            t['Unpair'][i] = 0#unpair
+            t['Unpair_Map'][i] = 0#unpair_map
+            t['Unpair_Map_Hq'][i] = 0#unpair_map_hq
         else:
-            fbam = row[5]
-            if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
-                fho1.write("%s view -F 256 %s | %s -r pos -s no \
-                        -t exon -i gene_id -m union -a 20 - %s > %s/%s.txt\n" % 
-                        (samtools, fbam, htseq, annotation, diro, sid))
+            t['BAM'] = 0#bam
+            t['Total'] = 0#unpair
+            t['Mapped'] = 0#unpair_map
+            t['Mapped_Hq'] = 0#unpair_map_hq
+    t.write(t.olist, format='ascii.tab', overwrite=True)
 
-    cmds = []
-    cmds.append("cd %s" % dirw)
-    cmds.append("module load python2")
-    cmds.append("%s -j %s < %s" % (parallel, pbs_ppn, fo1))
-    cmd = "\n".join(cmds)
-
-    pbsjob = PbsJob(queue = pbs_queue, 
-            ppn = pbs_ppn, 
-            walltime = pbs_walltime,
-            email = pbs_email,
-            cmds = "\n".join(cmds)
-    )
-    fjob = "%s.pbs" % jobpre
-    pbsjob.write(fjob)
-    logging.debug("Job script '%s' has been created" % fjob)
-
-def htseq_check(dirw, ilist, olist, diro):
-    os.chdir(dirw)
-    assert op.isfile(ilist), "%s not exist" % ilist
-    ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
-    cols = list(ary.dtype.names)
-    fho = open(olist, "w")
-    fho.write("\t".join(cols + ["HtseqFile"])+"\n")
-    for row in ary:
-        row = [str(x, 'utf-8') for x in list(row)]
-        sid = row[0]
-        fhts = "%s/%s.txt" % (diro, sid)
-        assert op.isfile(fhts), "%s not there" % fhts
-        fho.write("\t".join(row + [fhts]) + "\n")
-
-def run_ase(cfg, check):
+def run_ase(cfg):
     import pysam
     cfg = cfg['ase']
     dirw, ilist, olist, jobpre, diro = \
@@ -398,12 +209,8 @@ def run_ase(cfg, check):
     samtools, bcftools, parallel = \
             cfg['samtools'], cfg['bcftools'], cfg['parallel']
     target_vcf, gene_bed = cfg['targetvcf'], cfg['gene_bed']
-    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
-            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
-            cfg['pbs_ppn'], cfg['pbs_email']
-    if check:
-        ase_check(dirw, ilist, olist, diro, paired)
-        sys.exit(0)
+    pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
+            cfg['pbs_queue'], cfg['pbs_walltime'], cfg['pbs_ppn'], cfg['pbs_email']
 
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
@@ -667,6 +474,11 @@ def ase_check(dirw, ilist, olist, diro, paired):
             fr, rc, ft, rrc = row[5:9]
             fho.write("\t".join(row + [bam]) + "\n")
 
+    if prog == "hisat2":
+        check_hisat2(cfg)
+    elif prog == "htseq":
+        check_htseq(cfg)
+
 if __name__ == "__main__":
     import argparse
     import configparser
@@ -674,29 +486,23 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'Illumina RNA-Seq pipeline'
     )
-    parser.add_argument('config', nargs = "?", default = "config.ini", help = 'config file')
-    parser.add_argument('--check', action = "store_true", help = 'run script in check mode')
+    parser.add_argument('--config', "--cfg", default = "config.ini", help = 'config file')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("fqtrim", help = "Trimming and QC fastq files")
-    sp1.set_defaults(func = fq_trim)
-    
-    sp1 = sp.add_parser("hisat", help = 'Map fastq seqs to genome using hisat2')
-    sp1.set_defaults(func = hisat)
+    sp1 = sp.add_parser("mapping",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'mapping, counting and ASE'
+    )
+    sp1.add_argument("--check", action = 'store_true', help = "run script in check mode")
+    sp1.set_defaults(func = mapping)
 
-    sp1 = sp.add_parser("htseq", help = 'Quantify gene expression using htseq')
-    sp1.set_defaults(func = htseq)
-    
-    sp1 = sp.add_parser("ase", help = 'Allele-specific Expression calculation')
-    sp1.set_defaults(func = run_ase)
-    
     args = parser.parse_args()
     assert op.isfile(args.config), "cannot read %s" % args.config
     cfg = configparser.ConfigParser()
     cfg._interpolation = configparser.ExtendedInterpolation()
     cfg.read(args.config)
     if args.command:
-        args.func(cfg, args.check)
+        args.func(cfg, args)
     else:
         print('Error: need to specify a sub command\n')
         parser.print_help()

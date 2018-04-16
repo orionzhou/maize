@@ -25,17 +25,19 @@ if __name__ == "__main__":
     sam = pysam.AlignmentFile(fi, "r")
    
     fho = open(fo, "w")
-    fho.write("qId\tqBeg\tqEnd\tqSrd\tqSize\ttId\ttBeg\ttEnd\ttSrd\ttSize\t" +
-            "alnLen\tmatch\tmisMatch\tbaseN\tqNumIns\ttNumIns\tqBaseIns\ttBaseIns\tident\tscore\t" +
-            "qLoc\ttLoc\n")
+    fho.write("\t".join('''qName qStart qEnd qSize strand
+    tName tStart tEnd tSize
+    alnLen match misMatch baseN qNumIns tNumIns qBaseIns tBaseIns ident score
+    qLoc tLoc'''.split()))
     for x in sam.fetch():
         if x.is_unmapped:
             continue
-        tId, tBeg, tEnd, tSrd, tSize = x.reference_name, x.reference_start, x.reference_end, "+", x.reference_length
-        qId, qBeg, qEnd, qSrd, qSize = x.query_name, x.query_alignment_start, x.query_alignment_end, "+", x.query_length
+        tId, tBeg, tEnd, tSize = x.reference_name, x.reference_start, x.reference_end, x.reference_length
+        qId, qBeg, qEnd, qSize = x.query_name, x.query_alignment_start, x.query_alignment_end, x.query_length
         tBeg += 1
         qBeg += 1
-        if x.is_reverse: qSrd = "-"
+        strand = "+"
+        if x.is_reverse: strand = "-"
         if args.paired:
             if x.is_read2:
                 qId += ".2"
@@ -76,8 +78,8 @@ if __name__ == "__main__":
         ident = match / (match + misMatch)
 
         fho.write("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.03f\t%d\t%s\t%s\n" % 
-                (qId, qBeg, qEnd, qSrd, qSize,
-                 tId, tBeg, tEnd, tSrd, tSize,
+                (qId, qBeg, qEnd, qSize, strand
+                 tId, tBeg, tEnd, tSize,
                  alnLen, match, misMatch, 0,
                  qNumIns, tNumIns, qBaseIns, tBaseIns, ident, score, '', ''))
         #exit(1)

@@ -10,6 +10,7 @@ import logging
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import LineFile, must_open
 from maize.formats.sizes import Sizes
+from maize.utils.location import locAry2Str
 
 class PslLine(object):
 
@@ -213,6 +214,52 @@ def qcoord(args):
             p.qSize = cSize
         print(str(p))
 
+def psl2tsv(args):
+    sMatch, sMisMatch, sGapOpen, sGapExtend = 2, -3, -5, -2
+    print("\t".join('''qName qStart qEnd qSize strand
+    tName tStart tEnd tSize
+    alnLen match misMatch baseN qNumIns tNumIns qBaseIns tBaseIns ident score
+    qLoc tLoc'''.split()))
+    for line in must_open(args.fi):
+        if not re.match(r'\d+', line[0]):
+            continue
+        p = PslLine(line)
+        qName, qStart, qEnd, qSize, strand = p.qName, p.qStart, p.qEnd, p.qSize, p.qstrand
+        tName, tStart, tEnd, tSize = p.tName, p.tStart, p.tEnd, p.tSize
+        match, misMatch, baseN, qNumIns, tNumIns, qBaseIns, tBaseIns = \
+                p.matches, p.misMatches, p.nCount, p.qNumInsert, p.tNumInsert, \
+                p.qBaseInsert, p.tBaseInsert
+       
+        assert p.blockCount==len(p.tStarts), "unequal pieces"
+        assert p.blockCount==len(p.qStarts), "unequal pieces"
+        assert p.blockCount==len(p.blockSizes), "unequal pieces"
+        match += p.repMatches
+        alnLen = match + misMatch + baseN
+        assert alnLen==sum(p.blockSizes), "block size error: %s %d %d" % (qId, alnLen, sum(blockSizes))
+        assert alnLen+qBaseIns==qEnd-qStart, "%s: qLen error" % qId
+        assert alnLen+tBaseIns==tEnd-tStart, "%s: tLen error" % qId
+
+        qLocs, tLocs = [], []
+        for i in range(p.blockCount):
+            rtb, rte = p.tStarts[i]-tStart, p.tStarts[i]-tStart+p.blockSizes[i]
+            rqb, rqe = 0, 0
+            if strand == '-':
+                rqb, rqe = p.qStarts[i]-(qSize-qEnd), p.qStarts[i]-(qSize-qEnd)+p.blockSizes[i]
+            else:
+                rqb, rqe = p.qStarts[i]-qStart, p.qStarts[i]+p.blockSizes[i]-qStart
+            qLocs.append([rqb+1,rqe])
+            tLocs.append([rtb+1,rte])
+
+        score = match * sMatch + misMatch * sMisMatch
+        numIns = qNumIns + tNumIns
+        if numIns >= 1:
+            score += sGapOpen + (numIns - 1) * sGapExtend
+        ident = "%.03f" % (float(match)/(match+misMatch))
+        print("\t".join(str(x) for x in [qName, qStart+1, qEnd, qSize, strand,
+            tName, tStart+1, tEnd, tSize, alnLen, match, misMatch, baseN,
+            qNumIns, tNumIns, qBaseIns, tBaseIns, ident, score,
+            locAry2Str(qLocs), locAry2Str(tLocs)]))
+
 def psl2bed(args):
     for line in must_open(args.fi):
         if not re.match(r'\d+', line[0]):
@@ -251,6 +298,10 @@ if __name__ == "__main__":
     sp1.add_argument('fi', help = 'input PSL')
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = psl2bed)
+    
+    sp1 = sp.add_parser("2tsv", help = "convert to tsv file")
+    sp1.add_argument('fi', help = 'input PSL')
+    sp1.set_defaults(func = psl2tsv)
     
     args = parser.parse_args()
     if args.command:

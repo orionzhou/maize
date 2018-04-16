@@ -3,29 +3,32 @@
 
 import os
 import os.path as op
-import sys
 import numpy as np
-from string import Template
-from colorama import init, Fore, Back, Style
+import sys
+import logging
 
-def check_bam(fbam):
-    exist_bam = 1
-    try:
-        bam = pysam.AlignmentFile(fbam, "rb")
-    except:
-        exist_bam = 0
-    return exist_bam
-def check_sam(fsam):
-    exist_sam = 1
-    try:
-        sam = pysam.AlignmentFile(fsam, "r")
-    except:
-        exist_sam = 0
-    return exist_sam
+from maize.apps.base import eprint, sh, mkdir
+from maize.formats.base import must_open
+from maize.formats.pbs import PbsJob
 
-def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
-        db_hisat, hisat, samtools, gatk, parallel, temp_dir,
-        pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email):
+def hisat(cfg, check):
+    cfg = cfg['hisat']
+    dirw, ilist, olist, jobpre, diro1, diro2 = \
+            cfg['dirw'], cfg['ilist'], cfg['olist'], cfg['job_prefix'], \
+            cfg['outdir1'], cfg['outdir2']
+    paired = cfg.getboolean('paired')
+    temp_dir = cfg['temp_dir']
+    ref_gatk = cfg['ref_gatk']
+    gatk = cfg['gatk']
+    db_hisat, hisat, samtools, parallel = \
+            cfg['db_hisat'], cfg['hisat'], cfg['samtools'], cfg['parallel']
+    pbs_template, pbs_queue, pbs_walltime, pbs_ppn, pbs_email = \
+            cfg['pbs_template'], cfg['pbs_queue'], cfg['pbs_walltime'], \
+            cfg['pbs_ppn'], cfg['pbs_email']
+    if check:
+        hisat_check(dirw, ilist, olist, diro1, diro2, paired)
+        sys.exit(0)
+    
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
@@ -36,9 +39,10 @@ def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
     for diro in [diro1, diro2]:
         if not op.isdir(diro): 
             os.makedirs(diro)
-    frta = "../mo17vnt/51.realign/Mo17.list"
-    fvcf = "../mo17vnt/52.vnt/Mo17.4.vcf"
     jgatk = "java -jar %s" % gatk
+    pbs_queues = pbs_queue.split(",")
+    pbs_ppns = pbs_ppn.split(",")
+    pbs_walltimes = pbs_walltime.split(",")
     for row in ary:
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
@@ -46,17 +50,17 @@ def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
         fsam = "%s.sam" % pre1
         fbam = "%s.bam" % pre1
         if paired:
-            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
+            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[1:11]
             if not op.isfile(fsam):
-                fho1.write("%s -p 24 -x %s -q -1 %s -2 %s -U %s,%s \
+                fho1.write("%s -p %s -x %s -q -1 %s -2 %s -U %s,%s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
+                        (hisat, pbs_ppns[0], db_hisat, f1p, f2p, f1u, f2u, sid, sid, pre1))
         else:
-            fr, rc, ft, rrc = row[5:9]
+            fr, rc, ft, rrc = row[1:5]
             if not op.isfile(fsam):
-                fho1.write("%s -p 24 -x %s -q -U %s \
+                fho1.write("%s -p %s -x %s -q -U %s \
                         --rg-id %s --rg SM:%s -S %s.sam\n" % \
-                        (hisat, db_hisat, ft, sid, sid, pre1))
+                        (hisat, pbs_ppns[0], db_hisat, ft, sid, sid, pre1))
         if not op.isfile(fbam):
             #fho2.write("$PTOOL/picard.jar SortSam I=%s.sam \
             #        O=%s.bam SORT_ORDER=coordinate\n" % (pre1, pre1))
@@ -75,13 +79,7 @@ def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
         fho3.write("$PTOOL/picard.jar CollectInsertSizeMetrics \
                 INPUT=%s.bam OUTPUT=%s.ins.txt HISTOGRAM_FILE=%s.hist.pdf\n" \
                 % (pre1, pre2, pre2))
-    assert op.isfile(pbs_template), "cannot read template: %s" % pbs_template
-    fht = open(pbs_template, "r")
-    src = Template(fht.read())
     
-    pbs_walltimes = pbs_walltime.split(",")
-    pbs_ppns = pbs_ppn.split(",")
-    pbs_queues = pbs_queue.split(",")
     cmds = [[
         "cd %s" % dirw,
         "bash %s" % fo1
@@ -101,23 +99,23 @@ def run_hisat(dirw, ilist, olist, jobpre, diro1, diro2, paired, ref_gatk,
 
     fjobs = ["%s.%s.pbs" % (jobpre, chr(97+i)) for i in range(njob)]
     for i in range(njob):
-        temdict = {
-                "queue": pbs_queues[i],
-                "walltime": pbs_walltimes[i],
-                "ppn": pbs_ppns[i],
-                "email": pbs_email,
-                "cmds": "\n".join(cmds[i])
-        }
-        fho = open(fjobs[i], "w")
-        fho.write(src.substitute(temdict))
+        pbsjob = PbsJob(queue = pbs_queues[i],
+                ppn = pbs_ppns[i],
+                walltime = pbs_walltimes[i],
+                email = pbs_email,
+                cmds = "\n".join(cmds[i])
+        )
+        fjob = "%s.pbs" % jobpre
+        pbsjob.write(fjobs[i])
+        
+    logging.debug("%s job scripts were created: %s" % (njob, ", ".join(fjobs)))
+    logging.debug("qsub %s" % fjobs[0])
+    logging.debug("qsub -W depend=afterok:??? %s" % fjobs[1])
 
-    init()
-    print(Fore.GREEN)
-    print("%s job scripts has been generated: %s" % (njob, ", ".join(fjobs)))
-    print("Please check, make necessary changes, then type:")
-    print(Fore.RED + "qsub -W depend=afterany:??? %s" % fjobs[1])
-    print(Style.RESET_ALL)
+
+
 def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
+    from crimson import picard
     os.chdir(dirw)
     assert op.isfile(ilist), "%s not exist" % ilist
     ary = np.genfromtxt(ilist, names = True, dtype = object, delimiter = "\t")
@@ -134,13 +132,13 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
         row = [str(x, 'utf-8') for x in list(row)]
         sid = row[0]
         bam = "%s/%s.bam" % (diro1, sid)
-        assert check_bam(bam), "%s not exist" % bam
+        assert op.isfile(bam), "%s not exist" % bam
         fs = "%s/%s.sum.txt" % (diro2, sid)
         rs1 = picard.parse(fs)['metrics']['contents']
         if type(rs1) == dict: rs1 = [rs1]
         rs = { rs1[i]['CATEGORY']: rs1[i] for i in list(range(len(rs1))) }
         if paired:
-            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[5:15]
+            f1r, f2r, rc, f1p, f1u, f2p, f2u, rrc, rc1, rc2 = row[1:11]
             pair = rs['FIRST_OF_PAIR']['TOTAL_READS']
             pair_map = rs['FIRST_OF_PAIR']['READS_ALIGNED_IN_PAIRS']
             pair_map1 = rs['FIRST_OF_PAIR']['PF_READS_ALIGNED']
@@ -159,31 +157,10 @@ def hisat_check(dirw, ilist, olist, diro1, diro2, paired):
                     pair_map_hq, unpair, unpair_map, unpair_map_hq])
             fho.write("\t".join(row + [bam] + list(stats)) + "\n")
         else:
-            fr, rc, ft, rrc = row[5:9]
+            fr, rc, ft, rrc = row[1:5]
             unpair = rs['UNPAIRED']['TOTAL_READS']
             unpair_map = rs['UNPAIRED']['PF_READS_ALIGNED']
             unpair_map_hq = rs['UNPAIRED']['PF_HQ_ALIGNED_READS']
             stats = map(str, [unpair, unpair_map, unpair_map_hq])
             fho.write("\t".join(row + [bam] + list(stats)) + "\n")
 
-
-if __name__ == "__main__":
-    import argparse
-    import configparser
-    parser = argparse.ArgumentParser(__doc__,
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'Map fastq seqs to genome using hisat2'
-    )
-    parser.add_argument(
-            'config', nargs = '?', default = "config.ini", \
-            help = 'config file'
-    )
-    parser.add_argument(
-            '--check', action = "store_true", \
-            help = 'run the script in check mode'
-    )
-    args = parser.parse_args()
-    assert op.isfile(args.config), "cannot read %s" % args.config
-    cfg = configparser.ConfigParser()
-    cfg._interpolation = configparser.ExtendedInterpolation()
-    cfg.read(args.config)
