@@ -51,13 +51,14 @@ class PbsJob(object):
     __stanza__ = '''#PBS -q $queue
 #PBS -l nodes=$node:ppn=$ppn
 #PBS -l walltime=$walltime
+$memstr
 #PBS -m ae
 #PBS -M $email
 
 $cmds'''
     
     def __init__(self, queue = 'small', node = 1, ppn = 1, 
-            walltime = "10:00:00", 
+            walltime = "10:00:00", mem = '',
             email = 'zhoux379@umn.edu', 
             prefix = "jobpre",
             parallel = "parallel",
@@ -66,6 +67,8 @@ $cmds'''
         self.node = node
         self.ppn = ppn
         self.walltime = walltime
+        if mem != '': mem = "#PBS -l mem=%s" % mem
+        self.mem = mem
         self.email = email
         self.prefix = prefix
         self.parallel = parallel
@@ -81,11 +84,13 @@ $cmds'''
         node = jcfg.get("node", 1)
         ppn = jcfg.get('ppn', 1)
         walltime = jcfg.get("walltime", "10:00:00")
+        mem = jcfg.get("mem", "")
         email = jcfg.get("email", "zhoux379@umn.edu")
         job = cls(queue = queue,
                 node = node,
                 ppn = ppn,
                 walltime = walltime,
+                mem = mem,
                 email = email,
                 prefix = prefix,
                 bash = bash,
@@ -133,6 +138,7 @@ $cmds'''
                 "node": self.node,
                 "ppn": self.ppn,
                 "walltime": self.walltime,
+                "memstr": self.mem,
                 "email": self.email,
                 "cmds": cmd_str + "\n"
         }

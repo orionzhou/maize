@@ -49,7 +49,7 @@ def check_bam(fbam):
 
 def is_perfect_match(aln):
     nts, bks = aln.get_cigar_stats()
-    dst = nts[1]+nts[2]+nts[8]+nts[10]
+    dst = nts[1]+nts[2]+nts[8]+nts[10] # IDX NM
     if dst == 0:
         return True
     else:

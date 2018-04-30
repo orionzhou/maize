@@ -5,7 +5,10 @@ import sys
 import re
 
 from maize.apps.base import eprint
+from itertools import chain
+flatten = chain.from_iterable
 
+LEFT, RIGHT = 1, -1
 ptn_loc = re.compile("^([\w\-\.]+)\:([\d,]+)(\-|\.{1,2})([\d,]+)$")
 
 def locStr2Ary(locS):
@@ -33,9 +36,21 @@ def locAryLen(locA):
     if not locA or len(locA) == 0:
         return 0
     try:
-        return sum([x[1] - x[0] + 1 for x in locA])
+        return sum([x[1] - x[0] for x in locA])
+        #return sum([x[1] - x[0] + 1 for x in locA])
     except:
          print("invalid locAry: ", locA)
+
+def join_ranges(data, offset=0):
+    data = sorted(flatten(((start, LEFT), (stop + offset, RIGHT)) \
+            for start, stop in data))
+    c = 0
+    for value, label in data:
+        if c == 0:
+            x = value
+        c += label
+        if c == 0: 
+            yield x, value - offset
 
 def make_window(beg, end, winsize, winstep):
     import math

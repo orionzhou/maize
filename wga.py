@@ -17,7 +17,6 @@ def prepare(cfg):
     qry_fas, tgt_fas = cfg['qry_fas'], cfg['tgt_fas']
     tmpdir = cfg['temp_dir']
     npieces = int(cfg['npieces'])
-    diro1 = cfg['outdir1']
     
     if not op.isdir(dirw):
         logging.debug("making directory: %s" % dirw)
@@ -44,10 +43,10 @@ def prepare(cfg):
     else:
         logging.error("%s not exist" % qry_fas)
 
-    sh("genome %s/%s fasta" % (dirw, "01_tgt_genome"))
-    sh("genome %s/%s blat" % (dirw, "01_tgt_genome"))
-    sh("genome %s/%s fasta" % (dirw, "02_qry_genome"))
-    sh("genome %s/%s blat" % (dirw, "02_qry_genome"))
+    sh("genome fasta %s/%s" % (dirw, "01_tgt_genome"))
+    sh("genome blat %s/%s" % (dirw, "01_tgt_genome"))
+    sh("genome fasta %s/%s" % (dirw, "02_qry_genome"))
+    sh("genome blat %s/%s" % (dirw, "02_qry_genome"))
     
     sh("bed filter --minsize 1000 02_qry_genome/16.gap.bed > 04.qry.gap.bed")
     sh("subtractBed -nonamecheck -a 02_qry_genome/15.bed -b 04.qry.gap.bed | bed filter -min 100 - | bed makewindow -w 100000 -s 95000 - > 05.qry.clean.bed")

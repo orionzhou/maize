@@ -37,7 +37,7 @@ def check_genomedir(species, raw = False):
         return op.abspath(dirw), op.abspath(fg)
 
 def clean_fasta(args):
-    dirw, fi = check_genomedir(args.species, raw = True)
+    dirw, fi = check_genomedir(args.species, raw = False)
     os.chdir(dirw)
     for fname in ["raw.fix.fas.index", "11_genome.fas.index"]:
         if op.isfile(fname):
@@ -96,9 +96,9 @@ def build_bowtie(args):
         logging.debug("db.*.bt2 already exists - skipped")
     else:
         sh("rm -rf *")
-        sh("ln -sf %s db.fas" % fg)
+        sh("ln -sf %s db.fa" % fg)
         # need to "module load bowtie2"
-        sh("bowtie2-build db.fas db")
+        sh("bowtie2-build db.fa db")
 
 def build_hisat(args):
     dirg, fg = check_genomedir(args.species)
@@ -108,8 +108,29 @@ def build_hisat(args):
    
     if op.isfile("db.1.ht2") and not args.overwrite:
         logging.debug("db.1.ht2 already exists - skipped")
+    elif not op.isfile("../51.gtf"):
+        logging.error("no gtf file: ../51.gtf")
+        sys.exit()
     else:
-        sh("hisat2-build -p 8 %s db" % fg)
+        sh("hisat2_extract_exons.py ../51.gtf > db.exon")
+        sh("hisat2_extract_splice_sites.py ../51.gtf > db.ss")
+        sh("hisat2-build -p %d --ss db.ss --exon db.exon %s db" % (args.p, fg))
+
+def build_star(args):
+    dirg, fg = check_genomedir(args.species)
+    dirw = op.join(dirg, "21.star")
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+   
+    if op.isfile("SA") and not args.overwrite:
+        logging.debug("SA already exists - skipped")
+    elif not op.isfile("../51.gtf"):
+        logging.error("no gtf file: ../51.gtf")
+        sys.exit()
+    else:
+        sh("STAR --runThreadN %d --runMode genomeGenerate --genomeDir %s \
+                --genomeFastaFiles %s --sjdbGTFfile %s" %
+                (args.p, ".", fg, "../51.gtf"))
 
 def build_bwa(args):
     dirg, fg = check_genomedir(args.species)
@@ -121,6 +142,21 @@ def build_bwa(args):
         logging.debug("db.bwt already exists - skipped")
     else:
         sh("bwa index -a bwtsw -p %s/db %s" % (dirw, fg))
+
+def build_gatk(args):
+    dirg, fg = check_genomedir(args.species)
+    dirw = op.join(dirg, "21.gatk")
+    if not op.isdir(dirw): os.makedirs(dirw)
+    os.chdir(dirw)
+   
+    if op.isfile("db.dict") and not args.overwrite:
+        logging.debug("db.dict already exists - skipped")
+    else:
+        if op.exists("db.fasta"): sh("rm db.fasta")
+        if op.exists("db.dict"): sh("rm db.dict")
+        sh("cp ../11_genome.fas db.fasta")
+        sh("gatk CreateSequenceDictionary -R db.fasta")
+        sh("samtools faidx db.fasta")
 
 def repeatmasker(args):
     dirg, fg = check_genomedir(args.species)
@@ -139,7 +175,7 @@ def repeatmasker(args):
     
     cmds = []
     cmds.append("cd %s" % dirw)
-    cmds.append("RepeatMasker -pa %d -species %s -dir %s %s" % (args.cpu, species, dirw, fg)),
+    cmds.append("RepeatMasker -pa %d -species %s -dir %s %s" % (args.p, species, dirw, fg)),
     cmds.append("parse.rm.pl -i 11_genome.fas.out -o 12.repeatmasker.tsv")
     
     pbsjob = PbsJob(queue = 'ram256g', ppn = 24, walltime = "10:00:00", cmds = "\n".join(cmds))
@@ -170,7 +206,7 @@ if __name__ == "__main__":
     )
     sp1.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp1.add_argument('--overwrite', action='store_true', help = 'overwrite')
-    sp1.add_argument('--cpu', default = 24, help = 'number CPUs to use')
+    sp1.add_argument('--p', type = int, default = 24, help = 'number of threads')
     sp1.set_defaults(func = repeatmasker)
 
     sp2 = sp.add_parser("blat", help = "build Blat DB")
@@ -191,7 +227,19 @@ if __name__ == "__main__":
     sp2 = sp.add_parser("hisat", help = "build hisat2 DB")
     sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
+    sp2.add_argument('--p', type = int, default = 24, help = 'number of threads')
     sp2.set_defaults(func = build_hisat)
+    
+    sp2 = sp.add_parser("star", help = "build STAR DB")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
+    sp2.add_argument('--p', type = int, default = 24, help = 'number of threads')
+    sp2.set_defaults(func = build_star)
+    
+    sp2 = sp.add_parser("gatk", help = "build GATK ref-db")
+    sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
+    sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
+    sp2.set_defaults(func = build_gatk)
     
     args = parser.parse_args()
     if args.command:

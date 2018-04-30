@@ -2,25 +2,21 @@
 import os
 import os.path as op
 import sys
-from CoordSys import *
+
+from maize.formats.base import must_open
+from maize.utils.location import locAry2Str, locStr2Ary
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(__doc__,
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'gff to tsv'
+            description = 'gtb to tsv'
     )
-    parser.add_argument(
-            'fi', help = 'input gff'
-    )
-    parser.add_argument(
-            'fo', help = 'output tsv'
-    )
+    parser.add_argument('fi', help = 'input gtb')
     args = parser.parse_args()
     
-    fhi = open(args.fi, "r")
-    fho = open(args.fo, "w")
-    fho.write("gid\ttid\tttype\tetype\tseqid\tbeg\tend\tsrd\n")
+    fhi = must_open(args.fi)
+    print("\t".join("gid tid ttype etype chrom start end srd fam note".split()))
     for line in fhi:
         line = line.strip("\n")
         if line.startswith("#") or line.startswith("id"):
@@ -49,7 +45,6 @@ if __name__ == "__main__":
                 else:
                     assert srd == '+', "unknown strand: %s for %s" % (srd, tid)
                     beg, end = tbeg + rbeg - 1, tbeg + rend - 1
-                fields = [gid, tid, cat1, etype, seqid, str(beg), str(end), srd]
-                fho.write("\t".join(fields)+"\n") 
+                fields = [gid, tid, cat1, etype, seqid, str(beg), str(end), srd, cat3, note]
+                print("\t".join(fields)) 
     fhi.close()
-    fho.close()

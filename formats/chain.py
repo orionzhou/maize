@@ -27,7 +27,7 @@ import sys
 import logging
 
 from maize.formats.base import BaseFile, read_block, must_open
-from maize.apps.base import need_update, which
+from maize.apps.base import need_update, which, sh
 
 class ChainLine (object):
 
@@ -223,13 +223,22 @@ def frompsl(args):
                 format(netfile, sortedchain, liftoverfile)
         sh(cmd)
 
+def chainstat(args):
+    sh("chain 2bed %s > tmp.bed" % args.fi)
+    logging.debug("total size")
+    sh("bed size tmp.bed")
+    logging.debug("tgt noredundant size")
+    sh("cut -f1-3 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed size -")
+    logging.debug("qry noredundant size")
+    sh("cut -f5-7 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed size -")
+
 def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
     chain = "chain"
     score = 1000
     tStrand = "+"
-    tStart = min(x[0] for x in locs) - 1
+    tStart = min(x[0] for x in locs)
     tEnd = max(x[1] for x in locs)
-    qStart = min(x[2] for x in locs) - 1
+    qStart = min(x[2] for x in locs)
     qEnd = max(x[3] for x in locs)
     headerline = " ".join(str(x) for x in (
          chain, score, tName, tSize, tStrand, tStart,
@@ -238,16 +247,16 @@ def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
     print(headerline)
     for i in range(len(locs)):
         tb, te, qb, qe = locs[i]
-        size, size2 = te - tb + 1, qe - qb + 1
+        size, size2 = te - tb, qe - qb
         assert size == size2, "size not equal"
         if i == len(locs) - 1:
             print(size)
         else:
-            dt = locs[i+1][0] - 1 - te
+            dt = locs[i+1][0] - te
             if qStrand == "-":
-                dq = qb - 1 - locs[i+1][3]
+                dq = qb - locs[i+1][3]
             else:
-                dq = locs[i+1][2] - 1 - qe
+                dq = locs[i+1][2] - qe
             print("%d\t%d\t%d" % (size, dt, dq))
     print()
 
@@ -276,7 +285,7 @@ def bed2chain(args):
             cid0, tName0, qName0, srd0 = cid, tName, qName, srd
             locs = [[tStart, tEnd, qStart, qEnd]]
     print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs)
- 
+
 def chain2bed(args):
     chainFile = Chain(args.fi)
     for c in chainFile.chains:
@@ -324,6 +333,10 @@ if __name__ == '__main__':
     sp1.add_argument('tsize', help = 'target size file')
     sp1.add_argument('qsize', help = 'query size file')
     sp1.set_defaults(func = bed2chain)
+    
+    sp1 = sp.add_parser("stat", help = "get chain stats")
+    sp1.add_argument('fi', help = 'input chain file')
+    sp1.set_defaults(func = chainstat)
     
     args = parser.parse_args()
     if args.command:

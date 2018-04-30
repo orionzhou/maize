@@ -12,15 +12,40 @@ from maize.apps.base import AttrDict, str2bool, eprint, sh, mkdir, which
 from maize.formats.base import must_open
 from maize.formats.pbs import PbsJob, create_job_chain
 
-def check_cfg_mapping(c):
+def check_cfg_index(c, noutdir = 1, njob = 3):
     c.outdirs = c.outdir.split(",")
-    assert len(c.outdirs) == 4, "not 4 outdirs: %s" % c.outdir
+    assert len(c.outdirs) == noutdir, "not %s outdirs: %s" % (noutdir, c.outdir)
     
     for subdir in [c.dirw, c.temp_dir] + c.outdirs:
         if not op.isdir(subdir):
             mkdir(subdir)
     
-    for fn in [c.ilist, c.targetvcf, c.gene_bed]:
+    for fn in [c.ilist, c.vcf, c.genome, c.gff]:
+        assert op.isfile(fn), "cannot read %s" % fn
+
+    for key in 'bcftools'.split():
+        fp = which(c[key])
+        assert fp is not None, "not executable: %s" % c[key]
+        c[key] = fp
+    
+    c.pbs_walltimes = c.pbs_walltime.split(",")
+    c.pbs_ppns = c.pbs_ppn.split(",")
+    c.pbs_queues = c.pbs_queue.split(",")
+    c.pbs_mems = c.pbs_mem.split(",")
+    assert njob == len(c.pbs_queues) == len(c.pbs_walltimes) == len(c.pbs_ppns) == len(c.pbs_mems), "not %d jobs: %s" % (njob, c.pbs_queue)
+    c.njob = njob
+
+    return c
+
+def check_cfg_mapping(c, noutdir = 4, njob = 2):
+    c.outdirs = c.outdir.split(",")
+    assert len(c.outdirs) == noutdir, "not %s outdirs: %s" % (noutdir, c.outdir)
+    
+    for subdir in [c.dirw, c.temp_dir] + c.outdirs:
+        if not op.isdir(subdir):
+            mkdir(subdir)
+    
+    for fn in [c.ilist, c.vcf, c.gene_bed]:
         assert op.isfile(fn), "cannot read %s" % fn
 
     for key in 'samtools parallel sambamba htseq bcftools bedtools'.split():
@@ -30,27 +55,48 @@ def check_cfg_mapping(c):
 
     c.paired = str2bool(c.paired)
     
-    c.genomes = c.genomes.split(",")
-    c.ngenome = len(c.genomes)
-    logging.debug("mapping to %d genome(s)" % c.ngenome)
-    c.gffs = re.split("[\s,]+", c.gffs)
-    assert c.ngenome == len(c.gffs), "not %d gffs" % c.ngenome
-
-    if c.mapper == 'hisat2':
-        c.hisat_dbs = re.split("[\s,]+", c.hisat_dbs)
-        assert c.ngenome == len(c.hisat_dbs), "not %d hisat dbs" % c.ngenome
-        c.hisat2 = which(c.hisat2)
+    if c.mapper == 'tophat2':
+        c.tophat2 = which(c.tophat2)
+        assert c.tophat2 is not None, "not executable: %s" % c.tophat2
+    elif c.mapper == 'hisat2':
+        c.hisat2= which(c.hisat2)
         assert c.hisat2 is not None, "not executable: %s" % c.hisat2
-    elif c.mapper == 'bowtie2':
-        c.bowtie_dbs = re.split("[\s,]+", c.bowtie_dbs)
-        assert c.ngenome == len(c.bowtie_dbs), "not %d hisat dbs" % c.ngenome
-        c.bowtie2 = which(c.bowtie2)
-        assert c.bowtie2 is not None, "not executable: %s" % c.bowtie2
+    elif c.mapper == 'star':
+        c.star= which(c.star)
+        assert c.star is not None, "not executable: %s" % c.star
     else:
         logging.error("unsupported mapper: %s" % c.mapper)
         sys.exit(1)
     
-    njob = 3
+    assert op.isdir(c.genomedir), "cannot access %s" % c.genomedir
+    genomes = set()
+    t = Table.read(c.ilist, format = 'ascii.tab')
+    for i in range(len(t)):
+        gts = t['genome'][i].split(",")
+        for gt in gts:
+            genomes.add(gt)
+    genomes = sorted(list(genomes))
+    logging.debug("checking %d genomes" % len(genomes))
+   
+    c.genomes = dict()
+    for gt in genomes:
+        c.genomes[gt] = dict()
+        dirg = "%s/%s" % (c.genomedir, gt)
+        dbpre = ''
+        if c.mapper == 'tophat2':
+            dbpre = "%s/21.bowtie2/db" % dirg
+            assert op.isfile("%s.4.bt2" % dbpre), "no %s db-index: %s" % (c.mapper, dbpre)
+        elif c.mapper == 'hisat2':
+            dbpre = "%s/21.hisat2/db" % dirg
+            assert op.isfile("%s.8.ht2" % dbpre), "no %s db-index: %s" % (c.mapper, dbpre)
+        elif c.mapper == 'star':
+            dbpre = "%s/21.star" % dirg
+            assert op.isfile("%s/SA" % dbpre), "no %s db-index: %s" % (c.mapper, dbpre)
+        c.genomes[gt]['db'] = dbpre
+        gff = "%s/51.gff" % dirg
+        assert op.isfile(gff), "no gff for %s: %s" % (gff, gt)
+        c.genomes[gt]['gff'] = gff
+    
     c.pbs_walltimes = c.pbs_walltime.split(",")
     c.pbs_ppns = c.pbs_ppn.split(",")
     c.pbs_queues = c.pbs_queue.split(",")
@@ -58,6 +104,66 @@ def check_cfg_mapping(c):
     c.njob = njob
 
     return c
+
+def index(cfg, args):
+    c = AttrDict(cfg['index'])
+    c = check_cfg_index(c)
+    if args.check:
+        return 0
+    os.chdir(c.dirw)
+
+    jcmds = [[
+        "cd %s" % c.dirw
+        ],[
+        "cd %s" % c.dirw
+        ],[
+        "cd %s" % c.dirw
+    ]]
+    bcfgs = [
+        [dict(opt = 'bash')],
+        [dict(opt = 'parallel', thread = c.pbs_ppns[1])],
+        [dict(opt = 'bash')]
+    ]
+    
+    assert c.njob == len(bcfgs) == len(jcmds), "not %d jobs" % c.njob
+    jobs = []
+    for i in range(c.njob):
+        prefix = "%s.%d" % (c.job_prefix, i+1)
+        jcfg = {
+            'queue': c.pbs_queues[i],
+            'ppn': c.pbs_ppns[i], 
+            'walltime': c.pbs_walltimes[i],
+            'mem': c.pbs_mems[i], 
+            'email': c.pbs_email,
+        }
+        job = PbsJob.from_cfg(jcfg = jcfg, jcmds = jcmds[i], bcfgs = bcfgs[i],
+                prefix = prefix, njob = len(bcfgs[i]), 
+                bash = c.bash, parallel = c.parallel)
+        jobs.append(job)
+ 
+    t = Table.read(c.ilist, format = 'ascii.tab')
+    nrow = len(t)
+    gts = [t['genotype'][x] for x in range(nrow) if t['type'][x] == 'Inbred']
+    gts = set(gts)
+    logging.debug("creating pseudo-refs for %d genomes" % len(gts))
+    print(" ".join(gts))
+    for gt in gts:
+        diro = "%s/%s" % (c.outdirs[0], gt)
+        mkdir(diro)
+        jobs[0].subjobs[0].add_cmd("%s consensus -f %s %s -s %s \
+                -c %s/25.chain -o %s/11_genome.fas" % \
+                (c.bcftools, c.genome, c.vcf, gt, diro, diro))
+        #jobs[1].subjobs[0].add_cmd("genome fasta %s" % diro)
+        #jobs[0].subjobs[0].add_cmd("genome blat %s" % diro)
+        #jobs[0].subjobs[0].add_cmd("genome bwa %s" % diro)
+        jobs[1].subjobs[0].add_cmd("genome bowtie %s" % diro)
+        jobs[2].subjobs[0].add_cmd("genome hisat %s" % diro)
+   
+    for job in jobs:
+        job.write()
+    fj = "%s.sh" % c.job_prefix
+    create_job_chain([job.fname for job in jobs], fj)
+    logging.debug("job chain with %s jobs was created: %s" % (c.njob, fj))
 
 def mapping(cfg, args):
     c = AttrDict(cfg['mapping'])
@@ -68,22 +174,15 @@ def mapping(cfg, args):
     os.chdir(c.dirw)
 
     jcmds = [[
-        "module load bowtie2",
         "cd %s" % c.dirw,
     ], [
-        "cd %s" % c.dirw,
-    ], [
-        "module load python2",
-        #"module load picard/2.3.0",
         #"export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % temp_dir,
         "cd %s" % c.dirw,
     ]]
     bcfgs = [
         [dict(opt = 'bash')], 
-        [dict(opt = 'parallel', thread = c.pbs_ppns[1])],
-        [dict(opt = 'bash'),
-        dict(opt = 'parallel', thread = c.pbs_ppns[2]),
-        dict(opt = 'parallel', thread = c.pbs_ppns[2])
+        [dict(opt = 'parallel', thread = c.pbs_ppns[1]),
+        dict(opt = 'parallel', thread = c.pbs_ppns[1])
         ],
     ]
     
@@ -105,57 +204,72 @@ def mapping(cfg, args):
     t = Table.read(c.ilist, format = 'ascii.tab')
     nrow = len(t)
     for i in range(nrow):
-        sid = t['sid'][i]
-        for j in range(c.ngenome):
-            pre1= "%s/%s_%s" % (c.outdirs[0], sid, c.genomes[j])
-            fsam = "%s.sam" % pre1
+        sid = str(t['sid'][i])
+        genomes = t['genome'][i].split(",")
+        #logging.debug("mapping %s to %s" % (sid, ", ".join(genomes)))
+        for genome in genomes:
+            dbpre = c.genomes[genome]['db']
+            gff = c.genomes[genome]['gff']
+            pre1= "%s/%s_%s" % (c.outdirs[0], sid, genome)
             input_str = ''
             if c.paired:
                 f1p = t["TrimmedReadFile1Paired"][i]
                 f1u = t["TrimmedReadFile1Unpaired"][i]
                 f2p = t["TrimmedReadFile2Paired"][i]
                 f2u = t["TrimmedReadFile2Unpaired"][i]
-                if c.mapper == 'hisat2' or c.mapper == 'bowtie2':
+                if c.mapper == 'hisat2':
                     input_str = "-1 %s -2 %s -U %s,%s" % (f1p, f2p, f1u, f2u)
+                elif c.mapper == 'tophat2':
+                    input_str = "%s %s,%s,%s" % (f1p, f2p, f1u, f2u)
+                elif c.mapper == 'star':
+                    input_str = "%s %s" % (f1p, f2p)
             else:
                 ft = t["TrimmedReadFile"][i]
-                if c.mapper == 'hisat2' or c.mapper == 'bowtie2':
+                if c.mapper == 'hisat2':
                     input_str = "-U %s" % ft
+                elif c.mapper == 'bowtie2' or c.mapper == 'star':
+                    input_str = "%s" % ft
+            fbam = "%s.bam" % pre1
             if c.mapper == 'hisat2':
                 jobs[0].subjobs[0].add_cmd("%s -p %s -x %s -q %s \
-                        --rg-id %s --rg SM:%s -S %s.sam" % \
-                        (c.hisat2, c.pbs_ppns[0], c.hisat_dbs[j], input_str, \
+                        --rg-id %s --rg SM:%s | samtools view -Sb - \
+                        -o %s.raw.bam" % \
+                        (c.hisat2, c.pbs_ppns[0], dbpre, input_str, \
                         sid, sid, pre1))
-            elif c.mapper == 'bowtie2':
-                jobs[0].subjobs[0].add_cmd("%s -p %s -x %s -q %s \
-                        --rg-id %s --rg SM:%s --sensitive -S %s.sam" % \
-                        (c.bowtie2, c.pbs_ppns[0], c.bowtie_dbs[j], input_str, \
-                        sid, sid, pre1))
-            
-            fbam = "%s.bam" % pre1
-            jobs[1].subjobs[0].add_cmd("%s view -Sb %s.sam -o %s.raw.bam" % \
-                    (c.samtools, pre1, pre1))
-            jobs[2].subjobs[0].add_cmd("%s sort -t %s -m 60GB %s.raw.bam -o %s.bam" % \
-                    (c.sambamba, c.pbs_ppns[2], pre1, pre1))
-            #bcmds[2].append("%s index -t %s %s.bam" % (sambamba, pbs_ppns[2], pre1))
+                jobs[0].subjobs[0].add_cmd("%s sort -t %s -m 60GB %s.raw.bam -o %s.bam" % \
+                        (c.sambamba, c.pbs_ppns[0], pre1, pre1))
+            elif c.mapper == 'tophat2':
+                jobs[0].subjobs[0].add_cmd("mkdir -p %s" % pre1)
+                jobs[0].subjobs[0].add_cmd("%s -p %s -G %s \
+                        --rg-id %s --rg-sample %s %s %s -o %s" % \
+                        (c.tophat2, c.pbs_ppns[0], gff, sid, sid, dbpre, input_str, pre1))
+                fbam = "%s/accepted.bam" % pre1
+            elif c.mapper == 'star':
+                jobs[0].subjobs[0].add_cmd("%s --runThreadN %s --genomeDir %s \
+                        --readFilesIn %s --readFilesCommand zcat \
+                        --outFileNamePrefix %s. --outSAMtype BAM SortedByCoordinate" %\
+                        (c.star, c.pbs_ppns[0], dbpre, input_str, pre1))
+                fbam = "%s.Aligned.sortedByCoord.out.bam" % pre1
+                jobs[0].subjobs[0].add_cmd("%s index -t %s %s" % (c.sambamba, c.pbs_ppns[0], fbam))
         
-            pre2 = "%s/%s_%s" % (c.outdirs[1], sid, c.genomes[j])
-            jobs[2].subjobs[1].add_cmd("bam stat %s.bam --isize %s.ins.tsv > %s.tsv" % \
-                    (pre1, pre2, pre2))
+            pre2 = "%s/%s_%s" % (c.outdirs[1], sid, genome)
+            jobs[1].subjobs[0].add_cmd("bam stat %s --isize %s.ins.tsv > %s.tsv" % \
+                    (fbam, pre2, pre2))
         
-            fsen = "%s/%s.txt" % (c.outdirs[2], sid)
-            fant = "%s/%s.as.txt" % (c.outdirs[2], sid)
+            pre3 = "%s/%s_%s" % (c.outdirs[2], sid, genome)
+            fsen = "%s.txt" % pre3
+            fant = "%s.as.txt" % pre3
             #if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
             sam_filter_tag = "-f 1" if c.paired else ""
-            jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
-                        -t exon -i gene_id -m union -a 20 - %s > %s" % \
-                        (c.samtools, sam_filter_tag, fbam, \
-                        c.htseq, 'reverse', c.gffs[j], fsen))
+            #jobs[1].subjobs[1].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+            #            -t exon -i gene_id -m union -a 20 - %s > %s" % \
+            #            (c.samtools, sam_filter_tag, fbam, \
+            #            c.htseq, 'reverse', gff, fsen))
             #if not op.isfile(fant) or os.stat(fant).st_size == 0:
-            jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
-                        -t exon -i gene_id -m union -a 20 - %s > %s" % \
-                        (c.samtools, sam_filter_tag, fbam, \
-                        c.htseq, 'yes', c.gffs[j], fant))
+            #jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+            #            -t exon -i gene_id -m union -a 20 - %s > %s" % \
+            #            (c.samtools, sam_filter_tag, fbam, \
+            #            c.htseq, 'yes', c.gffs[j], fant))
    
     for job in jobs:
         job.write()
@@ -489,6 +603,13 @@ if __name__ == "__main__":
     parser.add_argument('--config', "--cfg", default = "config.ini", help = 'config file')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
+    sp1 = sp.add_parser("index",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'create genome index'
+    )
+    sp1.add_argument("--check", action = 'store_true', help = "run script in check mode")
+    sp1.set_defaults(func = index)
+    
     sp1 = sp.add_parser("mapping",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = 'mapping, counting and ASE'

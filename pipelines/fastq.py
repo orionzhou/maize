@@ -21,9 +21,9 @@ def parse_fastqc(fqc):
         r[ary[0]] = ary[1]
     return r
 
-def check_cfg_fqtrim(c):
+def check_cfg_fqtrim(c, njob = 1, noutdir = 3):
     c.outdirs = c.outdir.split(",")
-    assert len(c.outdirs) == 3, "not 3 outdirs: %s" % c.outdir
+    assert len(c.outdirs) == noutdir, "not %s outdirs: %s" % (noutdir, c.outdir)
     
     for subdir in [c.dirw, c.temp_dir] + c.outdirs:
         if not op.isdir(subdir):
@@ -39,7 +39,6 @@ def check_cfg_fqtrim(c):
 
     c.paired = str2bool(c.paired)
     
-    njob = 1
     c.pbs_walltimes = c.pbs_walltime.split(",")
     c.pbs_ppns = c.pbs_ppn.split(",")
     c.pbs_queues = c.pbs_queue.split(",")
@@ -55,63 +54,67 @@ def fq_trim(cfg, args):
         fq_trim_check(c)
         return 0
     os.chdir(c.dirw)
+ 
+    jcmds = [[
+        "export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % c.temp_dir,
+        "cd %s" % c.dirw
+    ]]
+    bcfgs = [
+        [dict(opt = 'parallel', thread = c.pbs_ppns[0]),
+        dict(opt = 'parallel', thread = c.pbs_ppns[0]),
+        dict(opt = 'parallel', thread = c.pbs_ppns[0])]
+    ]
+    
+    assert c.njob == len(bcfgs) == len(jcmds), "not %d jobs" % c.njob
+    jobs = []
+    for i in range(c.njob):
+        prefix = "%s.%d" % (c.job_prefix, i+1)
+        jcfg = {
+            'queue': c.pbs_queues[i],
+            'ppn': c.pbs_ppns[i], 
+            'walltime': c.pbs_walltimes[i],
+            'email': c.pbs_email,
+        }
+        job = PbsJob.from_cfg(jcfg = jcfg, jcmds = jcmds[i], bcfgs = bcfgs[i],
+                prefix = prefix, njob = len(bcfgs[i]), 
+                bash = c.bash, parallel = c.parallel)
+        jobs.append(job)
     
     t = Table.read(c.ilist, format = 'ascii.tab')
     nrow = len(t)
-    bcmds = [[[],[],[]]]
     if c.paired:
         for i in range(nrow):
             sid, f1, f2 = t['sid'][i], t['Readfile1'][i], t['Readfile2'][i]
             assert op.isfile(f1), "%s not there" % f1
             assert op.isfile(f2), "%s not there" % f2
-            bcmds[0][0].append("%s -o %s --extract -f fastq %s %s" % \
+            jobs[0].subjobs[0].add_cmd("%s -o %s --extract -f fastq %s %s" % \
                     (c.fastqc, c.outdirs[0], f1, f2))
             f11, f12, f21, f22 = ["%s/%s_%s.fq.gz" % (c.outdirs[1], sid, x) \
                     for x in ['1.PE', '1.SE', '2.PE', '2.SE']]
-            bcmds[0][1].append("java -Xmx2500M -jar %s PE -threads 4 \
+            jobs[0].subjobs[1].add_cmd("java -Xmx2500M -jar %s PE -threads 4 \
                     %s %s %s %s %s %s ILLUMINACLIP:%s:2:30:10:8:no \
                     LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35" % \
                     (c.trimmomatic, f1, f2, f11, f12, f21, f22, c.adapter))
-            bcmds[0][2].append("%s -o %s --extract -f fastq %s %s %s %s" % \
+            jobs[0].subjobs[2].add_cmd("%s -o %s --extract -f fastq %s %s %s %s" % \
                     (c.fastqc, c.outdirs[2], f11, f12, f21, f22))
     else:
         for i in range(nrow):
             sid, f1 = t['sid'][i], t['Readfile'][i]
             assert op.isfile(f1), "%s not there" % f1
-            bcmds[0][0].append("%s -o %s --extract -f fastq %s" % \
+            jobs[0].subjobs[0].add_cmd("%s -o %s --extract -f fastq %s" % \
                     (c.fastqc, c.outdirs[0], f1))
             fo = "%s/%s.fq.gz" % (c.outdirs[1], sid)
-            bcmds[0][1].append("java -Xmx2500M -jar %s SE -threads 4 \
+            jobs[0].subjobs[1].add_cmd("java -Xmx2500M -jar %s SE -threads 4 \
                     %s %s ILLUMINACLIP:%s:2:30:10:8:no \
                     LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:35" % \
                     (c.trimmomatic, f1, fo, c.adapter))
-            bcmds[0][2].append("%s -o %s --extract -f fastq %s" % \
+            jobs[0].subjobs[2].add_cmd("%s -o %s --extract -f fastq %s" % \
                     (c.fastqc, c.outdirs[2], fo))
     
-    jcmds = [[
-        "export _JAVA_OPTIONS='-Djava.io.tmpdir=%s'" % c.temp_dir,
-        "cd %s" % c.dirw
-    ]]
-    assert c.njob == len(bcmds) == len(jcmds), "not %d jobs" % c.njob
-    fjs = []
-    for i in range(c.njob):
-        job = PbsJob(queue = c.pbs_queues[i],
-            ppn = c.pbs_ppns[i], 
-            walltime = c.pbs_walltimes[i],
-            email = c.pbs_email,
-            prefix = "%s.%d" % (c.job_prefix, i+1),
-            parallel = c.parallel
-        )
-        sub_cmds = bcmds[i]
-        for j in range(len(bcmds[i])):
-            job.add_subjob(bcmds[i][j], opt = 'parallel')
-        if i == 0:
-            job.add_cmd("fqpipe check trim")
-        fjs.append(job.jobfilename)
+    for job in jobs:
         job.write()
-    
     fj = "%s.sh" % c.job_prefix
-    create_job_chain(fjs, fj)
+    create_job_chain([job.fname for job in jobs], fj)
     logging.debug("job chain with %s jobs was created: %s" % (c.njob, fj))
 
 def fq_trim_check(c):
@@ -174,10 +177,9 @@ def fq_trim_check(c):
             q2 = "%s/%s_fastqc/fastqc_data.txt" % (c.outdirs[2], sid)
             r1, r2 = parse_fastqc(q1), parse_fastqc(q2)
             rc1, rc2 = r1['Total Sequences'], r2['Total Sequences']
-            fho.write("\t".join(row + [rc1, p1, rc2]) + "\n")
             t['ReadCount'][i] = rc1
             t["TrimmedReadFile"][i] = p1
-            t['ReadCount'][i] = rc2
+            t['TrimmedReadCount'][i] = rc2
     t.write(c.olist, format='ascii.tab', overwrite=True)
 
 if __name__ == "__main__":
