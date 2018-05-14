@@ -54,6 +54,7 @@ def check_cfg_mapping(c, noutdir = 4, njob = 2):
         c[key] = fp
 
     c.paired = str2bool(c.paired)
+    assert c.stranded in ['yes', 'no', 'reverse'], "unknown stranded option: %s" % c.stranded
     
     if c.mapper == 'tophat2':
         c.tophat2 = which(c.tophat2)
@@ -69,8 +70,14 @@ def check_cfg_mapping(c, noutdir = 4, njob = 2):
         sys.exit(1)
     
     assert op.isdir(c.genomedir), "cannot access %s" % c.genomedir
-    genomes = set()
     t = Table.read(c.ilist, format = 'ascii.tab')
+    if 'genome' not in t[0]:
+        genomeb = 'B73c'
+        logging.debug("no 'genome' column detected: use %s" % genomeb)
+        t.add_column(Column([genomeb] * len(t)), name = 'genome')
+    c.t = t
+    
+    genomes = set()
     for i in range(len(t)):
         gts = t['genome'][i].split(",")
         for gt in gts:
@@ -180,10 +187,9 @@ def mapping(cfg, args):
         "cd %s" % c.dirw,
     ]]
     bcfgs = [
-        [dict(opt = 'bash')], 
-        [dict(opt = 'parallel', thread = c.pbs_ppns[1]),
-        dict(opt = 'parallel', thread = c.pbs_ppns[1])
-        ],
+        [dict(opt = 'bash'),
+        dict(opt = 'parallel', thread = c.pbs_ppns[1])],
+        [dict(opt = 'parallel', thread = c.pbs_ppns[1])]
     ]
     
     assert c.njob == len(bcfgs) == len(jcmds), "not %d jobs" % c.njob
@@ -201,7 +207,7 @@ def mapping(cfg, args):
                 bash = c.bash, parallel = c.parallel)
         jobs.append(job)
  
-    t = Table.read(c.ilist, format = 'ascii.tab')
+    t = c.t
     nrow = len(t)
     for i in range(nrow):
         sid = str(t['sid'][i])
@@ -253,7 +259,7 @@ def mapping(cfg, args):
                 jobs[0].subjobs[0].add_cmd("%s index -t %s %s" % (c.sambamba, c.pbs_ppns[0], fbam))
         
             pre2 = "%s/%s_%s" % (c.outdirs[1], sid, genome)
-            jobs[1].subjobs[0].add_cmd("bam stat %s --isize %s.ins.tsv > %s.tsv" % \
+            jobs[0].subjobs[1].add_cmd("bam stat %s --isize %s.ins.tsv > %s.tsv" % \
                     (fbam, pre2, pre2))
         
             pre3 = "%s/%s_%s" % (c.outdirs[2], sid, genome)
@@ -261,15 +267,15 @@ def mapping(cfg, args):
             fant = "%s.as.txt" % pre3
             #if not op.isfile(fsen) or os.stat(fsen).st_size == 0:
             sam_filter_tag = "-f 1" if c.paired else ""
-            #jobs[1].subjobs[1].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
-            #            -t exon -i gene_id -m union -a 20 - %s > %s" % \
-            #            (c.samtools, sam_filter_tag, fbam, \
-            #            c.htseq, 'reverse', gff, fsen))
+            jobs[1].subjobs[0].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+                        -t exon -i gene_id -m union -a 20 - %s > %s" % \
+                        (c.samtools, sam_filter_tag, fbam, \
+                        c.htseq, c.stranded, gff, fsen))
             #if not op.isfile(fant) or os.stat(fant).st_size == 0:
-            #jobs[2].subjobs[2].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
+            #jobs[1].subjobs[0].add_cmd("%s view %s -F 256 %s | %s -r pos -s %s \
             #            -t exon -i gene_id -m union -a 20 - %s > %s" % \
             #            (c.samtools, sam_filter_tag, fbam, \
-            #            c.htseq, 'yes', c.gffs[j], fant))
+            #            c.htseq, 'yes', gff, fant))
    
     for job in jobs:
         job.write()

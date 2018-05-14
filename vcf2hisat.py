@@ -413,8 +413,12 @@ def parse_vcf_tags(info, fmt, gtstr):
     idic, gdic = dict(), dict()
     fds = info.split(";")
     for fdstr in fds:
-        key, val = fdstr.split("=")
-        idic[key] = val
+        ps = fdstr.split("=")
+        assert len(ps) <= 2, "wrong INFO format: %s" % fdstr
+        if len(ps) == 1:
+            idic[ps[0]] = True
+        else:
+            idic[ps[0]] = ps[1]
 
     keys = fmt.split(":")
     vals = gtstr.split(":")
@@ -646,14 +650,16 @@ def main(genome_file,
                 if filter != 'PASS' and filter != '.':
                     continue
                 
-                idic, gdic = parse_vcf_tags(info, format, fields[9])
-                if int(idic['DP']) > 2270:
+                if float(qual) < 100:
                     continue
-                if gdic['GT'] == '0/1':
-                    jjj += 1
-                    #if jjj % 8 != 1:
-                    if jjj > -1:
-                        continue
+                #if False:
+                #idic, gdic = parse_vcf_tags(info, format, fields[9])
+                #if int(idic['DP']) > 2270:
+                #    continue
+                #if gdic['GT'] == '0/1':
+                #jjj += 1
+                #if jjj % 3 == 1:
+                #    continue
 
                 chr_seq = chr_dic[chr]
                 chr_genotype_vars = []

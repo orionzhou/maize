@@ -157,6 +157,8 @@ def build_gatk(args):
         sh("cp ../11_genome.fas db.fasta")
         sh("gatk CreateSequenceDictionary -R db.fasta")
         sh("samtools faidx db.fasta")
+        #sh("gatk FindBadGenomicKmersSpark -R db.fasta -O kmers_to_ignore.txt")
+        #sh("gatk BwaMemIndexImageCreator -I db.fasta -O db.img")
 
 def repeatmasker(args):
     dirg, fg = check_genomedir(args.species)
@@ -224,16 +226,22 @@ if __name__ == "__main__":
     sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
     sp2.set_defaults(func = build_bwa)
     
-    sp2 = sp.add_parser("hisat", help = "build hisat2 DB")
+    sp2 = sp.add_parser("hisat", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "build hisat2 DB"
+    )
     sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
-    sp2.add_argument('--p', type = int, default = 24, help = 'number of threads')
+    sp2.add_argument('--p', type = int, default = 1, help = 'number of threads')
     sp2.set_defaults(func = build_hisat)
     
-    sp2 = sp.add_parser("star", help = "build STAR DB")
+    sp2 = sp.add_parser("star", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "build STAR DB"
+    )
     sp2.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp2.add_argument('--overwrite', action='store_true', help = 'overwrite')
-    sp2.add_argument('--p', type = int, default = 24, help = 'number of threads')
+    sp2.add_argument('--p', type = int, default = 1, help = 'number of threads')
     sp2.set_defaults(func = build_star)
     
     sp2 = sp.add_parser("gatk", help = "build GATK ref-db")

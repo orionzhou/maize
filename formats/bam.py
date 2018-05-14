@@ -49,7 +49,16 @@ def check_bam(fbam):
 
 def is_perfect_match(aln):
     nts, bks = aln.get_cigar_stats()
-    dst = nts[1]+nts[2]+nts[8]+nts[10] # IDX NM
+    dst = nts[1]+nts[2]+nts[8] # IDX
+    mm = 0
+    if aln.has_tag("NM"):
+        mm = aln.get_tag("NM")
+    elif aln.has_tag("nM"): # STAR
+        mm = aln.get_tag("nM")
+    else:
+        logging.log("no NM/nM tag")
+        sys.exit(1)
+    dst += mm
     if dst == 0:
         return True
     else:
@@ -140,7 +149,36 @@ def bam_stat(args):
         fho.close()
     for stat in s.stats:
         print("%s\t%d" % (stat, getattr(s, stat)))
- 
+
+def bam_filter(args):
+    ibam = pysam.AlignmentFile(args.fi, "rb")
+    obam = pysam.AlignmentFile(args.fo, "wb", template=ibam)
+    cu = 0
+    for aln in ibam:
+        if aln.is_secondary or aln.is_supplementary:
+            continue
+        if aln.is_paired:
+            if aln.is_qcfail:
+                continue
+            if aln.is_duplicate:
+                continue
+            if aln.is_unmapped:
+                continue
+        else:
+            if aln.is_qcfail:
+                continue
+            if aln.is_duplicate:
+                continue
+            if aln.is_unmapped:
+                continue
+        aid = aln.query_name
+        mq = aln.mapping_quality
+        pm = is_perfect_match(aln)
+        if not pm and mq >= 20:
+            obam.write(aln)
+            cu += 1
+    print("%d hq reads with mismatches" % cu) 
+
 def bam_binstat(args):
     bam = pysam.AlignmentFile(args.fi)
     cdic = dict()
@@ -184,6 +222,14 @@ if __name__ == "__main__":
     sp1.add_argument('fi', help = 'input SAM/BAM file')
     sp1.add_argument('--isize', help = 'output insert size distribution to file')
     sp1.set_defaults(func = bam_stat)
+
+    sp1 = sp.add_parser("filter",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'filter SAM/BAM file'
+    )
+    sp1.add_argument('fi', help = 'input SAM/BAM file')
+    sp1.add_argument('fo', help = 'output BAM file')
+    sp1.set_defaults(func = bam_filter)
 
     sp1 = sp.add_parser("binstat",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
