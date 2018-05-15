@@ -4,10 +4,7 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
-import configparser
 from string import Template
-from colorama import init, Fore, Back, Style
 
 def infer_read(rows, fho, fhb):
     rdic, vdic = dict(), dict()
@@ -38,6 +35,7 @@ def infer_read(rows, fho, fhb):
     nerr = len(rdic)
     fho.write("%s\t%d\t%d\t%d\t%d\n" % (rid, nref, nalt, nunk, nerr))
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser(
             description = 'Allele-specific Expression calculation'
     )

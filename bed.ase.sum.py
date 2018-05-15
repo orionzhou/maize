@@ -4,11 +4,9 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
-import configparser
-from colorama import init, Fore, Back, Style
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser(
             description = 'Allele-specific Expression calculation'
     )

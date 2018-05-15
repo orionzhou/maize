@@ -4,10 +4,7 @@ import os
 import os.path as op
 import sys
 import numpy as np
-import argparse
-import configparser
 from string import Template
-from colorama import init, Fore, Back, Style
 import pysam
 
 def get_read_base(aln, qseq, qual, pos):
@@ -70,6 +67,7 @@ def read_variants(fv):
     fhv.close()
     return vdic
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser(
             description = 'Allele-specific Expression calculation'
     )
