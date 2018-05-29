@@ -14,13 +14,15 @@ def get_read_base(aln, qseq, qual, pos):
         return [rbase, qseq[qpos], qual[qpos]]
     return ['', '', 0]
 def infer_variant(x, minBaseQual):
-    aln = x.get_aligned_pairs(matches_only = True, with_seq = True)
+    aln = x.get_aligned_pairs(matches_only = False, with_seq = True)
     qseq = x.query_sequence
     qual = x.query_qualities
     mms = dict()
     for qpos, rpos, rbase in aln:
-        if rbase.islower() and qual[qpos] >= minBaseQual:
+        if qpos is not None and rpos is not None and rbase.islower() and qual[qpos] >= minBaseQual:
             mms[qpos] = [rpos+1, 'M', qseq[qpos]]
+    #if x.query_name == 'HISEQ15:141:C6VDGANXX:5:1115:10555:79840':
+    #    print(mms)
     res = []
     qpos, rpos = 0, x.reference_start
     rbeg = rpos
