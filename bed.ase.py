@@ -16,24 +16,31 @@ def infer_read(rows, fho, fhb):
             for rvnt in row[4].split(" "):
                 pos, vtype, vnt = rvnt.split(":")
                 rdic[pos] = "%s:%s" % (vtype, vnt)
-        vpos, vnt = row[7], row[8]
-        vdic[vpos] = vnt
+        vpos, vnt, phase = row[7:10]
+        assert phase in ['0|1','1|0'], "Unknown phase: %s" % phase
+        vdic[vpos] = [vnt, phase]
         loc = "%s:%s" % tuple(row[0:2])
         if loc not in locs:
             locs.add(loc)
             fhb.write("%s\t%s\t%s\t%s\n" % tuple(row[0:4]))
-    nref, nalt, nunk, nerr = 0, 0, 0, 0
+    n0, n1, nunk, nerr = 0, 0, 0, 0
     for pos in vdic:
         if pos in rdic:
-            if rdic[pos] == vdic[pos]:
-                nalt = nalt + 1
+            if rdic[pos] == vdic[pos][0]:
+                if vdic[pos][1] == '0|1':
+                    n1 = n1 + 1
+                else:
+                    n0 = n0 + 1
             else:
                 nunk = nunk + 1
             del rdic[pos]
         else:
-            nref = nref + 1
+            if vdic[pos][1] == '0|1':
+                n0 = n0 + 1
+            else:
+                n1 = n1 + 1
     nerr = len(rdic)
-    fho.write("%s\t%d\t%d\t%d\t%d\n" % (rid, nref, nalt, nunk, nerr))
+    fho.write("%s\t%d\t%d\t%d\t%d\n" % (rid, n0, n1, nunk, nerr))
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(
@@ -58,7 +65,7 @@ if __name__ == "__main__":
     fhi = open(fi, "r")
     fho = open(fo, "w")
     fhb = open(fb, "w")
-    fho.write("rid\tnref\tnalt\tnunk\tnerr\n")
+    fho.write("rid\tn0\tn1\tnunk\tnerr\n")
     prid = ""
     rows = []
     for line in fhi:

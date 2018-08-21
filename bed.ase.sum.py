@@ -25,15 +25,15 @@ if __name__ == "__main__":
     fhr = open(fr, "r")
     rdic = dict()
     for line in fhr:
-        rid, nref, nalt, nunk, nerr = line.strip("\n").split("\t")
+        rid, n0, n1, nunk, nerr = line.strip("\n").split("\t")
         if rid == 'rid':
             continue
         tag = "unk"
-        if int(nref) > 0 and int(nalt) == 0:
-            tag = 'ref'
-        elif int(nref) == 0 and int(nalt) > 0:
-            tag = 'alt'
-        elif int(nref) > 0 and int(nalt) > 0:
+        if int(n0) > 0 and int(n1) == 0:
+            tag = 'h0'
+        elif int(n0) == 0 and int(n1) > 0:
+            tag = 'h1'
+        elif int(n0) > 0 and int(n1) > 0:
             tag = 'cft'
         rdic[rid] = tag
     fhr.close()
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         row = line.strip("\n").split("\t")
         gid, rid = row[3], row[7]
         if gid not in gdic:
-            gdic[gid] = {'nref': 0, 'nalt': 0, 'ncft': 0}
+            gdic[gid] = {'n0': 0, 'n1': 0, 'ncft': 0}
         if gid not in tdic:
             tdic[gid] = set()
         if rid not in tdic[gid]:
@@ -53,21 +53,21 @@ if __name__ == "__main__":
             continue
         if rid not in rdic:
             print("%s not in read dict" % rid)
-        if rdic[rid] == 'ref':
-            gdic[gid]['nref'] += 1
-        elif rdic[rid] == 'alt':
-            gdic[gid]['nalt'] += 1
+        if rdic[rid] == 'h0':
+            gdic[gid]['n0'] += 1
+        elif rdic[rid] == 'h1':
+            gdic[gid]['n1'] += 1
         elif rdic[rid] == 'cft':
             gdic[gid]['ncft'] += 1
     fhb.close()
     
     fho = open(fo, "w")
-    fho.write("gid\tnref\tnalt\tncft\n")
+    fho.write("gid\tn0\tn1\tncft\n")
     for gid in sorted(gdic):
         sdic = gdic[gid]
-        nref, nalt, ncft = sdic['nref'], sdic['nalt'], sdic['ncft']
-        if nref + nalt < 0:
+        n0, n1, ncft = sdic['n0'], sdic['n1'], sdic['ncft']
+        if n0 + n1 < 0:
             continue
-        fho.write("%s\t%d\t%d\t%d\n" % (gid, nref, nalt, ncft))
+        fho.write("%s\t%d\t%d\t%d\n" % (gid, n0, n1, ncft))
     fho.close()
     

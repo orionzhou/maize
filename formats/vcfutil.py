@@ -98,13 +98,13 @@ def vcf2fas(args):
         #logging.debug("%s\t%s\t%s\t%s" % (seqid, beg, end, note))
         print("%s\t%s\t%s\t%s\t%s" % (seqid, beg, end, note, seqstr))
 
-def vcf2bed(args):
+def hybrid_bed(args):
     fhi = must_open(args.fi)
     for line in fhi:
         if line.startswith("#"):
             continue
         row = line.strip("\n").split("\t")
-        sid, pos, ref, alt = row[0], row[1], row[3], row[4]
+        sid, pos, ref, alt, phase = row[0], row[1], row[3], row[4], row[9]
         pos = int(pos)
         vnt = "M:%s" % alt
         if len(ref) > 1:
@@ -120,7 +120,7 @@ def vcf2bed(args):
                 continue
         else:
             assert len(ref) == 1 and len(alt) == 1, "error: %s" % line
-        print("\t".join([sid, str(pos-1), str(pos), vnt]))
+        print("\t".join([sid, str(pos-1), str(pos), vnt, phase]))
 
 def vcf2tsv(args):
     vcf_reader = vcf.Reader(must_open(args.fi))
@@ -236,11 +236,6 @@ if __name__ == '__main__':
     sp1.add_argument('fs', help = 'reference sequence file (.fas)')
     sp1.set_defaults(func = vcf2fas)
  
-    sp1 = sp.add_parser("2bed", help = "extract variant locations")
-    sp1.add_argument('fi', help = 'input vcf file')
-    sp1.add_argument('--noindel', action = 'store_true', help = 'remove InDel')
-    sp1.set_defaults(func = vcf2bed)
-   
     sp1 = sp.add_parser("2tsv", help = "vcf -> tsv")
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = vcf2tsv)
@@ -253,6 +248,11 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = hybrid)
 
+    sp1 = sp.add_parser("hybrid_bed", help = "extract variant locations")
+    sp1.add_argument('fi', help = 'input vcf file')
+    sp1.add_argument('--noindel', action = 'store_true', help = 'remove InDel')
+    sp1.set_defaults(func = hybrid_bed)
+   
     args = parser.parse_args()
     if args.command:
         args.func(args)

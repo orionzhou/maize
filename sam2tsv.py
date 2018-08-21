@@ -28,7 +28,7 @@ if __name__ == "__main__":
     fho.write("\t".join('''qName qStart qEnd qSize strand
     tName tStart tEnd tSize
     alnLen match misMatch baseN qNumIns tNumIns qBaseIns tBaseIns ident score
-    qLoc tLoc'''.split()))
+    qLoc tLoc'''.split()) + "\n")
     for x in sam.fetch():
         if x.is_unmapped:
             continue
@@ -75,13 +75,14 @@ if __name__ == "__main__":
         if numIns >= 1:
             score_indel = sGapOpen + (numIns - 1) * sGapExtend
         score = score_match + score_misMatch + score_indel
-        ident = match / (match + misMatch)
+        ident = "%.03f" % (match / (match + misMatch))
 
-        fho.write("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.03f\t%d\t%s\t%s\n" % 
-                (qId, qBeg, qEnd, qSize, strand
-                 tId, tBeg, tEnd, tSize,
-                 alnLen, match, misMatch, 0,
-                 qNumIns, tNumIns, qBaseIns, tBaseIns, ident, score, '', ''))
+        ary = [qId, qBeg, qEnd, qSize, strand, 
+            tId, tBeg, tEnd, tSize,
+            alnLen, match, misMatch, 0,
+            qNumIns, tNumIns, qBaseIns, tBaseIns, ident, score, '', '']
+        ary = [str(x) for x in ary]
+        fho.write("\t".join(ary) + "\n")
         #exit(1)
     fho.close()
     

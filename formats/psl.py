@@ -193,7 +193,7 @@ class Psl(LineFile):
     def getMatchCount(self, id):
         return self.mCounts[id]
 
-def qcoord(args):
+def coordQ(args):
     sizes = Sizes(args.fs)
     for line in must_open(args.fi):
         if not re.match(r'\d+', line[0]):
@@ -212,6 +212,24 @@ def qcoord(args):
             else:
                 p.qStarts = [x + qosStart - 1 for x in p.qStarts]
             p.qSize = cSize
+        print(str(p))
+
+def coordT(args):
+    sizes = Sizes(args.fs)
+    for line in must_open(args.fi):
+        if not re.match(r'\d+', line[0]):
+            continue
+        p = PslLine(line)
+        tnames = p.tName.split("-")
+        if len(tnames) == 3:
+            x = p.tName
+            t.qName, tosStart, tosEnd = tnames[0], int(tnames[1]), int(tnames[2])
+            assert tosEnd-tosStart+1 == p.tSize
+            cSize = sizes.get_size(p.tName)
+            p.tStart += tosStart - 1
+            p.tEnd += tosStart - 1
+            p.tStarts = [x + tosStart - 1 for x in p.tStarts]
+            p.tSize = cSize
         print(str(p))
 
 def psl2tsv(args):
@@ -289,10 +307,15 @@ if __name__ == "__main__":
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("qcoord", help = "recover query chrom coordinates")
+    sp1 = sp.add_parser("coordQ", help = "recover query chrom coordinates")
     sp1.add_argument('fi', help = 'input PSL')
     sp1.add_argument('fs', help = 'query genome size file (.sizes)')
-    sp1.set_defaults(func = qcoord)
+    sp1.set_defaults(func = coordQ)
+ 
+    sp1 = sp.add_parser("coordT", help = "recover target chrom coordinates")
+    sp1.add_argument('fi', help = 'input PSL')
+    sp1.add_argument('fs', help = 'target genome size file (.sizes)')
+    sp1.set_defaults(func = coordT)
  
     sp1 = sp.add_parser("2bed", help = "convert to BED file")
     sp1.add_argument('fi', help = 'input PSL')

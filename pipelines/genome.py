@@ -11,7 +11,7 @@ from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
 from maize.formats.pbs import PbsJob
 
-def check_genomedir(species, raw = False):
+def make_genomedir(species):
     dirw = species
     if species.isalnum():
         dirw = op.join("/home/springer/zhoux379/data/genome", species)
@@ -19,64 +19,58 @@ def check_genomedir(species, raw = False):
     if not op.isdir(dirw):
         logging.debug("creating diretory: %s" % dirw)
         mkdir(dirw)
-    if raw:
-        fis = ['raw.fas', 'raw.fa', 'raw.fas.gz', 'raw.fa.gz']
-        fis = [x for x in fis if op.isfile(op.join(dirw, x))]
-        if len(fis) == 0:
-            logging.error("no raw.fas found")
-            sys.exit()
-        elif len(fis) > 1:
-            logging.error(">1 raw.fas found")
-            sys.exit()
-        return dirw, fis[0]
-    else:
-        fg = "%s/11_genome.fas" % dirw
-        if not op.isfile(fg):
-            logging.error("%s not there" % fg)
-            sys.exit()
-        return op.abspath(dirw), op.abspath(fg)
+    return dirw
+
+def get_genomedir(species):
+    dirw = species
+    if species.isalnum():
+        dirw = op.join("/home/springer/zhoux379/data/genome", species)
+        logging.debug("converting species to directory: %s" % dirw)
+    fg = "%s/10_genome.fna" % dirw
+    if not op.isfile(fg):
+        logging.error("%s not there" % fg)
+        sys.exit()
+    return op.abspath(dirw), op.abspath(fg)
 
 def clean_fasta(args):
-    dirw, fi = check_genomedir(args.species, raw = False)
+    dirw = make_genomedir(args.species)
     os.chdir(dirw)
     for fname in ["raw.fix.fas.index", "11_genome.fas.index"]:
         if op.isfile(fname):
             os.remove(fname)
-    if op.islink("11_genome.fas"): os.unlink("11_genome.fas")
+    if op.islink("10_genome.fna"): os.unlink("10_genome.fna")
    
-    if op.isfile("11_genome.fas") and not args.overwrite:
-        logging.debug("11_genome.fas already exits: skipped")
+    if op.isfile("10_genome.fna") and not args.overwrite:
+        logging.debug("10_genome.fna already exits: skipped")
+    elif op.isfile("08_seq_map/renamed.fna"):
+        sh("ln -sf 08_seq_map/renamed.fna 10_genome.fna")
+        if op.isfile("08_seq_map/renamed.sizes"):
+            sh("ln -sf 08_seq_map/renamed.sizes 10_genome.sizes")
     else:
-        sh("fasta clean %s > 01.fas" % fi)
-
-        if args.rename:
-            sh("fasta rename --map 03.seqid.map 01.fas > 11_genome.fas")
-            os.remove("01.fas")
-        else:
-            sh("mv 01.fas 11_genome.fas")
+        logging.error("08_seq_map/renamed.fna not there")
+        sys.exit(1)
     
-    if op.isfile("ctg.raw.fas"):
-        sh("fasta clean ctg.raw.fas > ctg.fas")
-
-    if op.isfile("15.sizes") and not args.overwrite:
-        logging.debug("15.sizes already exits - skipped")
-    else:
-        sh("fasta size 11_genome.fas > 15.sizes")
+    if not op.isdir("15_intervals"):
+        mkdir("15_intervals")
     
-    if op.isfile("15.bed") and not args.overwrite:
-        logging.debug("15.bed already exits - skipped")
+    if op.isfile("15_intervals/01.chrom.bed") and not args.overwrite:
+        logging.debug("01.chrom.bed already exits - skipped")
     else:
-        sh("fasta size --bed 11_genome.fas > 15.bed")
+        sh("fasta size --bed 10_genome.fna > 15_intervals/01.chrom.bed")
+    if op.isfile("15_intervals/01.chrom.sizes") and not args.overwrite:
+        logging.debug("01.chrom.sizes already exits - skipped")
+    else:
+        sh("faSize -detailed 10_genome.fna > 15_intervals/01.chrom.sizes")
     
-    if op.isfile("16.gap.bed") and not args.overwrite:
-        logging.debug("16.gap.bed already exits - skipped")
+    if op.isfile("15_intervals/11.gap.bed") and not args.overwrite:
+        logging.debug("11.gap.bed already exits - skipped")
     else:
-        sh("fasta gaps 11_genome.fas > 16.gap.bed")
+        sh("fasta gaps 10_genome.fna > 15_intervals/11.gap.bed")
 
 def build_blat(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.blat")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/blat")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
    
     if not args.overwrite and op.isfile('db.2bit'):
@@ -87,9 +81,9 @@ def build_blat(args):
     if op.isfile("tmp.out"): os.remove("tmp.out")
 
 def build_bowtie(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.bowtie2")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/bowtie2")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
     
     if op.isfile("db.rev.1.bt2") and not args.overwrite:
@@ -101,41 +95,43 @@ def build_bowtie(args):
         sh("bowtie2-build db.fa db")
 
 def build_hisat(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.hisat2")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/hisat2")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
    
+    f_gtf = "../../50_annotation/10.gtf"
     if op.isfile("db.1.ht2") and not args.overwrite:
         logging.debug("db.1.ht2 already exists - skipped")
-    elif not op.isfile("../51.gtf"):
-        logging.error("no gtf file: ../51.gtf")
+    elif not op.isfile(f_gtf):
+        logging.error("no gtf file: f_gtf")
         sys.exit()
     else:
-        sh("hisat2_extract_exons.py ../51.gtf > db.exon")
-        sh("hisat2_extract_splice_sites.py ../51.gtf > db.ss")
+        sh("hisat2_extract_exons.py %s > db.exon" % f_gtf)
+        sh("hisat2_extract_splice_sites.py %s > db.ss" % f_gtf)
         sh("hisat2-build -p %d --ss db.ss --exon db.exon %s db" % (args.p, fg))
 
 def build_star(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.star")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/star")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
-   
+  
+    f_gtf = "../../50_annotation/10.gtf"
     if op.isfile("SA") and not args.overwrite:
         logging.debug("SA already exists - skipped")
-    elif not op.isfile("../51.gtf"):
-        logging.error("no gtf file: ../51.gtf")
+    elif not op.isfile(f_gtf):
+        logging.error("no gtf file: %s" % f_gtf )
         sys.exit()
     else:
         sh("STAR --runThreadN %d --runMode genomeGenerate --genomeDir %s \
                 --genomeFastaFiles %s --sjdbGTFfile %s" %
-                (args.p, ".", fg, "../51.gtf"))
+                (args.p, ".", fg, f_gtf))
 
 def build_bwa(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.bwa")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/bwa")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
    
     if op.isfile("db.bwt") and not args.overwrite:
@@ -144,9 +140,9 @@ def build_bwa(args):
         sh("bwa index -a bwtsw -p %s/db %s" % (dirw, fg))
 
 def build_gatk(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "21.gatk")
-    if not op.isdir(dirw): os.makedirs(dirw)
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "21_dbs/gatk")
+    if not op.isdir(dirw): mkdir(dirw)
     os.chdir(dirw)
    
     if op.isfile("db.dict") and not args.overwrite:
@@ -154,15 +150,15 @@ def build_gatk(args):
     else:
         if op.exists("db.fasta"): sh("rm db.fasta")
         if op.exists("db.dict"): sh("rm db.dict")
-        sh("cp ../11_genome.fas db.fasta")
+        sh("cp ../../10_genome.fna db.fasta")
         sh("gatk CreateSequenceDictionary -R db.fasta")
         sh("samtools faidx db.fasta")
         #sh("gatk FindBadGenomicKmersSpark -R db.fasta -O kmers_to_ignore.txt")
         #sh("gatk BwaMemIndexImageCreator -I db.fasta -O db.img")
 
 def repeatmasker(args):
-    dirg, fg = check_genomedir(args.species)
-    dirw = op.join(dirg, "12.repeatmasker")
+    dirg, fg = get_genomedir(args.species)
+    dirw = op.join(dirg, "12_repeatmasker")
     if not op.isdir(dirw): os.makedirs(dirw)
     os.chdir(dirw)
 
@@ -199,7 +195,6 @@ if __name__ == "__main__":
             help = "clean and rename fasta records, generate *.sizes and gap location files")
     sp1.add_argument('species', help = 'species/accession/genotype/dir-path')
     sp1.add_argument('--overwrite', action='store_true', help = 'overwrite')
-    sp1.add_argument('--rename', action = 'store_true', help = 'rename seq IDs')
     sp1.set_defaults(func = clean_fasta)
 
     sp1 = sp.add_parser("repeatmasker", 

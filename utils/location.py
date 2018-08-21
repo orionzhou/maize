@@ -63,7 +63,7 @@ def make_window(beg, end, winsize, winstep):
         size_lastwin = size - (nwin-1) * winstep
         if float(size_lastwin) / winstep < 0.3:
             mergelast = True
-            eprint(size_lastwin)
+            #eprint(size_lastwin)
     
     wins = []
     for i in range(0, nwin):
