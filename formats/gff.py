@@ -29,8 +29,18 @@ valid_gff_parent_child = {"match": "match_part",
                           "expressed_sequence_match": "match_part",
                           "protein_match": "match_part",
                           "transposable_element": "transposon_fragment",
-                          "gene": "mRNA",
-                          "mRNA": "exon,CDS,five_prime_UTR,three_prime_UTR"
+                          "gene": "mRNA,rRNA,tRNA,miRNA,ncRNA,lnc_RNA,snRNA,snoRNA,pre_miRNA,SRP_RNA,RNase_MRP_RNA",
+                          "mRNA": "exon,CDS,five_prime_UTR,three_prime_UTR",
+                          "rRNA": "exon",
+                          "tRNA": "exon",
+                          "miRNA": "exon",
+                          "ncRNA": "exon",
+                          "lnc_RNA": "exon",
+                          "snRNA": "exon",
+                          "snoRNA": "exon",
+                          "pre_miRNA": "exon",
+                          "SRP_miRNA": "exon",
+                          "RNase_MRP_miRNA": "exon",
                          }
 valid_gff_to_gtf_type = {"exon": "exon",
                          "pseudogenic_exon": "exon",
@@ -336,55 +346,23 @@ class GffFeatureTracker (object):
     def get_symbol(self, parent):
         return self.symbolstore[parent]
 
-def make_attributes(s, gff3=True, keep_attr_order=True):
+def make_index(gff_file):
     """
-    In GFF3, the last column is typically:
-    ID=cds00002;Parent=mRNA00002;
+    Make a sqlite database for fast retrieval of features.
+    """
+    import gffutils
+    db_file = gff_file + ".db"
 
-    In GFF2, the last column is typically:
-    Gene 22240.t000374; Note "Carbonic anhydrase"
-    """
-    if gff3:
-        """
-        hack: temporarily replace the '+' sign in the attributes column
-        with the string 'PlusSign' to prevent urlparse.parse_qsl() from
-        replacing the '+' sign with a space
-        """
-        s = s.replace('+', 'PlusSign')
-        d = parse_qs(s)
-        for key in d.keys():
-            d[key][0] = unquote(d[key][0].replace('PlusSign', '+').replace('"', ''))
+    if need_update(gff_file, db_file):
+        if op.exists(db_file):
+            os.remove(db_file)
+        logging.debug("Indexing `{0}`".format(gff_file))
+        gffutils.create_db(gff_file, db_file, force = True,
+                merge_strategy="create_unique")
     else:
-        attributes = s.split(";")
-        d = dict()
-        for a in attributes:
-            a = a.strip()
-            if ' ' not in a:
-                continue
-            key, val = a.split(' ', 1)
-            val = unquote(val.replace('"', '').replace('=', ' ').strip())
-            d[key].append(val)
+        logging.debug("Load index `{0}`".format(gff_file))
 
-    for key, val in d.items():
-        d[key] = list(flatten([v.split(",") for v in val]))
-
-    return d
-
-def to_range(obj, score=None, id=None, strand=None):
-    """
-    Given a gffutils object, convert it to a range object
-    """
-    from jcvi.utils.range import Range
-
-    if score or id:
-        _score = score if score else obj.score
-        _id = id if id else obj.id
-        return Range(seqid=obj.seqid, start=obj.start, end=obj.end, \
-            score=_score, id=_id)
-    elif strand:
-        return (obj.seqid, obj.start, obj.end, obj.strand)
-
-    return (obj.seqid, obj.start, obj.end)
+    return gffutils.FeatureDB(db_file)
 
 def addparent(args):
     """
@@ -612,42 +590,6 @@ def fixpartials(args):
 
     fw.close()
 
-def sizes(args):
-    """
-    %prog sizes gffile
-
-    Given a gff file of features, calculate the sizes of chosen parent feature
-    based on summation of sizes of child features.
-
-    For example, for parent 'mRNA' and child 'CDS' feature types, calcuate sizes of
-    mRNA by summing the sizes of the disjoint CDS parts.
-    """
-    p = OptionParser(sizes.__doc__)
-    p.set_outfile()
-    p.add_option("--parents", dest="parents", default="mRNA",
-            help="parent feature(s) for which size is to be calculated")
-    p.add_option("--child", dest="child", default="CDS",
-            help="child feature to use for size calculations")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
-    parents, cftype = set(opts.parents.split(",")), opts.child
-
-    gff = make_index(gffile)
-
-    fw = must_open(opts.outfile, "w")
-    for parent in parents:
-        for feat in gff.features_of_type(parent, order_by=('seqid', 'start')):
-            fsize = 0
-            fsize = feat.end - feat.start + 1 \
-                    if cftype == parent else \
-                    gff.children_bp(feat, child_featuretype=cftype)
-            print >> fw, "\t".join(str(x) for x in (feat.id, fsize))
-        fw.close()
-
 def cluster(args):
     """
     %prog cluster gffile
@@ -739,21 +681,11 @@ def summary(args):
 
     Print summary stats for features of different types.
     """
-    from jcvi.formats.base import SetFile
-    from jcvi.formats.bed import BedSummary
-    from jcvi.utils.table import tabulate
-
-    p = OptionParser(summary.__doc__)
-    p.add_option("--isoform", default=False, action="store_true",
-                 help="Find longest isoform of each id")
-    p.add_option("--ids", help="Only include features from certain IDs")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gff_file, = args
-    ids = opts.ids
+    from maize.formats.base import SetFile
+    from maize.formats.bed import BedSummary
+    from maize.utils.table import tabulate
+    gff_file = args.fi
+    ids = args.ids
 
     if ids:
         ids = SetFile(ids)
@@ -800,7 +732,7 @@ def summary(args):
 
     print >> sys.stdout, tabulate(table)
 
-def gb(args):
+def gff2gb(args):
     """
     %prog gb gffile fastafile
 
@@ -812,14 +744,7 @@ def gb(args):
         from BCBio import GFF
     except ImportError:
         print >> sys.stderr, "You need to install dep first: $ easy_install bcbio-gff"
-
-    p = OptionParser(gb.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    gff_file, fasta_file = args
+    gff_file, fasta_file = args.fi, args.fasta
     pf = op.splitext(gff_file)[0]
     out_file = pf + ".gb"
     fasta_input = SeqIO.to_dict(SeqIO.parse(fasta_file, "fasta", generic_dna))
@@ -838,15 +763,8 @@ def orient(args):
     $ %prog load --parents=EST_match --children=match_part clc.JCVIv4a.gff
     JCVI.Medtr.v4.fasta -o features.fasta
     """
-    from jcvi.formats.fasta import longestorf
-
-    p = OptionParser(orient.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    ingff3, fastafile = args
+    from maize.formats.fasta import longestorf
+    ingff3, fastafile = args.fi, args.fasta
     idsfile = fastafile.rsplit(".", 1)[0] + ".orf.ids"
     if need_update(fastafile, idsfile):
         longestorf([fastafile, "--ids"])
@@ -877,13 +795,7 @@ def rename(args):
 
     Change the IDs within the gff3.
     """
-    p = OptionParser(rename.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    ingff3, switch = args
+    ingff3, switch = args.fi, args.map
     switch = DictFile(switch)
 
     gff = Gff(ingff3)
@@ -899,27 +811,6 @@ def rename(args):
         g.update_attributes()
         print(g)
 
-def parents(args):
-    """
-    %prog parents gffile models.ids
-
-    Find the parents given a list of IDs in "models.ids".
-    """
-    p = OptionParser(parents.__doc__)
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    gff_file, idsfile = args
-    g = make_index(gff_file)
-    fp = open(idsfile)
-    for row in fp:
-        cid = row.strip()
-        b = g.parents(cid, 1).next()
-        print("\t".join((cid, b.id)))
-
 def filter(args):
     """
     %prog filter gffile > filtered.gff
@@ -931,37 +822,13 @@ def filter(args):
 
     (2) Total bp length of child features
     """
-    p = OptionParser(filter.__doc__)
-    p.add_option("--type", default="mRNA",
-             help="The feature to scan for the attributes [default: %default]")
-    g1 = OptionGroup(p, "Filter by identity/coverage attribute values")
-    g1.add_option("--id", default=95, type="float",
-                 help="Minimum identity [default: %default]")
-    g1.add_option("--coverage", default=90, type="float",
-                 help="Minimum coverage [default: %default]")
-    g1.add_option("--nocase", default=False, action="store_true",
-                 help="Case insensitive lookup of attribute names [default: %default]")
-    p.add_option_group(g1)
-    g2 = OptionGroup(p, "Filter by child feature bp length")
-    g2.add_option("--child_ftype", default=None, type="str",
-                 help="Child featuretype to consider")
-    g2.add_option("--child_bp", default=None, type="int",
-                 help="Filter by total bp of children of chosen ftype")
-    p.add_option_group(g2)
-    p.set_outfile()
-
-    opts, args = p.parse_args(args)
-    otype, oid, ocov = opts.type, opts.id, opts.coverage
-    cftype, clenbp = opts.child_ftype, opts.child_bp
+    gffile = args.fi
+    otype, oid, ocov = args.type, args.id, args.coverage
+    cftype, clenbp = args.child_ftype, args.child_bp
 
     id_attr, cov_attr = "Identity", "Coverage"
-    if opts.nocase:
+    if args.nocase:
         id_attr, cov_attr = id_attr.lower(), cov_attr.lower()
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
 
     gffdb = make_index(gffile)
     bad = set()
@@ -981,24 +848,21 @@ def filter(args):
                 bad.add(g.id)
 
     logging.debug("{0} bad accns marked.".format(len(bad)))
-
-    fw = must_open(opts.outfile, "w")
     for g in gffdb.features_of_type(ptype, order_by=('seqid', 'start')):
         if ptype != otype:
             feats = list(gffdb.children(g, featuretype=otype, order_by=('start')))
             ok_feats = [f for f in feats if f.id not in bad]
             if len(ok_feats) > 0:
-                print >> fw, g
+                print(g)
                 for feat in ok_feats:
-                    print >> fw, feat
+                    print(feat)
                     for child in gffdb.children(feat, order_by=('start')):
-                        print >> fw, child
+                        print(child)
         else:
             if g.id not in bad:
-                print >> fw, g
+                print(g)
                 for child in gffdb.children(g, order_by=('start')):
-                    print >> fw, child
-    fw.close()
+                    print(child)
 
 def fix_gsac(g, notes):
     a = g.attributes
@@ -1015,104 +879,136 @@ def fix_gsac(g, notes):
     a["Note"] = note
     g.update_attributes()
 
-def gapsplit(args):
-    """
-    %prog gapsplit gffile > split.gff
-
-    Read in the gff (normally generated by GMAP) and print it out after splitting
-    each feature into one parent and multiple child features based on alignment
-    information encoded in CIGAR string.
-    """
-    p = OptionParser(gapsplit.__doc__)
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
-
-    gff = Gff(gffile)
-    for g in gff:
-        if re.match("EST_match", g.type):
-            """
-            hacky implementation:
-            since the standard urlparse.parse_qsl() replaces all "+" symbols with spaces
-            we will write a regex to check either for a "-" or a " " (space)
-            """
-            match = re.search(r'\S+ (\d+) \d+ ([\s{1}\-])', g.attributes["Target"][0])
-            if match.group(2) == "-":
-                strand = match.group(2)
-            else:
-                strand = "+"
-                g.attributes["Target"][0] = " ".join(str(x) \
-                        for x in [g.attributes["Target"][0].rstrip(), strand])
-
-            if g.strand == "?":
-                g.strand = strand
-        else:
-            match = re.match(r'\S+ (\d+) \d+', g.attributes["Target"][0])
-        target_start = int(match.group(1))
-
-        re_cigar = re.compile(r'(\D+)(\d+)');
-        cigar = g.attributes["Gap"][0].split(" ")
-        g.attributes["Gap"] = None
-
-        parts = []
-        if g.strand == "+":
-            for event in cigar:
-                match = re_cigar.match(event)
-                op, count = match.group(1), int(match.group(2))
-                if op in "IHS":
-                    target_start += count
-                elif op in "DN":
-                    g.start += count
-                elif op == "P":
-                    continue
-                else:
-                    parts.append([g.start, g.start + count - 1, \
-                            target_start, target_start + count - 1])
-                    g.start += count
-                    target_start += count
-        else:
-            for event in cigar:
-                match = re_cigar.match(event)
-                op, count = match.group(1), int(match.group(2))
-                if op in "IHS":
-                    target_start += count
-                elif op in "DN":
-                    g.end -= count
-                elif op == "P":
-                    continue
-                else:
-                    parts.append([g.end - count + 1, g.end, \
-                            target_start, target_start + count - 1])
-                    g.end -= count
-                    target_start += count
-
-        g.update_attributes()
-        print(g)
-
-        parent = g.attributes["Name"][0]
-        g.type = "match_part"
-        g.attributes.clear()
-
-        for part in parts:
-            g.start, g.end = part[0], part[1]
-            g.score, g.strand, g.phase = ".", g.strand, "."
-
-            if re.match("EST", g.type):
-                target_list = [parent, part[2], part[3], g.strand]
-            else:
-                target_list = [parent, part[2], part[3]]
-            target = " ".join(str(x) for x in target_list)
-
-            g.attributes["Parent"] = [parent]
-            g.attributes["Target"] = [target]
-
+def fix(args):
+    fi, opt = args.fi, args.opt
+    gff = Gff(fi)
+    if opt == 'genbank':
+        for g in gff:
+            if g.type == 'region':
+                continue
+            print(g)
+    elif opt == 'ensembl':
+        print("not implemented yet")
+    elif opt == 'tair':
+        for g in gff:
+            if g.type in ['protein','chromosome','transposon_fragment','transposable_element']:
+                continue
+            elif g.type == 'pseudogenic_transcript':
+                g.type = 'mRNA'
+            elif g.type == 'pseudogenic_exon':
+                g.type = 'exon'
+            elif g.type == 'CDS':
+                parent = g.get_attr('Parent')
+            print(g)
+    elif opt == 'phytozome':
+        gdic = dict()
+        for g in gff:
+            if g.type.endswith('RNA'):
+                g.id, g.name = g.get_attr('ID'), g.get_attr('Name')
+                gdic[g.id] = g.name
+                g.set_attr('ID', g.name)
+            elif g.type != 'gene':
+                g.set_attr("Parent", gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
-
+    elif opt == 'jcvi':
+        for g in gff:
+            if g.type == 'transposable_element':
+                g.type = 'transposable_element_gene'
+            conf = g.get_attr('conf_class')
+            if conf:
+                g.set_attr("Note", "[%s]%s" % (g.get_attr("Note"), conf))
+            print(g)
+    elif opt == 'b73':
+        chrids = ["%d" % x for x in range(1, 11)]
+        chr_types = set(["chromosome", "contig"])
+        gene_types = set(["gene"]) 
+        rna_types = set(["mRNA", "rRNA", "tRNA", 
+                "miRNA", "lnc_RNA", "ncRNA", "snRNA", "snoRNA", 
+                "pre_miRNA", "SRP_RNA", "RNase_MRP_RNA"])
+        mrna_subtypes = set(['exon', 'CDS', 'five_prime_UTR', 'three_prime_UTR'])
+        allowed_types = gene_types | rna_types | mrna_subtypes
+        for g in gff:
+            if g.seqid not in chrids and not g.seqid.startswith("B73V4") \
+                    and not g.seqid.startswith("chr") \
+                    and not g.seqid.startswith("scaffold"):
+                continue
+            if g.type in chr_types:
+                continue
+            elif g.type == "ncRNA_gene":
+                g.type = "gene"
+            elif g.type == "transcript":
+                biotype = g.get_attr('biotype')
+                if biotype and biotype == 'protein_coding':
+                    g.type = "mRNA"
+                else:
+                    continue
+            if g.type not in allowed_types:
+                logging.info("type[%s] not allowed" % g.type)
+                continue
+            if g.get_attr("ID"):
+                ary = g.get_attr("ID").split(":")
+                if len(ary) == 2:
+                    g.set_attr("ID", ary[1])
+            if g.get_attr("Parent"):
+                ary = g.get_attr("Parent").split(":")
+                if len(ary) == 2:
+                    g.set_attr("Parent", ary[1])
+            g.update_attributes()
+            print(g)
+    elif opt == 'mo17':
+        gdic = dict()
+        for g in gff:
+            if g.type == 'region':
+                continue
+            elif g.type == 'gene':
+                nid = g.get_attr('locus_tag').replace('Zm00014a_','Zm00014a')
+                oid = g.get_attr('ID')
+                g.set_attr('ID', nid)
+                gdic[oid] = nid
+            elif g.type.endswith('RNA'):
+                nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
+                oid = g.get_attr('ID')
+                g.set_attr('ID', nid)
+                gdic[oid] = nid
+                g.set_attr('Parent', gdic[g.get_attr('Parent')])
+            else:
+                g.set_attr('Parent', gdic[g.get_attr('Parent')])
+            g.update_attributes()
+            print(g)
+    elif opt == 'w22':
+        chrids = ["%d" % x for x in range(1, 11)]
+        for g in gff:
+            if g.type in ['chromosome', 'intron', 'exon']:
+                continue
+            if g.seqid in chrids:
+                g.seqid = "chr%s" % g.seqid
+            elif g.seqid == 'chr10000001':
+                g.seqid = 'unmapped'
+            print(g)
+    elif opt == 'ph207':
+        for g in gff:
+            gid, par = g.get_attr("ID"), g.get_attr("Parent")
+            if gid:
+                g.set_attr("ID", gid.replace(".v1.1", ""))
+            if par:
+                g.set_attr("Parent", par.replace(".v1.1", ""))
+            g.update_attributes()
+            print(g)
+    elif opt == 'phb47':
+        gdic = dict()
+        for g in gff:
+            if g.type.endswith('RNA'):
+                gid, gname = g.get_attr("ID"), g.get_attr("Name")
+                g.set_attr("ID", g.name)
+                gdic[gid] = gname
+            elif g.type != 'gene':
+                g.set_attr("Parent", gdic[g.get_attr("Parent")])
+            g.update_attributes()
+            print(g)
+    else:
+        logging.error("unknown opt: %s" % opt)
+ 
 def chain(args):
     """
     %prog chain gffile > chained.gff
@@ -1254,7 +1150,7 @@ def format(args):
 
     Read in the gff and print it out, changing seqid, etc.
     """
-    from jcvi.formats.obo import load_GODag, validate_term
+    from maize.formats.obo import load_GODag, validate_term
 
     valid_multiparent_ops = ["split", "merge"]
 
@@ -1661,33 +1557,17 @@ def fixboundaries(args):
     Adjust the boundary coordinates of parents features based on
     range chained child features, extracting their min and max values
     """
-    p = OptionParser(fixboundaries.__doc__)
-    p.add_option("--type", default="gene", type="str",
-                 help="Feature type for which to adjust boundaries")
-    p.add_option("--child_ftype", default="mRNA", type="str",
-                 help="Child featuretype(s) to use for identifying boundaries")
-    p.set_outfile()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
+    gffile = args.fi
     gffdb = make_index(gffile)
 
-    fw = must_open(opts.outfile, "w")
     for f in gffdb.all_features(order_by=('seqid', 'start')):
-        if f.featuretype == opts.type:
+        if f.featuretype == args.type:
             child_coords = []
-            for cftype in opts.child_ftype.split(","):
+            for cftype in args.child_ftype.split(","):
                 for c in gffdb.children(f, featuretype=cftype, order_by=('start')):
                     child_coords.append((c.start, c.stop))
             f.start, f.stop = range_minmax(child_coords)
-
-        print >> fw, f
-
-    fw.close()
+        print(f)
 
 def liftover(args):
     """
@@ -1986,40 +1866,16 @@ def sort(args):
         cmd += " gff3 -sort -tidy -retainids -addids no {0}".format(gffile)
         sh(cmd, outfile=sortedgff)
 
-def fromgtf(args):
+def gtf2gff(args):
     """
     %prog fromgtf gtffile
 
     Convert gtf to gff file. In gtf, the "transcript_id" will convert to "ID=",
     the "transcript_id" in exon/CDS feature will be converted to "Parent=".
     """
-    p = OptionParser(fromgtf.__doc__)
-    p.add_option("--transcript_id", default="transcript_id",
-                 help="Field name for transcript [default: %default]")
-    p.add_option("--gene_id", default="gene_id",
-                 help="Field name for gene [default: %default]")
-    p.add_option("--augustus", default=False, action="store_true",
-                 help="Input is AUGUSTUS gtf [default: %default]")
-    p.set_home("augustus")
-    p.set_outfile()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gtffile, = args
-    outfile = opts.outfile
-    if opts.augustus:
-        ahome = opts.augustus_home
-        s = op.join(ahome, "scripts/gtf2gff.pl")
-        cmd = "{0} --gff3 < {1} --out={2}".format(s, gtffile, outfile)
-        sh(cmd)
-        return
-
+    gtffile = args.fi
     gff = Gff(gtffile)
-    fw = must_open(outfile, "w")
-    transcript_id = opts.transcript_id
-    gene_id = opts.gene_id
+    transcript_id, gene_id = args.transcript_id, args.gene_id
     nfeats = 0
     for g in gff:
         if g.type in ("transcript", "mRNA"):
@@ -2038,7 +1894,7 @@ def fromgtf(args):
             assert 0, "Don't know how to deal with {0}".format(g.type)
 
         g.update_attributes()
-        print >> fw, g
+        print(g)
         nfeats += 1
 
     logging.debug("A total of {0} features written.".format(nfeats))
@@ -2263,30 +2119,6 @@ def extract(args):
         if s in f:
             SeqIO.write([f[s]], fw, "fasta")
 
-def split(args):
-    """
-    %prog split gffile outdir
-
-    Split the gff into one contig per file. Will also take sequences if the file
-    contains FASTA sequences.
-    """
-    p = OptionParser(split.__doc__)
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    gffile, outdir = args
-    mkdir(outdir)
-
-    g = Gff(gffile)
-    seqids = g.seqids
-
-    for s in seqids:
-        outfile = op.join(outdir, s + ".gff")
-        extract([gffile, "--contigs=" + s, "--outfile=" + outfile])
-
 def note(args):
     """
     %prog note gffile > tabfile
@@ -2429,7 +2261,7 @@ def bed(args):
     Parses the start, stop locations of the selected features out of GFF and
     generate a bed file
     '''
-    from jcvi.utils.cbook import gene_name
+    from maize.utils.cbook import gene_name
 
     p = OptionParser(bed.__doc__)
     p.add_option("--type", dest="type", default="gene",
@@ -2488,59 +2320,6 @@ def bed(args):
     logging.debug("Extracted {0} features (type={1} id={2})".\
                     format(len(b), ",".join(type), key))
 
-def make_index(gff_file):
-    """
-    Make a sqlite database for fast retrieval of features.
-    """
-    import gffutils
-    db_file = gff_file + ".db"
-
-    if need_update(gff_file, db_file):
-        if op.exists(db_file):
-            os.remove(db_file)
-        logging.debug("Indexing `{0}`".format(gff_file))
-        gffutils.create_db(gff_file, db_file, merge_strategy="create_unique")
-    else:
-        logging.debug("Load index `{0}`".format(gff_file))
-
-    return gffutils.FeatureDB(db_file)
-
-def get_parents(gff_file, parents):
-    gff = Gff(gff_file)
-    for g in gff:
-        if g.type not in parents:
-            continue
-        yield g
-
-def children(args):
-    """
-    %prog children gff_file
-
-    Get the children that have the same parent.
-    """
-    p = OptionParser(children.__doc__)
-    p.add_option("--parents", default="gene",
-            help="list of features to extract, use comma to separate (e.g."
-            "'gene,mRNA') [default: %default]")
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gff_file, = args
-    g = make_index(gff_file)
-    parents = set(opts.parents.split(','))
-
-    for feat in get_parents(gff_file, parents):
-
-        cc = [c.id for c in g.children(feat.id, 1)]
-        if len(cc) <= 1:
-            continue
-
-        print("\t".join(str(x) for x in \
-                    (feat.id, feat.start, feat.stop, "|".join(cc))))
-
 def load(args):
     '''
     %prog load gff_file fasta_file [--options]
@@ -2555,7 +2334,7 @@ def load(args):
     Switch TSS with TrSS for Translation Start Site.
     '''
     from datetime import datetime as dt
-    from jcvi.formats.fasta import Seq, SeqRecord
+    from maizeormats.fasta import Seq, SeqRecord
 
     # can request output fasta sequence id to be picked from following attributes
     valid_id_attributes = ["ID", "Name", "Parent", "Alias", "Target"]
@@ -2814,7 +2593,7 @@ def get_upstream_coords(uSite, uLen, seqlen, feat, children_list, gffdb):
 
     return upstream_start, upstream_stop
 
-def bed12(args):
+def gff2bed12(args):
     """
     %prog bed12 gffile > bedfile
 
@@ -2835,26 +2614,10 @@ def bed12(args):
     11. blockSizes
     12. blockStarts
     """
-    p = OptionParser(bed12.__doc__)
-    p.add_option("--parent", default="mRNA",
-            help="Top feature type [default: %default]")
-    p.add_option("--block", default="exon",
-            help="Feature type for regular blocks [default: %default]")
-    p.add_option("--thick", default="CDS",
-            help="Feature type for thick blocks [default: %default]")
-    p.set_outfile()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
-    parent, block, thick = opts.parent, opts.block, opts.thick
-    outfile = opts.outfile
+    gffile = args.fi
+    parent, block, thick = args.parent, args.block, args.thick
 
     g = make_index(gffile)
-    fw = must_open(outfile, "w")
-
     for f in g.features_of_type(parent):
 
         chrom = f.chrom
@@ -2887,9 +2650,9 @@ def bed12(args):
         blockStarts = ",".join(str(x) for x in blockStarts) + ","
         itemRgb = 0
 
-        print >> fw, "\t".join(str(x) for x in (chrom, chromStart, chromEnd, \
+        print("\t".join(str(x) for x in (chrom, chromStart, chromEnd, \
                 name, score, strand, thickStart, thickEnd, itemRgb,
-                blockCount, blockSizes, blockStarts))
+                blockCount, blockSizes, blockStarts)))
 
 if __name__ == '__main__':
     import argparse
@@ -2899,16 +2662,61 @@ if __name__ == '__main__':
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("merge", 
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            help = "merge several gff files into one"
-    )
+    sp1 = sp.add_parser("summary", help = "mary stats for features of different types",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input gtf file')
+    sp1.add_argument("--isoform", default=False, action="store_true",
+                   help="Find longest isoform of each id")
+    sp1.add_argument("--ids", help="Only include features from certain IDs")
+    sp1.set_defaults(func = summary)
+
+    sp1 = sp.add_parser("filter", help = "filter the gff file based on criteria",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input gtf file')
+    sp1.add_argument("--type", default="mRNA", help="The feature to scan for the attributes")
+    sp1.add_argument("--id", default=95, type=float, help="Minimum identity")
+    sp1.add_argument("--coverage", default=90, type=float, help="Minimum coverage")
+    sp1.add_argument("--nocase", default=False, action="store_true", help="Case insensitive lookup of attribute names")
+    sp1.add_argument("--child_ftype", default=None, help="Child featuretype to consider")
+    sp1.add_argument("--child_bp", default=None, type=int, help="Filter by total bp of children of chosen ftype")
+    sp1.set_defaults(func = filter)
+
+    sp1 = sp.add_parser("merge", help = "merge several gff files into one",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('config', help = 'config file containing a list of gff files') 
     sp1.set_defaults(func = merge)
 
     sp1 = sp.add_parser('2gtf', help = 'convert gff3 to gtf format')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.set_defaults(func = gff2gtf)
+    
+    sp1 = sp.add_parser('fromgtf', help = 'convert gtf to gff3 format',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input gtf file')
+    sp1.add_argument("--transcript_id", default="transcript_id", help="Field name for transcript")
+    sp1.add_argument("--gene_id", default="gene_id", help="Field name for gene")
+    sp1.add_argument("--augustus", default=False, action="store_true", help="Input is AUGUSTUS gtf")
+    sp1.set_defaults(func = gtf2gff)
+    
+    sp1 = sp.add_parser('2bed12', help = 'convert gff3 to bed12 format',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input GFF3 file')
+    sp1.add_argument("--parent", default="mRNA", help="Top feature type")
+    sp1.add_argument("--block", default="exon", help="Feature type for regular blocks")
+    sp1.add_argument("--thick", default="CDS", help="Feature type for thick blocks")
+    sp1.set_defaults(func = gff2bed12)
+    
+    sp1 = sp.add_parser('fix', help = 'fix gff fields/tags')
+    sp1.add_argument('opt', help = 'option (ensembl, phytozome, etc.)')
+    sp1.add_argument('fi', help = 'input GFF3 file')
+    sp1.set_defaults(func = fix)
+    
+    sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input GFF3 file')
+    sp1.add_argument("--type", default="gene", help="Feature type for which to adjust boundaries")
+    sp1.add_argument("--child_ftype", default="mRNA", help="Child featuretype(s) to use for identifying boundaries")
+    sp1.set_defaults(func = fixboundaries)
     
     args = parser.parse_args()
     if args.command:
@@ -2917,34 +2725,3 @@ if __name__ == '__main__':
         print('Error: need to specify a sub command\n')
         parser.print_help()
 
-    actions = (
-        ('addparent', 'merge sister features and infer their parent'),
-        ('bed', 'parse gff and produce bed file for particular feature type'),
-        ('bed12', 'produce bed12 file for coding features'),
-        ('fromgtf', 'convert gtf to gff3 format'),
-        ('gb', 'convert gff3 to genbank format'),
-        ('sort', 'sort the gff file'),
-        ('filter', 'filter the gff file based on Identity and Coverage'),
-        ('sizes', 'calculate sizes of features in gff file'),
-        ('format', 'format the gff file, change seqid, etc.'),
-        ('fixboundaries', 'fix boundaries of parent features by range chaining child features'),
-        ('chain', 'fill in parent features by chaining children'),
-        ('rename', 'change the IDs within the gff3'),
-        ('uniq', 'remove the redundant gene models'),
-        ('liftover', 'adjust gff coordinates based on tile number'),
-        ('note', 'extract certain attribute field for each feature'),
-        ('load', 'extract the feature (e.g. CDS) sequences and concatenate'),
-        ('extract', 'extract contig or features from gff file'),
-        ('split', 'split the gff into one contig per file'),
-        ('merge', 'merge several gff files into one'),
-        ('parents', 'find the parents given a list of IDs'),
-        ('children', 'find all children that belongs to the same parent'),
-        ('frombed', 'convert from bed format to gff3'),
-        ('fromsoap', 'convert from soap format to gff3'),
-        ('gapsplit', 'split alignment GFF3 at gaps based on CIGAR string'),
-        ('orient', 'orient the coding features based on translation'),
-        ('splicecov', 'tag gff introns with coverage info from junctions.bed'),
-        ('summary', 'print summary stats for features of different types'),
-        ('cluster', 'cluster transcripts based on shared splicing structure'),
-        ('fixpartials', 'fix 5/3 prime partial transcripts, locate nearest in-frame start/stop')
-            )

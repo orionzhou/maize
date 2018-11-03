@@ -5,11 +5,15 @@ import os
 import os.path as op
 import sys
 import logging
-import pysam
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open, ndigit
-from maize.formats.pbs import PbsJob
+from maize.formats.base import must_open, ndigit, prettysize
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from pyfaidx import Fasta
 
 def prepare(cfg):
     cfg = cfg['prepare']
@@ -215,29 +219,66 @@ def run_blat(cfg):
     eprint("qsub -W depend=afterok: %s" % fjs[3])
     eprint("qsub -W depend=afterok: %s" % fjs[4])
 
+dna_comp_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
+def revcomp(dna):
+    return ''.join([dna_comp_dict[base] for base in dna[::-1]])
+
+def callvnt(args):
+    qrydb = Fasta(args.qry)
+    tgtdb = Fasta(args.tgt)
+    fhv = open(args.vnt, 'w')
+    for line in must_open(args.fi):
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        ps = line.split()
+        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid, opt = ps[:9]
+        tStart, tEnd, qStart, qEnd = int(tStart), int(tEnd), int(qStart), int(qEnd)
+        tsize, qsize = tEnd - tStart, qEnd - qStart
+        tseq, qseq = '', ''
+        if opt == 'aln':
+            tseq = tgtdb[tName][tStart:tEnd].seq.upper()
+            qseq = qrydb[qName][qStart:qEnd].seq.upper()
+            if srd == '-': qseq = revcomp(qseq)
+            assert len(qseq) == len(tseq), "error in seq size"
+            n_snp = 0
+            for i in range(len(qseq)):
+                qnt, tnt = qseq[i], tseq[i]
+                if qnt != 'N' and tnt != 'N' and qnt != tnt:
+                    tPos = tStart + i
+                    qPos = qEnd - i - 1 if srd == '-' else qStart + i
+                    fhv.write("\t".join([tName, str(tPos), str(tPos+1), srd,
+                        qName, str(qPos), str(qPos+1), cid, 'snp',
+                        tnt, qnt])+"\n")
+                    n_snp += 1
+            print("\t".join(ps[:8] + [str(n_snp)]))
+        elif opt == 'indel':
+            tseq = tgtdb[tName][tStart-1:tEnd+1].seq.upper()
+            qseq = qrydb[qName][qStart-1:qEnd+1].seq.upper()
+            if srd == '-': qseq = revcomp(qseq)
+            fhv.write("\t".join(ps[:8] + ['indel', tseq, qseq])+"\n")
+        else:
+            print('unknown type: %s' % opt)
+    fhv.close()
+ 
 if __name__ == "__main__":
     import argparse
-    import configparser
     parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'whole genome alignment pipeline'
+            description = 'whole genome comparison utilities'
     )
-    parser.add_argument('config', nargs = "?", default = "config.ini", help = 'config file')
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("prepare", help = "prepare sequences for align") 
-    sp1.set_defaults(func = prepare)
-    
-    sp1 = sp.add_parser("blat", help = "generate blat jobs")
-    sp1.set_defaults(func = run_blat)
+    sp1 = sp.add_parser("callvnt", help = "variant calling using paired aln itvs in BED") 
+    sp1.add_argument('fi', help = 'input (9-col) BED containing paired intervals')
+    sp1.add_argument('tgt', help = 'tgt reference fasta')
+    sp1.add_argument('qry', help = 'qry reference fasta')
+    sp1.add_argument('--vnt', default = 'vnt.bed', help = 'output variant BED file')
+    sp1.set_defaults(func = callvnt)
     
     args = parser.parse_args()
-    assert op.isfile(args.config), "cannot read %s" % args.config
-    cfg = configparser.ConfigParser()
-    cfg._interpolation = configparser.ExtendedInterpolation()
-    cfg.read(args.config)
     if args.command:
-        args.func(cfg)
+        args.func(args)
     else:
         print('Error: need to specify a sub command\n')
         parser.print_help()

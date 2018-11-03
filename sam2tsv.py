@@ -38,11 +38,10 @@ if __name__ == "__main__":
         qBeg += 1
         strand = "+"
         if x.is_reverse: strand = "-"
-        if args.paired:
-            if x.is_read2:
-                qId += ".2"
-            else:
-                qId += ".1"
+        if x.is_paired and x.is_read1:
+            qId += ".1"
+        elif x.is_paired and x.is_read2:
+            qId += ".2"
         alnLen, match, misMatch, baseN, qLen = 0,0,0,0,0
         qNumIns, tNumIns, qBaseIns, tBaseIns = 0,0,0,0
         for op, nt in x.cigartuples:

@@ -271,7 +271,7 @@ def bed2chain(args):
         line = line.rstrip("\n")
         if not line:
             continue
-        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid = line.split()
+        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid = line.split()[:8]
         tStart, tEnd, qStart, qEnd = int(tStart), int(tEnd), int(qStart), int(qEnd)
         if firstline:
             cid0, tName0, qName0, srd0 = cid, tName, qName, srd
@@ -328,8 +328,8 @@ if __name__ == '__main__':
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = chain2bed)
     
-    sp1 = sp.add_parser("frombed", help = "convert from BED to chain file")
-    sp1.add_argument('fi', help = 'input tsv file')
+    sp1 = sp.add_parser("fromBed", help = "convert from bed to chain file")
+    sp1.add_argument('fi', help = 'input bed file')
     sp1.add_argument('tsize', help = 'target size file')
     sp1.add_argument('qsize', help = 'query size file')
     sp1.set_defaults(func = bed2chain)

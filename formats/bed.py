@@ -482,7 +482,7 @@ if __name__ == '__main__':
     sp1.add_argument('--size', '-w', default = 100, type = int, help = 'window size')
     sp1.add_argument('--step', '-s', default = 100, type = int, help = 'window step')
     sp1.set_defaults(func = makewindow)
-    
+   
     args = parser.parse_args()
     if args.command:
         args.func(args)

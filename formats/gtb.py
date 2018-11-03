@@ -1,20 +1,17 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import os
 import os.path as op
 import sys
+import logging
+from astropy.table import Table, Column
 
+from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
 from maize.utils.location import locAry2Str, locStr2Ary
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(__doc__,
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'gtb to tsv'
-    )
-    parser.add_argument('fi', help = 'input gtb')
-    args = parser.parse_args()
-    
+def gtb2tsv(args):
     fhi = must_open(args.fi)
     print("\t".join("gid tid ttype etype chrom start end srd fam note".split()))
     for line in fhi:
@@ -48,3 +45,27 @@ if __name__ == "__main__":
                 fields = [gid, tid, cat1, etype, seqid, str(beg), str(end), srd, cat3, note]
                 print("\t".join(fields)) 
     fhi.close()
+
+if __name__ == "__main__":
+    import argparse
+    import configparser
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'Gtb utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("2tsv",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'gtb to tsv'
+    )
+    sp1.add_argument('fi', help = 'input Gtb file')
+    sp1.set_defaults(func = gtb2tsv)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+

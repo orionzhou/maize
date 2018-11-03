@@ -10,6 +10,10 @@ import vcf
 from maize.apps.base import sh, mkdir
 from maize.formats.base import must_open
 
+dna_comp_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
+def revcomp(dna):
+    return ''.join([dna_comp_dict[base] for base in dna[::-1]])
+
 def stat(args):
     fhi = must_open(args.fi)
     print("\t".join(["chr", "pos", "nalt", "rsize", "asize", "nsam", "aaf", "nucdiv"]))
@@ -98,7 +102,7 @@ def vcf2fas(args):
         #logging.debug("%s\t%s\t%s\t%s" % (seqid, beg, end, note))
         print("%s\t%s\t%s\t%s\t%s" % (seqid, beg, end, note, seqstr))
 
-def hybrid_bed(args):
+def vcf2bed(args):
     fhi = must_open(args.fi)
     for line in fhi:
         if line.startswith("#"):
@@ -123,7 +127,10 @@ def hybrid_bed(args):
         print("\t".join([sid, str(pos-1), str(pos), vnt, phase]))
 
 def vcf2tsv(args):
-    vcf_reader = vcf.Reader(must_open(args.fi))
+    vcf_reader = vcf.Reader(fsock=must_open(args.fi))
+    #vcf_reader.fetch("B02", 50001, 100000)
+    #print(str(vcf_reader))
+    #sys.exit()
     lst1 = ["DP", "QD", "FS", "MQ", "MQRankSum", "ReadPosRankSum", "SOR"]
     lsth = ['chr', 'pos', 'ref', 'alt', 'IS_SNP', 'PASS', 'QUAL'] + lst1
     lst2 = ["AD", "DP", "GQ"]
@@ -166,6 +173,72 @@ def vcf2tsv(args):
             valb += ['' if x is None else str(x) for x in valb1] 
         print("\t".join(map(str, valh + valb)))
 
+def parseEff(args):
+    fhi = must_open(args.fi)
+    for line in fhi:
+        if line.startswith("#"):
+            continue
+        row = line.strip("\n").split("\t")
+        chrom, pos, vid, ref, alt, qual, filt, info = row[:8]
+        pos = int(pos)
+        refl, altl = len(ref), len(alt)
+        vnttype = ''
+        if refl == 1 and altl == 1:
+            vnttype = 'snp'
+        elif refl == 1 and altl > 1:
+            vnttype = 'ins'
+        elif refl > 1 and altl == 1:
+            vnttype = 'del'
+        else:
+            assert refl > 1 and altl > 1, "error: %s" % line
+            vnttype = 'mix'
+        if info == '.':
+            continue
+        ps = info.replace("ANN=",'').split("|")
+        allele, anno, impact, gname, gid, ttyppe, tid = ps[:7]
+        print("\t".join([chrom, str(pos), str(refl), str(altl), vnttype, 
+            anno, impact, gid, tid]))
+
+def wgc2vcf(args):
+    fo1, fo2 = args.tvcf, args.qvcf
+    qry, tgt = args.qry, args.tgt
+    fho1 = open(fo1, 'w')
+    fho2 = open(fo2, 'w')
+    vcfhead = '#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT'.split(' ')
+    fho1.write("##fileformat=VCFv4.2\n")
+    fho2.write("##fileformat=VCFv4.2\n")
+    fho1.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+    fho2.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+    fho1.write("\t".join(vcfhead + [qry]) + "\n")
+    fho2.write("\t".join(vcfhead + [tgt]) + "\n")
+    for line in must_open(args.fi):
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid, opt, tseq, qseq = line.split()[:12]
+        tStart, tEnd, qStart, qEnd = int(tStart), int(tEnd), int(qStart), int(qEnd)
+        tsize, qsize = tEnd - tStart, qEnd - qStart
+        trow = [tName, tStart, '.', tseq, qseq, 50, '.', '.', 'GT', '1/1']
+        qrow = [qName, qStart, '.', qseq, tseq, 50, '.', '.', 'GT', '1/1']
+        if opt == 'snp':
+            assert len(qseq) == 1 and len(tseq) == 1, "error in seq size"
+            trow[1], qrow[1] = tStart + 1, qStart + 1
+            if srd == '-':
+                qrow[3], qrow[4] = revcomp(qseq), revcomp(tseq)
+        elif opt == 'indel':
+            if tseq[1:-1] == qseq[1:-1]:
+                continue
+            trow[3], trow[4] = tseq[:-1], qseq[:-1]
+            qrow[3], qrow[4] = qseq[:-1], tseq[:-1]
+            if srd == '-':
+                qrow[3], qrow[4] = revcomp(qseq[1:]), revcomp(tseq[1:])
+        else:
+            logging.error("unknown vnt type: %s" % opt)
+        fho1.write("\t".join(map(str, trow)) + "\n")
+        fho2.write("\t".join(map(str, qrow)) + "\n")
+    fho1.close()
+    fho2.close()
+ 
 def ase(args):
     lsth = ["chr", "pos", "ref", "alt", "qual", "depth", "dpr", "dpa"]
     print("\t".join(lsth))
@@ -240,6 +313,10 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = vcf2tsv)
 
+    sp1 = sp.add_parser("parseEff", help = "parse snpEff output")
+    sp1.add_argument('fi', help = 'input vcf file (snpEff output)')
+    sp1.set_defaults(func = parseEff)
+
     sp1 = sp.add_parser("ase", help = "report allele proportion (ASE) for each variant")
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = ase)
@@ -248,10 +325,20 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = hybrid)
 
-    sp1 = sp.add_parser("hybrid_bed", help = "extract variant locations")
+    sp1 = sp.add_parser("2bed", help = "extract variant locations")
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.add_argument('--noindel', action = 'store_true', help = 'remove InDel')
-    sp1.set_defaults(func = hybrid_bed)
+    sp1.set_defaults(func = vcf2bed)
+   
+    sp1 = sp.add_parser("fromWgc", 
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "generate Vcf from wgc output Bed")
+    sp1.add_argument('fi', help = 'input 11-col Bed file')
+    sp1.add_argument('tvcf', help = 'output tgt vcf')
+    sp1.add_argument('qvcf', help = 'output qry vcf')
+    sp1.add_argument('--tgt', default = 'tgt', help = 'sample name for tgt')
+    sp1.add_argument('--qry', default = 'qry', help = 'sample name for qry')
+    sp1.set_defaults(func = wgc2vcf)
    
     args = parser.parse_args()
     if args.command:

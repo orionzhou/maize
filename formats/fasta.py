@@ -72,7 +72,7 @@ def extract(args):
     if op.isfile(args.db):
         db = Fasta(args.db)
     else:
-        f_db = "%s/%s/11_genome.fas" % (os.environ["genome"], args.db)
+        f_db = "%s/%s/10_genome.fna" % (os.environ["genome"], args.db)
         assert op.isfile(f_db), "cannot find %s" % args.db
         db = Fasta(f_db)
 
