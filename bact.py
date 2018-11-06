@@ -24,6 +24,7 @@ def parse_gi(fi):
     fhi.close()
     print "%d unique GIs extracted" % len(res.keys())
     return res
+
 def gi_seqret(res, fs, fo): 
     fho = open(fo, "w")
 

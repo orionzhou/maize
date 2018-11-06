@@ -467,17 +467,15 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input *.bed file')
     sp1.set_defaults(func = size)
  
-    sp1 = sp.add_parser("filter", 
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            help = "filter bed file with requirements")
+    sp1 = sp.add_parser("filter", help = "filter bed file with requirements",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input *.bed file')
     sp1.add_argument('--minsize', '-min', default = 0, type = int, help = 'minimum feature length')
     sp1.add_argument('--maxsize', '-max', default = 1000000000, type = int, help = 'maximum feature length')
     sp1.set_defaults(func = filter)
     
-    sp1 = sp.add_parser("makewindow", 
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            help = "make sliding windows with given size and step")
+    sp1 = sp.add_parser("makewindow", help = "make sliding windows with given size and step",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input *.bed file')
     sp1.add_argument('--size', '-w', default = 100, type = int, help = 'window size')
     sp1.add_argument('--step', '-s', default = 100, type = int, help = 'window step')
