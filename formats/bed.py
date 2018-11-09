@@ -13,20 +13,18 @@ from itertools import groupby
 
 from maize.formats.base import LineFile, must_open, is_number, get_number
 from maize.utils.location import make_window
-#from maize.formats.sizes import Sizes
-#from maize.utils.iter import pairwise
-#from maize.utils.cbook import SummaryStats, thousands, percentage
-#from maize.utils.grouper import Grouper
-#from maize.utils.range import Range, range_union, range_chain, \
-#            range_distance, range_intersect
+from maize.formats.sizes import Sizes
+from maize.utils.iter import pairwise
+from maize.utils.cbook import SummaryStats, thousands, percentage
+from maize.utils.grouper import Grouper
+from maize.utils.range import Range, range_union, range_chain, \
+            range_distance, range_intersect
 from maize.apps.base import sh, need_update
-
+from maize.utils.natsort import natsort_key, natsorted
 
 class BedLine(object):
-    """
-    the Bed format supports more columns. we only need
-    the first 4, but keep the information in 'extra'.
-    """
+    # the Bed format supports more columns. we only need
+    # the first 4, but keep the information in 'extra'.
     __slots__ = ("seqid", "start", "end", "accn",
                  "extra", "score", "strand", "args", "nargs")
 
@@ -106,8 +104,15 @@ class BedLine(object):
         return row
 
 class Bed(LineFile):
-    def __init__(self, filename=None, key=None, juncs=False, include=None):
+
+    def __init__(self, filename=None, key=None, sorted=True, juncs=False,
+                       include=None):
         super(Bed, self).__init__(filename)
+
+        # the sorting key provides some flexibility in ordering the features
+        # for example, user might not like the lexico-order of seqid
+        self.nullkey = lambda x: (natsort_key(x.seqid), x.start, x.accn)
+        self.key = key or self.nullkey
 
         if not filename:
             return
@@ -119,6 +124,9 @@ class Bed(LineFile):
             if include and b.accn not in include:
                 continue
             self.append(b)
+
+        if sorted:
+            self.sort(key=self.key)
 
     def add(self, row):
         self.append(BedLine(row))

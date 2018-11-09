@@ -128,7 +128,7 @@ def _number_finder(s, regex, numconv):
 
     # If the list begins with a number, lead with an empty string.
     # This is used to get around the "unorderable types" issue.
-    if not isinstance(s[0], basestring):
+    if not isinstance(s[0], str):
         return [''] + s
     else:
         return s
@@ -196,7 +196,7 @@ def natsort_key(s, number_type=int, signed=False, exp=False):
     """
 
     # If we are dealing with non-strings, return now
-    if not isinstance(s, basestring):
+    if not isinstance(s, str):
         if hasattr(s, '__getitem__'):
             return tuple(natsort_key(x) for x in s)
         else:

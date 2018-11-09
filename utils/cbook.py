@@ -11,7 +11,6 @@ import functools
 
 from collections import defaultdict
 
-
 class memoized(object):
     """
     Decorator that caches a function's return value each time it is called.
@@ -44,7 +43,6 @@ class memoized(object):
         """Support instance methods."""
         return functools.partial(self.__call__, obj)
 
-
 def inspect(item, maxchar=80):
     """
     Inspect the attributes of an item.
@@ -57,7 +55,6 @@ def inspect(item, maxchar=80):
         except:
             member = "[ERROR]"
         print >> sys.stderr, "{}: {}".format(i, member)
-
 
 def timeit(func):
     """
@@ -76,7 +73,6 @@ def timeit(func):
         return result
 
     return timed
-
 
 def depends(func):
     """
@@ -141,7 +137,6 @@ class Registry (defaultdict):
         for k, v in d.items():
             self[k].append(v)
 
-
 class SummaryStats (object):
 
     def __init__(self, a, dtype=None, title=None):
@@ -196,7 +191,6 @@ class SummaryStats (object):
         logging.debug("Array of size {0} written to file `{1}`.".\
                         format(self.size, filename))
 
-
 class AutoVivification(dict):
     """
     Implementation of perl's autovivification feature.
@@ -210,7 +204,6 @@ class AutoVivification(dict):
             value = self[item] = type(self)()
             return value
 
-
 def enumerate_reversed(sequence):
     """
     Perform reverse enumeration, returning an iterator with decrementing
@@ -220,7 +213,6 @@ def enumerate_reversed(sequence):
     """
     for index in reversed(xrange(len(sequence))):
         yield index, sequence[index]
-
 
 def percentage(a, b, precision=1, mode=0):
     """
@@ -237,7 +229,6 @@ def percentage(a, b, precision=1, mode=0):
     elif mode == 2:
         return _a * 100. / _b
     return pct
-
 
 def thousands(x):
     """
@@ -258,10 +249,8 @@ def thousands(x):
         return s + ','.join(reversed(groups))
     return locale.format('%d', x, True)
 
-
 SUFFIXES = {1000: ['', 'Kb', 'Mb', 'Gb', 'Tb', 'Pb', 'Eb', 'Zb'],
             1024: ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB']}
-
 
 def human_size(size, a_kilobyte_is_1024_bytes=False, precision=1, target=None):
     '''Convert a file size to human-readable form.
@@ -299,7 +288,6 @@ def human_size(size, a_kilobyte_is_1024_bytes=False, precision=1, target=None):
 
     return '{0:.{1}f}{2}'.format(size, precision, suffix)
 
-
 def autoscale(bp, optimal=6):
     """
     >>> autoscale(150000000)
@@ -319,7 +307,6 @@ def autoscale(bp, optimal=6):
         precision -= 1
 
     return best_stride
-
 
 def gene_name(st, exclude=("ev",), sep="."):
     """
@@ -343,7 +330,6 @@ def gene_name(st, exclude=("ev",), sep="."):
         name = st
 
     return name
-
 
 def seqid_parse(seqid, sep=["-"], stdpf=True):
     """
@@ -409,7 +395,6 @@ def seqid_parse(seqid, sep=["-"], stdpf=True):
 
     return prefix, id, suffix
 
-
 def fixChromName(name, orgn="medicago"):
     """
     Convert quirky chromosome names encountered in different
@@ -452,7 +437,6 @@ def fixChromName(name, orgn="medicago"):
 
     return name
 
-
 def fill(text, delimiter="", width=70):
     """
     Wrap text with width per line
@@ -462,7 +446,6 @@ def fill(text, delimiter="", width=70):
         t = delimiter.join(text[i:i + width])
         texts.append(t)
     return "\n".join(texts)
-
 
 def tile(lt, width=70, gap=1):
     """
@@ -477,7 +460,6 @@ def tile(lt, width=70, gap=1):
 
     return "\n".join("".join(x) for x in g)
 
-
 def uniqify(L):
     """
     Uniqify a list, maintains order (the first occurrence will be kept).
@@ -491,7 +473,6 @@ def uniqify(L):
         seen.add(a)
 
     return nL
-
 
 if __name__ == '__main__':
     import doctest

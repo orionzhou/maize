@@ -3,12 +3,6 @@
 Collection of Python libraries to parse bioinformatics files, or perform 
 common tasks related to maize assembly, annotation, and comparative genomics.
 
-| | |
-| --- | --- |
-| Authors | Peng Zhou ([orionzhou](http://github.com/orionzhou)) |
-| Email   | <zhoupenggeni@gmail.com> |
-| License | [BSD](http://creativecommons.org/licenses/BSD/) |
-
 ## Contents
 
 Following modules are available as generic Bioinformatics handling methods.
@@ -24,11 +18,6 @@ Following modules are available as generic Bioinformatics handling methods.
     `.coords` format (`nucmer` output), `.fasta` format, `.fastq` format,
     `.gff` format, `obo` format (ontology),
     `.psl` format (UCSC blat, GMAP, etc.), `.sam` format (read mapping), etc.
-
-- `graphics`
-  - BLAST or synteny dot plot.
-  - Paint regions on set of chromosomes.
-  - Macro-synteny and micro-synteny plots.
 
 - `utils`
   - Grouper can be used as disjoint set data structure.
@@ -46,11 +35,6 @@ Then there are modules that contain domain-specific methods.
   - Synteny scan (de-novo) and lift over (find nearby anchors).
   - Ortholog and tandem gene duplicates finder.
 
-## Applications
-
-Please visit [wiki](https://github.com/orionzhou/jcvi/wiki) for
-full-fledged applications. 
-
 ## Dependencies
 
 Following are a list of third-party python packages that are used by
@@ -67,10 +51,6 @@ best way is to install them via `pip install` when you see `ImportError`.
 ## Installation
 
 The easiest way is to install it via PyPI:
-
-```bash
-pip install maize
-```
 
 To install the development version:
 
@@ -104,7 +84,7 @@ the `fasta` example:
 
 ```bash
 usage: fasta [-h]
-             {size,desc,clean,extract,split,splitlong,tile,merge,gaps,rename,rmdot,cleanid,fas2aln}
+             {size,desc,clean,extract,split,tile,merge,gaps,rename,rmdot,cleanid,2aln,translate}
              ...
 
 fasta utilities
@@ -113,7 +93,7 @@ optional arguments:
   -h, --help            show this help message and exit
 
 available commands:
-  {size,desc,clean,extract,split,splitlong,tile,merge,gaps,rename,rmdot,cleanid,fas2aln}
+  {size,desc,clean,extract,split,tile,merge,gaps,rename,rmdot,cleanid,2aln,translate}
     size                Report length for each sequence
     desc                Report description for each sequence
     clean               Remove irregular chararacters
@@ -122,11 +102,13 @@ available commands:
     tile                create sliding windows that tile the entire sequence
     merge               merge multiple fasta files and update IDs
     gaps                report gap ('N's) locations in fasta sequences
-    rename              rename / normalize sequence IDs
+    rename              rename/normalize sequence IDs, merge short
+                        scaffolds/contigs
     rmdot               replace periods (.) in an alignment fasta by dashes
                         (-)
     cleanid             clean sequence IDs in a fasta file
-    fas2aln             convert fasta alignment file to clustal format
+    2aln                convert fasta alignment file to clustal format
+    translate           translate nucleotide seqs to amino acid seqs
 ```
 
 Then you need to use one action, you can just do:
@@ -139,6 +121,4 @@ This will tell you the options and arguments it expects.
 
 **Feel free to check out other scripts in the package, it is not just
 for FASTA.**
-
-## Reference
 
