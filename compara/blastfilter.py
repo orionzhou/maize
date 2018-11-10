@@ -27,19 +27,18 @@ import os.path as op
 from collections import defaultdict
 from itertools import groupby
 
-from jcvi.formats.blast import Blast
-from jcvi.utils.grouper import Grouper
-from jcvi.utils.cbook import gene_name
-from jcvi.compara.synteny import check_beds
-from jcvi.apps.base import OptionParser
+from maize.formats.blast import Blast
+from maize.utils.grouper import Grouper
+from maize.utils.cbook import gene_name
+from maize.compara.synteny import check_beds
+from maize.apps.base import sh
 
+def blastfilter_main(blast_file, args):
 
-def blastfilter_main(blast_file, p, opts):
+    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, args)
 
-    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, p, opts)
-
-    tandem_Nmax = opts.tandem_Nmax
-    cscore = opts.cscore
+    tandem_Nmax = args.tandem_Nmax
+    cscore = args.cscore
 
     fp = open(blast_file)
     total_lines = sum(1 for line in fp if line[0] != '#')
@@ -50,7 +49,7 @@ def blastfilter_main(blast_file, p, opts):
 
     filtered_blasts = []
     seen = set()
-    ostrip = opts.strip_names
+    ostrip = args.strip_names
     nwarnings = 0
     for b in blasts:
         query, subject = b.query, b.subject
@@ -112,8 +111,8 @@ def blastfilter_main(blast_file, p, opts):
         standems = tandem_grouper(sbed, filtered_blasts,
                 flip=False, tandem_Nmax=tandem_Nmax)
 
-        qdups_fh = open(op.splitext(opts.qbed)[0] + ".localdups", "w") \
-                if opts.tandems_only else None
+        qdups_fh = open(op.splitext(args.qbed)[0] + ".localdups", "w") \
+                if args.tandems_only else None
 
         if is_self:
             for s in standems:
@@ -122,11 +121,11 @@ def blastfilter_main(blast_file, p, opts):
             sdups_to_mother = qdups_to_mother
         else:
             qdups_to_mother = write_localdups(qtandems, qbed, qdups_fh)
-            sdups_fh = open(op.splitext(opts.sbed)[0] + ".localdups", "w") \
-                    if opts.tandems_only else None
+            sdups_fh = open(op.splitext(args.sbed)[0] + ".localdups", "w") \
+                    if args.tandems_only else None
             sdups_to_mother = write_localdups(standems, sbed, sdups_fh)
 
-        if opts.tandems_only:
+        if args.tandems_only:
             # write out new .bed after tandem removal
             write_new_bed(qbed, qdups_to_mother)
             if not is_self:
@@ -145,7 +144,6 @@ def blastfilter_main(blast_file, p, opts):
     fw = open(blastfilteredfile, "w")
     write_new_blast(filtered_blasts, fh=fw)
     fw.close()
-
 
 def write_localdups(tandems, bed, dups_fh=None):
 
@@ -171,7 +169,6 @@ def write_localdups(tandems, bed, dups_fh=None):
 
     return dups_to_mother
 
-
 def write_new_bed(bed, children):
     # generate local dup removed annotation files
     out_name = "%s.nolocaldups%s" % op.splitext(bed.filename)
@@ -183,11 +180,9 @@ def write_new_bed(bed, children):
         print >>fh, row
     fh.close()
 
-
 def write_new_blast(filtered_blasts, fh=sys.stdout):
     for b in filtered_blasts:
         print >> fh, b
-
 
 def filter_cscore(blast_list, cscore=.5):
 
@@ -202,7 +197,6 @@ def filter_cscore(blast_list, cscore=.5):
         cur_cscore = b.score / max(best_score[b.query], best_score[b.subject])
         if cur_cscore > cscore:
             yield b
-
 
 def filter_tandem(blast_list, qdups_to_mother, sdups_to_mother):
 
@@ -224,7 +218,6 @@ def filter_tandem(blast_list, qdups_to_mother, sdups_to_mother):
             continue
         seen[key] = None
         yield b
-
 
 def tandem_grouper(bed, blast_list, tandem_Nmax=10, flip=True):
     if not flip:
@@ -248,30 +241,20 @@ def tandem_grouper(bed, blast_list, tandem_Nmax=10, flip=True):
 
     return standems
 
-
-def main(args):
-
-    p = OptionParser(__doc__)
-    p.set_beds()
-    p.set_stripnames()
-    p.add_option("--tandems_only", dest="tandems_only",
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'quota align'
+    )
+    p.add_argument("blast_file", help = 'input blast file')
+    p.add_argument("--tandems_only", dest="tandems_only",
             action="store_true", default=False,
             help="only calculate tandems, write .localdup file and exit.")
-    p.add_option("--tandem_Nmax", type="int", default=10,
-            help="merge tandem genes within distance [default: %default]")
-    p.add_option("--cscore", type="float", default=.7,
-            help="retain hits that have good bitscore. a value of 0.5 means "
-                 "keep all values that are 50% or greater of the best hit. "
-                 "higher is more stringent [default: %default]")
+    p.add_argument("--tandem_Nmax", type=int, default=10,
+            help="merge tandem genes within distance")
+    args = p.parse_args()
+ 
+    blastfile = args.blast_file
+    blastfilter_main(blastfile, args)
 
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    blastfile, = args
-    blastfilter_main(blastfile, p, opts)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

@@ -232,7 +232,7 @@ def read_clusters(qa_file, qorder, sorder):
 
     return clusters
 
-if __name__ == '__main__':
+def main():
     import argparse
     p = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
@@ -254,8 +254,7 @@ if __name__ == '__main__':
     supported_solvers = ("SCIP", "GLPK")
     p.add_argument("--solver", default="SCIP", choices=supported_solvers,
             help="use MIP solver")
-    p.add_argument("--screen", default=False, action="store_true",
-            help="generate new anchors file")
+    p.add_argument("--screen", action="store_true", help="generate new anchors file")
     p.add_argument("-v", "--verbose", action="store_true", help="verbose mode")
     args = p.parse_args()
 
@@ -308,3 +307,6 @@ if __name__ == '__main__':
             largs += ["--qbed={0}".format(args.qbed)]
             largs += ["--sbed={0}".format(args.sbed)]
         screen(largs)
+
+if __name__ == '__main__':
+    main()

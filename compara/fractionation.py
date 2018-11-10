@@ -10,37 +10,118 @@ import logging
 
 from itertools import groupby
 
-from jcvi.formats.blast import Blast
-from jcvi.formats.bed import Bed
-from jcvi.utils.range import range_minmax, range_overlap, range_distance
-from jcvi.utils.cbook import gene_name
-from jcvi.utils.grouper import Grouper
-from jcvi.compara.synteny import check_beds
-from jcvi.apps.base import OptionParser, ActionDispatcher, sh
-
+from maize.formats.blast import Blast
+from maize.formats.bed import Bed
+from maize.utils.range import range_minmax, range_overlap, range_distance
+from maize.utils.cbook import gene_name
+from maize.utils.grouper import Grouper
+from maize.compara.synteny import check_beds
+from maize.apps.base import sh
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'catalog utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        # Identify true gene loss
-        ('loss', 'extract likely gene loss candidates'),
-        ('validate', 'confirm synteny loss against CDS bed overlaps'),
-        ('summary', 'provide summary of fractionation'),
-        ('gaps', 'check gene locations against gaps'),
-        # Gene specific status
-        ('gffselect', 'dump gff for the missing genes'),
-        ('genestatus', 'tag genes based on translation from GMAP models'),
-        # Specific study for napus (requires specific datasets)
-        ('napus', 'extract gene loss vs diploid ancestors (napus)'),
-        ('merge', 'merge protein quartets table with registry (napus)'),
-        ('segment', 'merge adjacent gene loss into segmental loss (napus)'),
-        ('offdiag', 'find gene pairs that are off diagonal'),
-        ('diff', 'calculate diff of size of syntenic regions'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
+    # Identify true gene loss
+    sp1 = sp.add_parser("loss", 
+            help = 'extract likely gene loss candidates',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blocksfile', help = 'blocks file')
+    sp1.add_argument('blastfile', nargs='?', help = 'blast file')
+    sp1.add_argument("--bed", action="store_true", help="Genomic BLAST is in bed format")
+    sp1.add_argument("--gdist", default=20, type=int, help="Gene distance")
+    sp1.add_argument("--bdist", default=20000, type=int, help="Base pair distance")
+    sp1.set_defaults(func = loss)
 
+    sp1 = sp.add_parser("validate", 
+            help = 'confirm synteny loss against CDS bed overlaps',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('frfile', help = 'diploid napus fractionation file')
+    sp1.add_argument('cdsbed', help = 'cds bed')
+    sp1.set_defaults(func = validate)
 
+    sp1 = sp.add_parser("summary", 
+            help = 'provide summary of fractionation',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('frfile', help = 'fractionation file')
+    sp1.add_argument('statusfile', help = 'status file')
+    sp1.add_argument("--extra", help="Cross with extra tsv file")
+    sp1.set_defaults(func = summary)
+
+    sp1 = sp.add_parser("gaps", 
+            help = 'check gene locations against gaps',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('idsfile', help = 'idsfile')
+    sp1.add_argument('frfile', help = 'fractionation file')
+    sp1.add_argument('gapsbed', help = 'gaps bed')
+    sp1.add_argument("--bdist", default=0, type=int, help="Base pair distance")
+    sp1.set_defaults(func = gaps)
+
+    # Gene specific status
+    sp1 = sp.add_parser("gffselect", 
+            help = 'dump gff for the missing genes',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gmapped', help = 'gmap location bed')
+    sp1.add_argument('expected', help = 'expected location bed')
+    sp1.add_argument('idsfile', help = 'translated ids')
+    sp1.add_argument('tag', help = 'tag')
+    sp1.set_defaults(func = gffselect)
+
+    sp1 = sp.add_parser("genestatus", 
+            help = 'tag genes based on translation from GMAP models',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('idsfile', help = 'ids file')
+    sp1.set_defaults(func = genestatus)
+    
+    # Specific study for napus (requires specific datasets)
+    sp1 = sp.add_parser("napus", 
+            help = 'extract gene loss vs diploid ancestors (napus)',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('napusbed', help = 'napus bed')
+    sp1.add_argument('brbo', help = 'brapa boleracea i1.blocks')
+    sp1.add_argument('dpnp', help = 'diploid napus fractionation')
+    sp1.set_defaults(func = napus)
+
+    sp1 = sp.add_parser("merge", 
+            help = 'merge protein quartets table with registry (napus)',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('quartets', help = 'protein quartets')
+    sp1.add_argument('registry', help = 'registry')
+    sp1.add_argument('lost', help = 'lost')
+    sp1.set_defaults(func = merge)
+
+    sp1 = sp.add_parser("segment", 
+            help = 'merge adjacent gene loss into segmental loss (napus)',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('idsfile', help = '(loss.)ids file')
+    sp1.add_argument('bedfile', help = 'bed file')
+    sp1.add_argument("--chain", default=1, type=int,
+                 help="Allow next N genes to be chained")
+    sp1.set_defaults(func = segment)
+
+    sp1 = sp.add_parser("offdiag", 
+            help = 'find gene pairs that are off diagonal',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorsfile', help = 'anchors file')
+    sp1.set_defaults(func = offdiag)
+
+    sp1 = sp.add_parser("diff", 
+            help = 'calculate diff of size of syntenic regions',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('simplefile', help = 'simplefile')
+    sp1.set_defaults(func = diff)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+        
 def offdiag(args):
     """
     %prog offdiag diploid.napus.1x1.lifted.anchors
@@ -48,20 +129,13 @@ def offdiag(args):
     Find gene pairs that are off diagnoal. "Off diagonal" are the pairs that are
     not on the orthologous chromosomes. For example, napus chrA01 and brapa A01.
     """
-    p = OptionParser(offdiag.__doc__)
-    p.set_beds()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    anchorsfile, = args
-    qbed, sbed, qorder, sorder, is_self = check_beds(anchorsfile, p, opts)
+    anchorsfile = args.anchorsfile
+    qbed, sbed, qorder, sorder, is_self = check_beds(anchorsfile, args)
 
     fp = open(anchorsfile)
     pf = "-".join(anchorsfile.split(".")[:2])
     header = "Block-id|Napus|Diploid|Napus-chr|Diploid-chr|RBH?".split("|")
-    print "\t".join(header)
+    print("\t".join(header))
     i = -1
     for row in fp:
         if row[0] == '#':
@@ -83,8 +157,7 @@ def offdiag(args):
         if qseqid == sseqid or sseqid[-2:] == 'nn':
             continue
         block_id = pf + "-block-{0}".format(i)
-        print "\t".join((block_id, q, s, oqseqid, osseqid, rbh))
-
+        print("\t".join((block_id, q, s, oqseqid, osseqid, rbh)))
 
 def diff(args):
     """
@@ -92,15 +165,9 @@ def diff(args):
 
     Calculate difference of pairwise syntenic regions.
     """
-    from jcvi.utils.cbook import SummaryStats
+    from maize.utils.cbook import SummaryStats
 
-    p = OptionParser(diff.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    simplefile, = args
+    simplefile = args.simplefile
     fp = open(simplefile)
     data = [x.split() for x in fp]
     spans = []
@@ -116,7 +183,6 @@ def diff(args):
     print >> sys.stderr, "Sum of A: {0}".format(sum(aspans))
     print >> sys.stderr, "Sum of B: {0}".format(sum(bspans))
     print >> sys.stderr, "Sum of Delta: {0} ({1})".format(sum(dspans), s)
-
 
 def estimate_size(accns, bed, order, conservative=True):
     """
@@ -140,7 +206,6 @@ def estimate_size(accns, bed, order, conservative=True):
     assert dist != -1
     return dist
 
-
 def segment(args):
     """
     %prog segment loss.ids bedfile
@@ -154,22 +219,14 @@ def segment(args):
 
     The real deletion size is within these estimates.
     """
-    from jcvi.formats.base import SetFile
+    from maize.formats.base import SetFile
 
-    p = OptionParser(segment.__doc__)
-    p.add_option("--chain", default=1, type="int",
-                 help="Allow next N genes to be chained [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    idsfile, bedfile = args
+    idsfile, bedfile = args.idsfile, args.bedfile
     bed = Bed(bedfile)
     order = bed.order
     ids = SetFile(idsfile)
     losses = Grouper()
-    skip = opts.chain
+    skip = args.chain
     for i, a in enumerate(bed):
         a = a.accn
         for j in xrange(i + 1, i + 1 + skip):
@@ -189,8 +246,8 @@ def segment(args):
 
     # Summary for all segments
     for x in sorted(singletons) + sorted(segments):
-        print "\t".join(str(x) for x in ("|".join(sorted(x)), len(x),
-                        estimate_size(x, bed, order)))
+        print("\t".join(str(x) for x in ("|".join(sorted(x)), len(x),
+                        estimate_size(x, bed, order))))
 
     # Find longest segment stretch
     if segments:
@@ -217,7 +274,6 @@ def segment(args):
     print >> sys.stderr, "Average ({0}): {1} bp".\
                          format(nt, (total_asize + total_bsize) / 2)
 
-
 def merge(args):
     """
     %prog merge protein-quartets registry LOST
@@ -225,15 +281,9 @@ def merge(args):
     Merge protein quartets table with dna quartets registry. This is specific
     to the napus project.
     """
-    from jcvi.formats.base import DictFile
+    from maize.formats.base import DictFile
 
-    p = OptionParser(merge.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    quartets, registry, lost = args
+    quartets, registry, lost = args.quartets, args.registry, args.lost
     qq = DictFile(registry, keypos=1, valuepos=3)
     lost = DictFile(lost, keypos=1, valuepos=0, delimiter='|')
     qq.update(lost)
@@ -281,8 +331,7 @@ def merge(args):
             status = qqs[idx]
             status = ip[status]
             comment += "-" + status
-        print row.strip() + "\t" + "\t".join(qqs + [comment])
-
+        print(row.strip() + "\t" + "\t".join(qqs + [comment]))
 
 def gffselect(args):
     """
@@ -292,15 +341,9 @@ def gffselect(args):
     genes. translated.ids was generated by fasta.translate --ids. tag must be
     one of "complete|pseudogene|partial".
     """
-    from jcvi.formats.bed import intersectBed_wao
+    from maize.formats.bed import intersectBed_wao
 
-    p = OptionParser(gffselect.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 4:
-        sys.exit(not p.print_help())
-
-    gmapped, expected, idsfile, tag = args
+    gmapped, expected, idsfile, tag = args.gmapped, args.expected, args.idsfile, args.tag
     data = get_tags(idsfile)
     completeness = dict((a.replace("mrna", "path"), c) \
                          for (a, b, c) in data)
@@ -326,7 +369,6 @@ def gffselect(args):
 
     logging.debug("Total {0} records written to `{1}`.".format(cnt, idsfile))
 
-
 def gaps(args):
     """
     %prog gaps idsfile fractionationfile gapsbed
@@ -334,20 +376,12 @@ def gaps(args):
     Check gene locations against gaps. `idsfile` contains a list of IDs to query
     into `fractionationfile` in order to get expected locations.
     """
-    from jcvi.formats.base import DictFile
-    from jcvi.apps.base import popen
-    from jcvi.utils.cbook import percentage
+    from maize.formats.base import DictFile
+    from maize.apps.base import popen
+    from maize.utils.cbook import percentage
 
-    p = OptionParser(gaps.__doc__)
-    p.add_option("--bdist", default=0, type="int",
-                 help="Base pair distance [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    idsfile, frfile, gapsbed = args
-    bdist = opts.bdist
+    idsfile, frfile, gapsbed = args.idsfile, args.frfile, args.gapsbed
+    bdist = args.bdist
     d =  DictFile(frfile, keypos=1, valuepos=2)
     bedfile = idsfile + ".bed"
     fw = open(bedfile, "w")
@@ -370,7 +404,6 @@ def gaps(args):
     print >> sys.stderr, "Ids in gaps: {1}".\
             format(total, percentage(in_gaps, total))
 
-
 def get_tags(idsfile):
     fp = open(idsfile)
     data = []
@@ -387,7 +420,6 @@ def get_tags(idsfile):
         data.append((mRNA, label, tag))
     return data
 
-
 def genestatus(args):
     """
     %prog genestatus diploid.gff3.exon.ids
@@ -395,13 +427,7 @@ def genestatus(args):
     Tag genes based on translation from GMAP models, using fasta.translate()
     --ids.
     """
-    p = OptionParser(genestatus.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    idsfile, = args
+    idsfile = args.idsfile
     data = get_tags(idsfile)
     key = lambda x: x[0].split(".")[0]
     for gene, cc in groupby(data, key=key):
@@ -413,8 +439,7 @@ def genestatus(args):
             tag = "partial"
         else:
             tag = "pseudogene"
-        print "\t".join((gene, tag))
-
+        print("\t".join((gene, tag)))
 
 def summary(args):
     """
@@ -423,17 +448,10 @@ def summary(args):
     Provide summary of fractionation. `fractionation` file is generated with
     loss(). `gmap.status` is generated with genestatus().
     """
-    from jcvi.formats.base import DictFile
-    from jcvi.utils.cbook import percentage, Registry
+    from maize.formats.base import DictFile
+    from maize.utils.cbook import percentage, Registry
 
-    p = OptionParser(summary.__doc__)
-    p.add_option("--extra", help="Cross with extra tsv file [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    frfile, statusfile = args
+    frfile, statusfile = args.frfile, args.statusfile
     status = DictFile(statusfile)
     fp = open(frfile)
     registry = Registry()  # keeps all the tags for any given gene
@@ -507,7 +525,7 @@ def summary(args):
         print >> fw, "\n".join(b)
         fw.close()
 
-    extra = opts.extra
+    extra = args.extra
     if extra:
         registry.update_from(extra)
 
@@ -521,7 +539,6 @@ def summary(args):
 
     logging.debug("Registry written.")
 
-
 def get_tag(name, order):
     if name[0] == '[':
         tag, tname = name[1:].split(']')
@@ -533,7 +550,6 @@ def get_tag(name, order):
         xi, x = order[name]
         seqid, start, end = x.seqid, x.start, x.end
     return tag, (seqid, start, end)
-
 
 def napus(args):
     """
@@ -553,15 +569,9 @@ def napus(args):
     Step 4: categorize gene losses into singleton, or segmental (defined as
     consecutive losses with a maximum skip of 1
     """
-    from jcvi.utils.cbook import SummaryStats
+    from maize.utils.cbook import SummaryStats
 
-    p = OptionParser(napus.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    napusbed, brbo, dpnp = args
+    napusbed, brbo, dpnp = args.napusbed, args.brbo, args.dpnp
     retention = {}
     fp = open(dpnp)
     for row in fp:
@@ -650,10 +660,8 @@ def napus(args):
             print >> fw, "\t".join(data[i])
     fw.close()
 
-
 def region_str(region):
     return "{0}:{1}-{2}".format(*region)
-
 
 def loss(args):
     """
@@ -661,28 +669,14 @@ def loss(args):
 
     Extract likely gene loss candidates between genome a and b.
     """
-    p = OptionParser(loss.__doc__)
-    p.add_option("--bed", default=False, action="store_true",
-                 help="Genomic BLAST is in bed format [default: %default]")
-    p.add_option("--gdist", default=20, type="int",
-                 help="Gene distance [default: %default]")
-    p.add_option("--bdist", default=20000, type="int",
-                 help="Base pair distance [default: %default]")
-    p.set_beds()
-    opts, args = p.parse_args(args)
-
-    if len(args) not in (1, 2):
-        sys.exit(not p.print_help())
-
-    blocksfile = args[0]
-    emptyblast = (len(args) == 1)
-    if emptyblast:
+    blocksfile, blastfile = args.blocksfile, args.blastfile
+    if not blastfile:
         genomicblast = "empty.blast"
         sh("touch {0}".format(genomicblast))
     else:
-        genomicblast = args[1]
-
-    gdist, bdist = opts.gdist, opts.bdist
+        genomicblast = blastfile
+        
+    gdist, bdist = args.gdist, args.bdist
     qbed, sbed, qorder, sorder, is_self = check_beds(blocksfile, p, opts)
     blocks = []
     fp = open(blocksfile)
@@ -720,7 +714,7 @@ def loss(args):
             proxytrack[a] = proxy
 
     tags = {}
-    if opts.bed:
+    if args.bed:
         bed = Bed(genomicblast, sorted=False)
         key = lambda x: gene_name(x.accn.rsplit(".", 1)[0])
         for query, bb in groupby(bed, key=key):
@@ -775,11 +769,10 @@ def loss(args):
                 ptag = "[NF]"
             target_region = ptag + target_region
 
-        print "\t".join((b.seqid, accn, target_region))
+        print("\t".join((b.seqid, accn, target_region)))
 
     if emptyblast:
         sh("rm -f {0}".format(genomicblast))
-
 
 def validate(args):
     """
@@ -787,15 +780,9 @@ def validate(args):
 
     Check whether [S] intervals overlap with CDS.
     """
-    from jcvi.formats.bed import intersectBed_wao
+    from maize.formats.bed import intersectBed_wao
 
-    p = OptionParser(validate.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    fractionation, cdsbed = args
+    fractionation, cdsbed = args.frfile, args.cdsbed
     fp = open(fractionation)
 
     sbed = "S.bed"
@@ -831,7 +818,6 @@ def validate(args):
 
     logging.debug("Fixed {0} [S] cases in `{1}`.".format(fixed, validated))
     fw.close()
-
 
 if __name__ == '__main__':
     main()

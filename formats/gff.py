@@ -7,6 +7,7 @@ import os.path as op
 import logging
 import re
 
+from itertools import chain
 from astropy.table import Table, Column
 from urllib.parse import quote, unquote, parse_qsl
 
@@ -17,7 +18,6 @@ from maize.apps.base import mkdir, parse_multi_values, need_update, sh
 from maize.formats.bed import Bed, BedLine
 from maize.utils.natsort import natsorted
 from maize.utils.range import range_minmax
-
 
 Valid_strands = ('+', '-', '?', '.')
 Valid_phases = ('0', '1', '2', '.')
@@ -40,9 +40,12 @@ valid_gff_parent_child = {"match": "match_part",
                           "snRNA": "exon",
                           "snoRNA": "exon",
                           "pre_miRNA": "exon",
-                          "SRP_miRNA": "exon",
+                          #"SRP_miRNA": "exon",
+                          "SRP_RNA": "exon",
                           "RNase_MRP_miRNA": "exon",
                          }
+valid_gff_type = set(list(valid_gff_parent_child.keys()) + 
+        list(chain.from_iterable(x.split(",") for x in valid_gff_parent_child.values())))
 valid_gff_to_gtf_type = {"exon": "exon",
                          "pseudogenic_exon": "exon",
                          "CDS": "CDS",
@@ -51,7 +54,6 @@ valid_gff_to_gtf_type = {"exon": "exon",
                          "five_prime_UTR": "5UTR",
                          "three_prime_UTR": "3UTR"
                         }
-valid_gff_type = tuple(valid_gff_parent_child.keys())
 reserved_gff_attributes = ("ID", "Name", "Alias", "Parent", "Target",
                            "Gap", "Derives_from", "Note", "Dbxref",
                            "Ontology_term", "Is_circular")
@@ -916,8 +918,6 @@ def fix(args):
             if g.type == 'region':
                 continue
             print(g)
-    elif opt == 'ensembl':
-        print("not implemented yet")
     elif opt == 'tair':
         for g in gff:
             if g.type in ['protein','chromosome','transposon_fragment','transposable_element']:
@@ -948,33 +948,27 @@ def fix(args):
             if conf:
                 g.set_attr("Note", "[%s]%s" % (g.get_attr("Note"), conf))
             print(g)
-    elif opt == 'b73':
-        chrids = ["%d" % x for x in range(1, 11)]
-        chr_types = set(["chromosome", "contig"])
-        gene_types = set(["gene"]) 
-        rna_types = set(["mRNA", "rRNA", "tRNA", 
-                "miRNA", "lnc_RNA", "ncRNA", "snRNA", "snoRNA", 
-                "pre_miRNA", "SRP_RNA", "RNase_MRP_RNA"])
-        mrna_subtypes = set(['exon', 'CDS', 'five_prime_UTR', 'three_prime_UTR'])
-        allowed_types = gene_types | rna_types | mrna_subtypes
+    elif opt == 'ensembl':
+        #chrids = ["%d" % x for x in range(1, 11)]
+        seqtypes = ["chromosome", "contig",'supercontig','biological_region']
         for g in gff:
-            if g.seqid not in chrids and not g.seqid.startswith("B73V4") \
-                    and not g.seqid.startswith("chr") \
-                    and not g.seqid.startswith("scaffold"):
-                continue
-            if g.type in chr_types:
+            if g.type in seqtypes:
                 continue
             elif g.type == "ncRNA_gene":
                 g.type = "gene"
+            elif g.type == 'pseudogene':
+                g.type = 'gene'
+            elif g.type == 'pseudogenic_transcript':
+                g.type = 'mRNA'
+            elif g.type not in valid_gff_type:
+                logging.info("type[%s] not allowed" % g.type)
+                sys.exit(1)
             elif g.type == "transcript":
                 biotype = g.get_attr('biotype')
                 if biotype and biotype == 'protein_coding':
                     g.type = "mRNA"
                 else:
                     continue
-            if g.type not in allowed_types:
-                logging.info("type[%s] not allowed" % g.type)
-                continue
             if g.get_attr("ID"):
                 ary = g.get_attr("ID").split(":")
                 if len(ary) == 2:
@@ -2451,9 +2445,11 @@ if __name__ == '__main__':
     sp1.add_argument("--child_bp", default=None, type=int, help="Filter by total bp of children of chosen ftype")
     sp1.set_defaults(func = filter)
 
-    sp1 = sp.add_parser('fix', help = 'fix gff fields/tags')
-    sp1.add_argument('opt', help = 'argument (ensembl, phytozome, etc.)')
+    sp1 = sp.add_parser('fix', help = 'fix gff fields/tags',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
+    opts = 'genbank tair phytozome jcvi ensembl mo17 w22 ph207 phb47'.split()
+    sp1.add_argument('--opt', default='ensembl', choices=opts, help = 'fix option')
     sp1.set_defaults(func = fix)
     
     sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries',

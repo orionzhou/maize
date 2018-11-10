@@ -20,11 +20,11 @@ import logging
 import numpy as np
 from math import log
 
-from jcvi.utils.iter import pairwise
-from jcvi.compara.synteny import AnchorFile, check_beds
-from jcvi.formats.bed import Bed
-from jcvi.formats.blast import BlastLine
-from jcvi.apps.base import OptionParser, ActionDispatcher, need_update, sh
+from maize.utils.iter import pairwise
+from maize.compara.synteny import AnchorFile, check_beds
+from maize.formats.bed import Bed
+from maize.formats.blast import BlastLine
+from maize.apps.base import OptionParser, ActionDispatcher, need_update, sh
 
 
 def main():
@@ -102,11 +102,11 @@ def pad(args):
 
     Test and reconstruct candidate PADs.
     """
-    from jcvi.formats.cdt import CDT
+    from maize.formats.cdt import CDT
 
     p = OptionParser(pad.__doc__)
     p.set_beds()
-    p.add_option("--cutoff", default=.3, type="float",
+    sp.add_argument("--cutoff", default=.3, type="float",
                  help="The clustering cutoff to call similar [default: %default]")
 
     opts, args = p.parse_args(args)
@@ -114,7 +114,7 @@ def pad(args):
     if len(args) != 2:
         sys.exit(not p.print_help())
 
-    cutoff = opts.cutoff
+    cutoff = args.cutoff
     blastfile, cdtfile = args
     qbed, sbed, qorder, sorder, is_self = check_beds(blastfile, p, opts)
 
@@ -171,7 +171,7 @@ def get_segments(ranges, extra, minsegment=40):
     arbitrary right extension rule. Extra are additional end breaks for
     chromosomes.
     """
-    from jcvi.utils.range import range_chain, LEFT, RIGHT
+    from maize.utils.range import range_chain, LEFT, RIGHT
 
     NUL = 2
     selected, score = range_chain(ranges)
@@ -227,13 +227,13 @@ def cluster(args):
     based on which the genome on one or both axis can be chopped up into pieces
     and clustered.
     """
-    from jcvi.utils.range import Range
+    from maize.utils.range import Range
 
     p = OptionParser(cluster.__doc__)
     p.set_beds()
-    p.add_option("--minsize", default=10, type="int",
+    sp.add_argument("--minsize", default=10, type="int",
                  help="Only segment using blocks >= size [default: %default]")
-    p.add_option("--path", default="~/scratch/bin",
+    sp.add_argument("--path", default="~/scratch/bin",
                  help="Path to the CLUSTER 3.0 binary [default: %default]")
 
     opts, args = p.parse_args(args)
@@ -244,7 +244,7 @@ def cluster(args):
     blastfile, anchorfile = args
     qbed, sbed, qorder, sorder, is_self = check_beds(blastfile, p, opts)
 
-    minsize = opts.minsize
+    minsize = args.minsize
     ac = AnchorFile(anchorfile)
     qranges, sranges = [], []
     qextra = [x[1:] for x in qbed.get_breaks()]
@@ -268,8 +268,8 @@ def cluster(args):
     spads = list(get_segments(sranges, sextra))
 
     suffix = ".pad.bed"
-    qpf = opts.qbed.split(".")[0]
-    spf = opts.sbed.split(".")[0]
+    qpf = args.qbed.split(".")[0]
+    spf = args.sbed.split(".")[0]
     qpadfile = qpf + suffix
     spadfile = spf + suffix
     qnpads, qpadnames = write_PAD_bed(qpadfile, qpf, qpads, qbed)
@@ -291,7 +291,7 @@ def cluster(args):
     fw.close()
 
     # Run CLUSTER 3.0 (Pearson correlation, average linkage)
-    cmd = op.join(opts.path, "cluster")
+    cmd = op.join(args.path, "cluster")
     cmd += " -g 2 -e 2 -m a -f {0}".format(matrixfile)
     pf = matrixfile.rsplit(".", 1)[0]
     cdtfile = pf + ".cdt"

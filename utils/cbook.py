@@ -79,7 +79,7 @@ def depends(func):
     Decorator to perform check on infile and outfile. When infile is not present, issue
     warning, and when outfile is present, skip function calls.
     """
-    from jcvi.apps.base import need_update, listify
+    from maize.apps.base import need_update, listify
 
     infile = "infile"
     outfile = "outfile"
@@ -132,7 +132,7 @@ class Registry (defaultdict):
         return sum(1 for x in self.iter_tag(tag))
 
     def update_from(self, filename):
-        from jcvi.formats.base import DictFile
+        from maize.formats.base import DictFile
         d = DictFile(filename)
         for k, v in d.items():
             self[k].append(v)
@@ -451,7 +451,7 @@ def tile(lt, width=70, gap=1):
     """
     Pretty print list of items.
     """
-    from jcvi.utils.iter import grouper
+    from maize.utils.iter import grouper
 
     max_len = max(len(x) for x in lt) + gap
     items_per_line = max(width / max_len, 1)

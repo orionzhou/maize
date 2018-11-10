@@ -10,6 +10,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils.CheckSum import seguid
+from pyfaidx import Fasta
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open, ndigit, prettysize
@@ -72,7 +73,6 @@ def translate(args):
         SeqIO.write(nrcd, sys.stdout, "fasta")
  
 def extract(args):
-    from pyfaidx import Fasta
     import re
     from maize.formats.bed import Bed
     

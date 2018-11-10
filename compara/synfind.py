@@ -181,22 +181,22 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'find synteny'
     )
-    p.add_argument("blast_file", help = 'input blast file')
-    p.add_argument("--sqlite", help="Write sqlite database")
-    p.add_argument("--qnote", default="null", help="Query dataset group id")
-    p.add_argument("--snote", default="null", help="Subject dataset group id")
-    p.add_argument("--window", type="int", default=40, help="Synteny window size")
-    p.add_argument("--cutoff", type="float", default=.1, 
+    sp1.add_argument("blast_file", help = 'input blast file')
+    sp1.add_argument("--sqlite", help="Write sqlite database")
+    sp1.add_argument("--qnote", default="null", help="Query dataset group id")
+    sp1.add_argument("--snote", default="null", help="Subject dataset group id")
+    sp1.add_argument("--window", type=int, default=40, help="Synteny window size")
+    sp1.add_argument("--cutoff", type=float, default=.1, 
             help="Minimum number of anchors to call synteny")
     supported_scoring = ("collinear", "density")
-    p.add_argument("--scoring", choices=supported_scoring,
+    sp1.add_argument("--scoring", choices=supported_scoring,
             default="collinear", help="Scoring scheme")
     args = p.parse_args()
 
     blastfile = args.blast_file
 
     sqlite = args.sqlite
-    qbed, sbed, qorder, sorder, is_self = check_beds(blastfile, p, args)
+    qbed, sbed, qorder, sorder, is_self = check_beds(blastfile, args)
     filtered_blast = read_blast(blastfile, qorder, sorder, \
                                 is_self=is_self, ostrip=args.strip_names)
     all_data = [(b.qi, b.si) for b in filtered_blast]

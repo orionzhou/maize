@@ -11,28 +11,12 @@ import sys
 import logging
 
 from math import sqrt
-from itertools import izip_longest
+from itertools import zip_longest
 
-from jcvi.compara.synteny import AnchorFile, check_beds
-from jcvi.formats.bed import Bed
-from jcvi.utils.grouper import Grouper
-from jcvi.apps.base import OptionParser, ActionDispatcher
-
-
-def main():
-
-    actions = (
-        ('collinear', 'reduce synteny blocks to strictly collinear'),
-        ('zipbed', 'build ancestral contig from collinear blocks'),
-        ('pairs', 'convert anchorsfile to pairsfile'),
-        # Sankoff-Zheng reconstruction
-        ('adjgraph', 'construct adjacency graph'),
-        # Experimental gene order graph for ancestral reconstruction
-        ('fuse', 'fuse gene orders based on anchorsfile'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+from maize.compara.synteny import AnchorFile, check_beds
+from maize.formats.bed import Bed
+from maize.utils.grouper import Grouper
+from maize.apps.base import sh
 
 def add_bed_to_graph(G, bed, families):
     for seqid, bs in bed.sub_beds():
@@ -47,7 +31,6 @@ def add_bed_to_graph(G, bed, families):
 
     return G
 
-
 def print_edges(G, bed, families):
     """
     Instead of going through the graph construction, just print the edges.
@@ -60,10 +43,9 @@ def print_edges(G, bed, families):
             strand = b.strand
             node = "=".join(families[accn])
             if prev_node:
-                print "{}{}--{}{}".format(prev_node, symbols[prev_strand],
-                                          symbols[strand], node)
+                print("{}{}--{}{}".format(prev_node, symbols[prev_strand],
+                                          symbols[strand], node))
             prev_node, prev_strand = node, strand
-
 
 def fuse(args):
     """
@@ -71,16 +53,10 @@ def fuse(args):
 
     Fuse gene orders based on anchors file.
     """
-    from jcvi.algorithms.graph import BiGraph
+    from maize.algorithms.graph import BiGraph
 
-    p = OptionParser(fuse.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) < 1:
-        sys.exit(not p.print_help())
-
-    bedfiles = [x for x in args if x.endswith(".bed")]
-    anchorfiles = [x for x in args if x.endswith(".anchors")]
+    bedfiles = [x for x in args.fis if x.endswith(".bed")]
+    anchorfiles = [x for x in args.fis if x.endswith(".anchors")]
 
     # TODO: Use Markov clustering to sparsify the edges
     families = Grouper()
@@ -106,7 +82,6 @@ def fuse(args):
     #    m, oo = G.path(path)
     #    print m
 
-
 def adjgraph(args):
     """
     %prog adjgraph adjacency.txt subgraph.txt
@@ -121,16 +96,10 @@ def adjgraph(args):
     138 6133 -5387 144 -6132 -139 140 141 146 -147 6134 145 -170 -142 -143
     """
     import pygraphviz as pgv
-    from jcvi.utils.iter import pairwise
-    from jcvi.formats.base import SetFile
+    from maize.utils.iter import pairwise
+    from maize.formats.base import SetFile
 
-    p = OptionParser(adjgraph.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    infile, subgraph = args
+    infile, subgraph = args.infile, args.subgraph
     subgraph = SetFile(subgraph)
     subgraph = set(x.strip("-") for x in subgraph)
 
@@ -184,20 +153,13 @@ def adjgraph(args):
     SG.write(fw)
     fw.close()
 
-
 def pairs(args):
     """
     %prog pairs anchorsfile prefix
 
     Convert anchorsfile to pairsfile.
     """
-    p = OptionParser(pairs.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    anchorfile, prefix = args
+    anchorfile, prefix = args.anchorsfile, args.prefix
     outfile = prefix + ".pairs"
     fw = open(outfile, "w")
 
@@ -218,7 +180,6 @@ def pairs(args):
     logging.debug("A total of {0} pairs written to `{1}`.".\
                     format(npairs, outfile))
 
-
 def interleave_pairs(pairs):
     a, b = pairs[0]
     yield a
@@ -227,7 +188,7 @@ def interleave_pairs(pairs):
         assert a < c
         xx = range(a + 1, c)
         yy = range(b + 1, d) if b < d else range(b - 1, d, -1)
-        for x, y in izip_longest(xx, yy):
+        for x, y in zip_longest(xx, yy):
             if x:
                 yield x
             if y:
@@ -235,7 +196,6 @@ def interleave_pairs(pairs):
         a, b = c, d
         yield a
         yield b
-
 
 def zipbed(args):
     """
@@ -245,16 +205,8 @@ def zipbed(args):
     order, use `zipbed rice.bed rice.rice.1x1.collinear.anchors`. The algorithms
     proceeds by interleaving the genes together.
     """
-    p = OptionParser(zipbed.__doc__)
-    p.add_option("--prefix", default="b",
-                 help="Prefix for the new seqid [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    bedfile, anchorfile = args
-    prefix = opts.prefix
+    bedfile, anchorfile = args.bedfile, args.anchorfile
+    prefix = args.prefix
     bed = Bed(bedfile)
     order = bed.order
     newbedfile = prefix + ".bed"
@@ -277,17 +229,14 @@ def zipbed(args):
 
     logging.debug("Reconstructed bedfile written to `{0}`.".format(newbedfile))
 
-
 # Non-linear transformation of anchor scores
 score_convert = lambda x: int(sqrt(x))
-
 
 def get_collinear(block):
     # block contains (gene a, gene b, score)
     asc_score, asc_chain = print_chain(block)
     desc_score, desc_chain = print_chain(block, ascending=False)
     return asc_chain if asc_score > desc_score else desc_chain
-
 
 def print_chain(block, ascending=True):
 
@@ -334,7 +283,6 @@ def print_chain(block, ascending=True):
         solution = [(a, -b, c) for (a, b, c) in solution]
     return chainscore, solution
 
-
 def collinear(args):
     """
     %prog collinear a.b.anchors
@@ -342,16 +290,8 @@ def collinear(args):
     Reduce synteny blocks to strictly collinear, use dynamic programming in a
     procedure similar to DAGchainer.
     """
-    p = OptionParser(collinear.__doc__)
-    p.set_beds()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    anchorfile, = args
-    qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, p, opts)
+    anchorfile = args.anchorfile
+    qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, args)
 
     af = AnchorFile(anchorfile)
     newanchorfile = anchorfile.rsplit(".", 1)[0] + ".collinear.anchors"
@@ -376,6 +316,54 @@ def collinear(args):
 
     fw.close()
 
-
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'catalog utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("collinear", 
+            help = 'reduce synteny blocks to strictly collinear',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.set_defaults(func = collinear)
+    
+    sp1 = sp.add_parser("zipbed", 
+            help = 'build ancestral contig from collinear blocks',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('bedfile', help = 'bed file')
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--prefix", default="b", help="Prefix for the new seqid")
+    sp1.set_defaults(func = zipbed)
+    
+    sp1 = sp.add_parser("pairs", 
+            help = 'convert anchorsfile to pairsfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorsfile', help = 'anchors file')
+    sp1.add_argument('prefix', help = 'prefix')
+    sp1.set_defaults(func = pairs)
+    
+    # Sankoff-Zheng reconstruction
+    sp1 = sp.add_parser("adjgraph", 
+            help = 'construct adjacency graph',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('infile', help = 'input (adjacency) file')
+    sp1.add_argument('subgraph', help = 'subgraph txt')
+    sp1.set_defaults(func = adjgraph)
+    
+    # Experimental gene order graph for ancestral reconstruction
+    sp1 = sp.add_parser("fuse", 
+            help = 'fuse gene orders based on anchorsfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fis', nargs = '+', help = 'one or more bed or anchor files')
+    sp1.set_defaults(func = fuse)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+

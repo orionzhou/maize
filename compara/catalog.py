@@ -9,16 +9,14 @@ import string
 from collections import defaultdict
 from itertools import product, combinations
 
-from jcvi.formats.blast import BlastLine
-from jcvi.formats.fasta import Fasta
-from jcvi.formats.bed import Bed
-from jcvi.formats.base import must_open, BaseFile
-from jcvi.utils.grouper import Grouper
-from jcvi.utils.cbook import gene_name
-from jcvi.compara.synteny import AnchorFile, check_beds
-from jcvi.apps.base import OptionParser, glob, ActionDispatcher, \
-            need_update, sh, mkdir
-
+from maize.formats.blast import BlastLine
+from maize.formats.fasta import Fasta
+from maize.formats.bed import Bed
+from maize.formats.base import must_open, BaseFile
+from maize.utils.grouper import Grouper
+from maize.utils.cbook import gene_name
+from maize.compara.synteny import AnchorFile, check_beds
+from maize.apps.base import glob, need_update, sh, mkdir
 
 class OMGFile (BaseFile):
 
@@ -56,23 +54,6 @@ class OMGFile (BaseFile):
                 bb.add(component)
         return bb
 
-
-def main():
-
-    actions = (
-        ('tandem', 'identify tandem gene groups within certain distance'),
-        ('ortholog', 'run a combined synteny and RBH pipeline to call orthologs'),
-        ('group', 'cluster the anchors into ortho-groups'),
-        ('omgprepare', 'prepare weights file to run Sankoff OMG algorithm'),
-        ('omg', 'generate a series of Sankoff OMG algorithm inputs'),
-        ('omgparse', 'parse the OMG outputs to get gene lists'),
-        ('enrich', 'enrich OMG output by pulling genes missed by OMG'),
-        ('layout', 'layout the gene lists'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
-
 def get_weights(weightsfiles=None):
     if weightsfiles is None:
         weightsfiles = glob("*.weights")
@@ -82,7 +63,6 @@ def get_weights(weightsfiles=None):
         a, b, c = row.split()
         weights[a].append((a, b, c))
     return weights
-
 
 def get_edges(weightsfiles=None):
     if weightsfiles is None:
@@ -96,7 +76,6 @@ def get_edges(weightsfiles=None):
         edges[(b, a)] = c
     return edges
 
-
 def get_info():
     infofiles = glob("*.info")
     info = {}
@@ -104,121 +83,6 @@ def get_info():
         a = row.split()[0]
         info[a] = row.rstrip()
     return info
-
-
-def enrich(args):
-    """
-    %prog enrich omgfile groups ntaxa > enriched.omg
-
-    Enrich OMG output by pulling genes misses by OMG.
-    """
-    p = OptionParser(enrich.__doc__)
-    p.add_option("--ghost", default=False, action="store_true",
-                 help="Add ghost homologs already used [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    omgfile, groupsfile, ntaxa = args
-    ntaxa = int(ntaxa)
-    ghost = opts.ghost
-
-    # Get gene pair => weight mapping
-    weights = get_edges()
-    info = get_info()
-    # Get gene => taxon mapping
-    info = dict((k, v.split()[5]) for k, v in info.items())
-
-    groups = Grouper()
-
-    fp = open(groupsfile)
-    for row in fp:
-        members = row.strip().split(",")
-        groups.join(*members)
-
-    logging.debug("Imported {0} families with {1} members.".\
-                    format(len(groups), groups.num_members))
-
-    seen = set()
-    omggroups = Grouper()
-    fp = open(omgfile)
-    for row in fp:
-        genes, idxs = row.split()
-        genes = genes.split(",")
-        seen.update(genes)
-        omggroups.join(*genes)
-
-    nmembers = omggroups.num_members
-    logging.debug("Imported {0} OMG families with {1} members.".\
-                    format(len(omggroups), nmembers))
-    assert nmembers == len(seen)
-
-    alltaxa = set(str(x) for x in range(ntaxa))
-    recruited = []
-    fp = open(omgfile)
-    for row in fp:
-        genes, idxs = row.split()
-        genes = genes.split(",")
-        a = genes[0]
-
-        idxs = set(idxs.split(","))
-        missing_taxa = alltaxa - idxs
-        if not missing_taxa:
-            print row.rstrip()
-            continue
-
-        leftover = groups[a]
-        if not ghost:
-            leftover = set(leftover) - seen
-
-        if not leftover:
-            print row.rstrip()
-            continue
-
-        leftover_sorted_by_taxa = dict((k, \
-                             [x for x in leftover if info[x] == k]) \
-                                for k in missing_taxa)
-
-        #print genes, leftover
-        #print leftover_sorted_by_taxa
-        solutions = []
-        for solution in product(*leftover_sorted_by_taxa.values()):
-            score = sum(weights.get((a, b), 0) for a in solution for b in genes)
-            if score == 0:
-                continue
-            score += sum(weights.get((a, b), 0) for a, b in combinations(solution, 2))
-            solutions.append((score, solution))
-            #print solution, score
-
-        best_solution = max(solutions) if solutions else None
-        if best_solution is None:
-            print row.rstrip()
-            continue
-
-        #print "best ==>", best_solution
-        best_score, best_addition = best_solution
-        genes.extend(best_addition)
-        recruited.extend(best_addition)
-
-        genes = sorted([(info[x], x) for x in genes])
-        idxs, genes = zip(*genes)
-
-        if ghost:  # decorate additions so it's clear that they were added
-            pgenes = []
-            for g in genes:
-                if g in recruited and g in seen:
-                    pgenes.append("|{0}|".format(g))
-                else:
-                    pgenes.append(g)
-            genes = pgenes
-
-        print "\t".join((",".join(genes), ",".join(idxs)))
-        if not ghost:
-            seen.update(best_addition)
-
-    logging.debug("Recruited {0} new genes.".format(len(recruited)))
-
 
 def pairwise_distance(a, b, threadorder):
     d = 0
@@ -232,7 +96,6 @@ def pairwise_distance(a, b, threadorder):
             dd = min(abs(xi - yi), 50)
         d += dd
     return d
-
 
 def insert_into_threaded(atoms, threaded, threadorder):
     min_idx, min_d = 0, 1000
@@ -248,14 +111,13 @@ def insert_into_threaded(atoms, threaded, threadorder):
     threaded.insert(i, atoms)
     logging.debug("Insert {0} before {1} (d={2})".format(atoms, t, min_d))
 
-
 def sort_layout(thread, listfile, column=0):
     """
     Sort the syntelog table according to chromomomal positions. First orient the
     contents against threadbed, then for contents not in threadbed, insert to
     the nearest neighbor.
     """
-    from jcvi.formats.base import DictFile
+    from maize.formats.base import DictFile
 
     outfile = listfile.rsplit(".", 1)[0] + ".sorted.list"
     threadorder = thread.order
@@ -290,7 +152,6 @@ def sort_layout(thread, listfile, column=0):
     fw.close()
     logging.debug("File `{0}` sorted to `{1}`.".format(outfile, thread.filename))
 
-
 def layout(args):
     """
     %prog layout omgfile taxa
@@ -298,15 +159,8 @@ def layout(args):
     Build column formatted gene lists after omgparse(). Use species list
     separated by comma in place of taxa, e.g. "BR,BO,AN,CN"
     """
-    p = OptionParser(layout.__doc__)
-    p.add_option("--sort",
-                 help="Sort layout file based on bedfile [default: %default]")
-    opts, args = p.parse_args(args)
 
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    omgfile, taxa = args
+    omgfile, taxa = args.omgfile, args.taxa
     listfile = omgfile.rsplit(".", 1)[0] + ".list"
     taxa = taxa.split(",")
     ntaxa = len(taxa)
@@ -344,11 +198,10 @@ def layout(args):
     sh(cmd)
 
     logging.debug("List file written to `{0}`.".format(listfile))
-    sort = opts.sort
+    sort = args.sort
     if sort:
         thread = Bed(sort)
         sort_layout(thread, listfile)
-
 
 def omgparse(args):
     """
@@ -356,21 +209,14 @@ def omgparse(args):
 
     Parse the OMG outputs to get gene lists.
     """
-    p = OptionParser(omgparse.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    work, = args
+    work = args.work
     omgfiles = glob(op.join(work, "gf*.out"))
     for omgfile in omgfiles:
         omg = OMGFile(omgfile)
         best = omg.best()
         for bb in best:
             genes, taxa = zip(*bb)
-            print "\t".join((",".join(genes), ",".join(taxa)))
-
+            print( "\t".join((",".join(genes), ",".join(taxa))) )
 
 def group(args):
     """
@@ -378,15 +224,8 @@ def group(args):
 
     Group the anchors into ortho-groups. Can input multiple anchor files.
     """
-    p = OptionParser(group.__doc__)
-    p.set_outfile()
 
-    opts, args = p.parse_args(args)
-
-    if len(args) < 1:
-        sys.exit(not p.print_help())
-
-    anchorfiles = args
+    anchorfiles = args.anchorfiles
     groups = Grouper()
     for anchorfile in anchorfiles:
         ac = AnchorFile(anchorfile)
@@ -396,14 +235,13 @@ def group(args):
     logging.debug("Created {0} groups with {1} members.".\
                   format(len(groups), groups.num_members))
 
-    outfile = opts.outfile
+    outfile = args.outfile
     fw = must_open(outfile, "w")
     for g in groups:
         print >> fw, ",".join(sorted(g))
     fw.close()
 
     return outfile
-
 
 def omg(args):
     """
@@ -418,14 +256,8 @@ def omg(args):
 
     Then followed by omgparse() to get the gene lists.
     """
-    p = OptionParser(omg.__doc__)
 
-    opts, args = p.parse_args(args)
-
-    if len(args) < 1:
-        sys.exit(not p.print_help())
-
-    weightsfiles = args
+    weightsfiles = args.weightsfiles
     groupfile = group(weightsfiles + ["--outfile=groups"])
 
     weights = get_weights(weightsfiles)
@@ -459,7 +291,6 @@ def omg(args):
 
         fw.close()
 
-
 def geneinfo(bed, order, genomeidx, ploidy):
     bedfile = bed.filename
     p = bedfile.split(".")[0]
@@ -487,35 +318,19 @@ def geneinfo(bed, order, genomeidx, ploidy):
 
     return infofile
 
-
 def omgprepare(args):
     """
     %prog omgprepare ploidy anchorsfile blastfile
 
     Prepare to run Sankoff's OMG algorithm to get orthologs.
     """
-    from jcvi.formats.blast import cscore
-    from jcvi.formats.base import DictFile
+    from maize.formats.blast import cscore
+    from maize.formats.base import DictFile
 
-    p = OptionParser(omgprepare.__doc__)
-    p.add_option("--norbh", action="store_true",
-                 help="Disable RBH hits [default: %default]")
-    p.add_option("--pctid", default=0, type="int",
-                 help="Percent id cutoff for RBH hits [default: %default]")
-    p.add_option("--cscore", default=90, type="int",
-                 help="C-score cutoff for RBH hits [default: %default]")
-    p.set_stripnames()
-    p.set_beds()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    ploidy, anchorfile, blastfile = args
-    norbh = opts.norbh
-    pctid = opts.pctid
-    cs = opts.cscore
+    ploidy, anchorfile, blastfile = args.ploidy, args.anchorfile, args.blastfile
+    norbh = args.norbh
+    pctid = args.pctid
+    cs = args.cscore
     qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, p, opts)
 
     fp = open(ploidy)
@@ -557,9 +372,8 @@ def omgprepare(args):
 
     logging.debug("Write {0} pairs to `{1}`.".format(npairs, weightsfile))
 
-
 def make_ortholog(blocksfile, rbhfile, orthofile):
-    from jcvi.formats.base import DictFile
+    from maize.formats.base import DictFile
 
     # Generate mapping both ways
     adict = DictFile(rbhfile)
@@ -582,7 +396,6 @@ def make_ortholog(blocksfile, rbhfile, orthofile):
     fp.close()
     fw.close()
 
-
 def ortholog(args):
     """
     %prog ortholog species_a species_b
@@ -594,41 +407,20 @@ def ortholog(args):
     such predictions. Extra orthologs will be recruited from reciprocal best
     match (RBH).
     """
-    from jcvi.apps.align import last as last_main
-    from jcvi.compara.blastfilter import main as blastfilter_main
-    from jcvi.compara.quota import main as quota_main
-    from jcvi.compara.synteny import scan, mcscan, liftover
-    from jcvi.formats.blast import cscore, filter
+    from maize.apps.align import last as last_main
+    from maize.compara.blastfilter import main as blastfilter_main
+    from maize.compara.quota import main as quota_main
+    from maize.compara.synteny import scan, mcscan, liftover
+    from maize.formats.blast import cscore, filter
 
-    p = OptionParser(ortholog.__doc__)
-    p.add_option("--dbtype", default="nucl",
-                 choices=("nucl", "prot"),
-                 help="Molecule type of subject database")
-    p.add_option("--full", default=False, action="store_true",
-                 help="Run in full mode, including blocks and RBH")
-    p.add_option("--cscore", default=0.7, type="float",
-                 help="C-score cutoff [default: %default]")
-    p.add_option("--dist", default=20, type="int",
-                 help="Extent of flanking regions to search")
-    p.add_option("--quota", help="Quota align parameter")
-    p.add_option("--nostdpf", default=False, action="store_true",
-            help="Do not standardize contig names")
-    p.add_option("--no_strip_names", default=False, action="store_true",
-            help="Do not strip alternative splicing "
-            "(e.g. At5g06540.1 -> At5g06540)")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    a, b = args
-    dbtype = opts.dbtype
+    a, b = args.species_a, args.species_b
+    dbtype = args.dbtype
     suffix = ".cds" if dbtype == "nucl" else ".pep"
     abed, afasta = a + ".bed", a + suffix
     bbed, bfasta = b + ".bed", b + suffix
-    ccscore = opts.cscore
-    quota = opts.quota
-    dist = "--dist={0}".format(opts.dist)
+    ccscore = args.cscore
+    quota = args.quota
+    dist = "--dist={0}".format(args.dist)
 
     aprefix = afasta.split(".")[0]
     bprefix = bfasta.split(".")[0]
@@ -646,7 +438,7 @@ def ortholog(args):
 
     filtered_last = last + ".filtered"
     if need_update(last, filtered_last):
-        if opts.no_strip_names:
+        if args.no_strip_names:
             blastfilter_main([last, "--cscore={0}".format(ccscore), "--no_strip_names"])
         else:
             blastfilter_main([last, "--cscore={0}".format(ccscore)])
@@ -654,9 +446,9 @@ def ortholog(args):
     anchors = pprefix + ".anchors"
     lifted_anchors = pprefix + ".lifted.anchors"
     pdf = pprefix + ".pdf"
-    if not opts.full:
+    if not args.full:
         if need_update(filtered_last, lifted_anchors):
-            if opts.no_strip_names:
+            if args.no_strip_names:
                 scan([filtered_last, anchors, dist,
                         "--liftover={0}".format(last), "--no_strip_names"])
             else:
@@ -666,15 +458,15 @@ def ortholog(args):
             quota_main([lifted_anchors,
                         "--quota={0}".format(quota), "--screen"])
         if need_update(anchors, pdf):
-            from jcvi.graphics.dotplot import dotplot_main
+            from maize.graphics.dotplot import dotplot_main
             dargs = [anchors]
-            if opts.nostdpf:
+            if args.nostdpf:
                 dargs += ["--nostdpf", "--skipempty"]
             dotplot_main(dargs)
         return
 
     if need_update(filtered_last, anchors):
-        if opts.no_strip_names:
+        if args.no_strip_names:
             scan([filtered_last, anchors, dist, "--no_strip_names"])
         else:
             scan([filtered_last, anchors, dist])
@@ -685,7 +477,7 @@ def ortholog(args):
 
     lifted_anchors = pprefix + ".1x1.lifted.anchors"
     if need_update((last, ooanchors), lifted_anchors):
-        if opts.no_strip_names:
+        if args.no_strip_names:
             liftover([last, ooanchors, dist, "--no_strip_names"])
         else:
             liftover([last, ooanchors, dist])
@@ -705,7 +497,6 @@ def ortholog(args):
     if need_update([pblocks, qblocks, rbh], [portho, qortho]):
         make_ortholog(pblocks, rbh, portho)
         make_ortholog(qblocks, rbh, qortho)
-
 
 def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
     evalue=.01, strip_name=".", ofile=sys.stderr, genefam=False):
@@ -794,7 +585,6 @@ def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
 
     return families
 
-
 def tandem(args):
     """
     %prog tandem blast_file cds_file bed_file [options]
@@ -805,37 +595,107 @@ def tandem(args):
 
     pep_file can also be used in same manner.
     """
-    p = OptionParser(tandem.__doc__)
-    p.add_option("--tandem_Nmax", dest="tandem_Nmax", type="int", default=3,
-               help="merge tandem genes within distance [default: %default]")
-    p.add_option("--percent_overlap", type="int", default=50,
-               help="tandem genes have >=x% aligned sequence, x=0-100 \
-               [default: %default]")
-    p.set_align(evalue=.01)
-    p.add_option("--not_self", default=False, action="store_true",
-                 help="provided is not self blast file [default: %default]")
-    p.add_option("--strip_gene_name", dest="sep", type="string", default=".",
-               help="strip alternative splicing. Use None for no stripping. \
-               [default: %default]")
-    p.add_option("--genefamily", dest="genefam", action="store_true",
-                 help="compile gene families based on similarity [default: %default]")
-    p.set_outfile()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    blast_file, cds_file, bed_file = args
-    N = opts.tandem_Nmax
-    P = opts.percent_overlap
-    is_self = not opts.not_self
-    sep = opts.sep
-    ofile = opts.outfile
+    blast_file, cds_file, bed_file = args.blast_file, args.cds_file, args.bed_file
+    N = args.tandem_Nmax
+    P = args.percent_overlap
+    is_self = not args.not_self
+    sep = args.sep
+    ofile = args.out_file
 
     tandem_main(blast_file, cds_file, bed_file, N=N, P=P, is_self=is_self, \
-        evalue=opts.evalue, strip_name=sep, ofile=ofile, genefam=opts.genefam)
-
+        evalue=args.evalue, strip_name=sep, ofile=ofile, genefam=args.genefam)
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'catalog utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("tandem", 
+            help = 'identify tandem gene groups within certain distance',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blast_file', help = 'blast file')
+    sp1.add_argument('cds_file', help = 'cds file')
+    sp1.add_argument('bed_file', help = 'bed file')
+    sp1.add_argument('out_file', help = 'out file')
+    sp1.add_argument("--tandem_Nmax", dest="tandem_Nmax", type=int, default=3,
+               help="merge tandem genes within distance")
+    sp1.add_argument("--percent_overlap", type=int, default=50,
+               help="tandem genes have >=x%% aligned sequence, x=0-100")
+    sp1.add_argument("--evalue", type=float, default=0.01, help = 'evalue')
+    sp1.add_argument("--not_self", action="store_true",
+                 help="provided is not self blast file")
+    sp1.add_argument("--strip_gene_name", dest="sep", default=".",
+               help="strip alternative splicing. Use None for no stripping")
+    sp1.add_argument("--genefamily", dest="genefam", action="store_true",
+                 help="compile gene families based on similarity")
+    sp1.set_defaults(func = tandem)
+
+    sp1 = sp.add_parser("ortholog", 
+            help = 'run a combined synteny and RBH pipeline to call orthologs',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('species_a', help = 'species A')
+    sp1.add_argument('species_b', help = 'species B')
+    sp1.add_argument("--dbtype", default="nucl", choices=("nucl", "prot"),
+                 help="Molecule type of subject database")
+    sp1.add_argument("--full", action="store_true",
+                 help="Run in full mode, including blocks and RBH")
+    sp1.add_argument("--cscore", default=0.7, type=float,
+                 help="C-score cutoff")
+    sp1.add_argument("--dist", default=20, type=int,
+                 help="Extent of flanking regions to search")
+    sp1.add_argument("--quota", help="Quota align parameter")
+    sp1.add_argument("--nostdpf", action="store_true",
+            help="Do not standardize contig names")
+    sp1.add_argument("--no_strip_names", action="store_true",
+            help="Do not strip alternative splicing "
+            "(e.g. At5g06540.1 -> At5g06540)")
+    sp1.set_defaults(func = ortholog)
+
+    sp1 = sp.add_parser("group", 
+            help = 'cluster the anchors into ortho-groups',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfiles', nargs="+", help='one of more anchor files')
+    sp1.add_argument('outfile', help='output file')
+    sp1.set_defaults(func = group)
+
+    sp1 = sp.add_parser("omgprepare", 
+            help = 'prepare weights file to run Sankoff OMG algorithm',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('ploidy', help='ploidy')
+    sp1.add_argument('anchorfile', help='anchor file')
+    sp1.add_argument('blastfile', help='blast file')
+    sp1.add_argument("--norbh", action="store_true", help="Disable RBH hits")
+    sp1.add_argument("--pctid", default=0, type=int, 
+            help="Percent id cutoff for RBH hits")
+    sp1.add_argument("--cscore", default=90, type=int,
+            help="C-score cutoff for RBH hits")
+    sp1.set_defaults(func = omgprepare)
+
+    sp1 = sp.add_parser("omg", 
+            help = 'generate a series of Sankoff OMG algorithm inputs',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('weightsfiles', nargs="+", help='one of more weights files')
+    sp1.set_defaults(func = omg)
+
+    sp1 = sp.add_parser("omgparse", 
+            help = 'parse the OMG outputs to get gene lists',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('work', help='work')
+    sp1.set_defaults(func = omgparse)
+
+    sp1 = sp.add_parser("layout", help = 'layout the gene lists',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('omgfile', help='omgfile')
+    sp1.add_argument('taxa', help='taxa')
+    sp1.add_argument("--sort", help="Sort layout file based on bedfile")
+    sp1.set_defaults(func = layout)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()

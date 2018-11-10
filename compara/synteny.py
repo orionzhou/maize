@@ -436,7 +436,7 @@ def add_options(p, args, dist=10):
     returns opts, files
     """
     p.set_beds()
-    p.add_option("--dist", default=dist, type="int",
+    sp1.add_argument("--dist", default=dist, type="int",
             help="Extent of flanking regions to search [default: %default]")
 
     opts, args = p.parse_args(args)
@@ -446,7 +446,7 @@ def add_options(p, args, dist=10):
 
     blast_file, anchor_file = args
 
-    return blast_file, anchor_file, opts.dist, opts
+    return blast_file, anchor_file, args.dist, opts
 
 def colinear_evaluate_weights(tour, data):
     tour = dict((s, i) for i, s in enumerate(tour))
@@ -462,16 +462,8 @@ def layout(args):
     """
     from maize.algorithms.ec import GA_setup, GA_run
 
-    p = OptionParser(layout.__doc__)
-    p.set_beds()
-    p.set_cpus(cpus=32)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    simplefile, qseqids, sseqids = args
-    qbed, sbed, qorder, sorder, is_self = check_beds(simplefile, p, opts)
+    simplefile, qseqids, sseqids = args.simplefile, args.qseqids, args.sseqids
+    qbed, sbed, qorder, sorder, is_self = check_beds(simplefile, args)
 
     qseqids = qseqids.strip().split(",")
     sseqids = sseqids.strip().split(",")
@@ -497,7 +489,7 @@ def layout(args):
     tour = range(len(qseqids))
     toolbox = GA_setup(tour)
     toolbox.register("evaluate", colinear_evaluate_weights, data=data)
-    tour, fitness = GA_run(toolbox, ngen=100, npop=100, cpus=opts.cpus)
+    tour, fitness = GA_run(toolbox, ngen=100, npop=100, cpus=args.cpus)
     tour = [qseqids[x] for x in tour]
 
     print(",".join(tour))
@@ -508,16 +500,10 @@ def fromaligns(args):
 
     Convert aligns file (old MCscan output) to anchors file.
     """
-    p = OptionParser(fromaligns.__doc__)
-    p.set_outfile()
-    opts, args = p.parse_args(args)
 
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    alignsfile, = args
+    alignsfile = args.alignsfile
     fp = must_open(alignsfile)
-    fw = must_open(opts.outfile, "w")
+    fw = must_open(args.outfile, "w")
     for row in fp:
         if row.startswith("## Alignment"):
             print >> fw, "###"
@@ -536,21 +522,12 @@ def mcscanq(args):
     used for 'highlighting' the lines in the synteny plot, drawn by
     graphics.karyotype and graphics.synteny.
     """
-    p = OptionParser(mcscanq.__doc__)
-    p.add_option("--color", help="Add color highlight, used in plotting")
-    p.add_option("--invert", default=False, action="store_true",
-                 help="Invert query and subject [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) < 2:
-        sys.exit(not p.print_help())
-
-    qids, blocksfile = args
+    qids, blocksfile = args.qids, args.blocksfile
     b = BlockFile(blocksfile)
     fp = open(qids)
     for gene in fp:
         gene = gene.strip()
-        for line in b.query_gene(gene, color=opts.color, invert=opts.invert):
+        for line in b.query_gene(gene, color=args.color, invert=args.invert):
             print(line)
 
 def spa(args):
@@ -563,15 +540,7 @@ def spa(args):
     from maize.algorithms.graph import merge_paths
     from maize.utils.cbook import uniqify
 
-    p = OptionParser(spa.__doc__)
-    p.add_option("--unmapped", default=False, action="store_true",
-                 help="Include unmapped scaffolds in the list [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) < 1:
-        sys.exit(not p.print_help())
-
-    spafiles = args
+    spafiles = args.spafiles
     paths = []
     mappings = []
     missings = []
@@ -604,7 +573,7 @@ def spa(args):
     for spafile, mapping, missing in zip(spafiles, mappings, missings):
         mapping = [x for x in mapping if "random" not in x]
         mapping = uniqify(mapping)
-        if len(mapping) < 50 and opts.unmapped:
+        if len(mapping) < 50 and args.unmapped:
             mapping = uniqify(mapping + missing)
 
         print(spafile, len(mapping), ",".join(mapping))
@@ -615,26 +584,15 @@ def rebuild(args):
 
     Rebuild anchors file from pre-built blocks file.
     """
-    p = OptionParser(rebuild.__doc__)
-    p.add_option("--header", default=False, action="store_true",
-                 help="First line is header [default: %default]")
-    p.add_option("--write_blast", default=False, action="store_true",
-                 help="Get blast records of rebuilt anchors [default: %default]")
-    p.set_beds()
 
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    blocksfile, blastfile = args
-    bk = BlockFile(blocksfile, header=opts.header)
+    blocksfile, blastfile = args.blocksfile, args.blastfile
+    bk = BlockFile(blocksfile, header=args.header)
     fw = open("pairs", "w")
     for a, b, h in bk.iter_all_pairs():
         print >> fw, "\t".join((a, b))
     fw.close()
 
-    if opts.write_blast:
+    if args.write_blast:
         AnchorFile("pairs").blast(blastfile, "pairs.blast")
 
     fw = open("tracks", "w")
@@ -648,13 +606,8 @@ def coge(args):
 
     Convert CoGe file to anchors file.
     """
-    p = OptionParser(coge.__doc__)
-    opts, args = p.parse_args(args)
 
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    cogefile, = args
+    cogefile = args.cogefile
     fp = must_open(cogefile)
     cogefile = cogefile.replace(".gz", "")
     ksfile = cogefile + ".ks"
@@ -687,16 +640,9 @@ def matrix(args):
     Make oxford grid based on anchors file.
     """
 
-    p = OptionParser(matrix.__doc__)
-    p.add_option("--seqids", help="File with seqids [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    bedfile, anchorfile, matrixfile = args
+    bedfile, anchorfile, matrixfile = args.bedfile, args.anchorfile, args.matrixfile
     ac = AnchorFile(anchorfile)
-    seqidsfile = opts.seqids
+    seqidsfile = args.seqids
     if seqidsfile:
         seqids = SetFile(seqidsfile, delimiter=',')
 
@@ -752,26 +698,12 @@ def simple(args):
     block_id  seqidA    startA    endA     bpSpanA  GeneA1   GeneA2  geneSpanA
     block_id  seqidB    startB    endB     bpSpanB  GeneB1   GeneB2  geneSpanB
     """
-    p = OptionParser(simple.__doc__)
-    p.add_option("--rich", default=False, action="store_true", \
-                help="Output additional columns [default: %default]")
-    p.add_option("--coords", default=False, action="store_true",
-                help="Output columns with base coordinates [default: %default]")
-    p.add_option("--bed", default=False, action="store_true",
-                help="Generate BED file for the blocks")
-    p.add_option("--noheader", default=False, action="store_true",
-                help="Don't output header [default: %default]")
-    p.set_beds()
-    opts, args = p.parse_args(args)
 
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    anchorfile, = args
-    additional = opts.rich
-    coords = opts.coords
-    header = not opts.noheader
-    bed = opts.bed
+    anchorfile, = args.anchorfile
+    additional = args.rich
+    coords = args.coords
+    header = not args.noheader
+    bed = args.bed
     if bed:
         coords = True
         bbed = Bed()
@@ -779,7 +711,7 @@ def simple(args):
     ac = AnchorFile(anchorfile)
     simplefile = anchorfile.rsplit(".", 1)[0] + ".simple"
 
-    qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, p, opts)
+    qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, args)
     pf = "-".join(anchorfile.split(".", 2)[:2])
     blocks = ac.blocks
 
@@ -882,34 +814,16 @@ def screen(args):
     4. Option --minspan: remove blocks with less span than this.
     5. Option --minsize: remove blocks with less number of anchors than this.
     """
-    p = OptionParser(screen.__doc__)
-    p.set_beds()
 
-    p.add_option("--ids", help="File with block IDs (0-based) [default: %default]")
-    p.add_option("--seqids", help="File with seqids [default: %default]")
-    p.add_option("--seqpairs", help="File with seqpairs [default: %default]")
-    p.add_option("--nointra", action="store_true",
-                 help="Remove intra-chromosomal blocks [default: %default]")
-    p.add_option("--minspan", default=0, type="int",
-                 help="Only blocks with span >= [default: %default]")
-    p.add_option("--minsize", default=0, type="int",
-                 help="Only blocks with anchors >= [default: %default]")
-    p.add_option("--simple", action="store_true",
-                 help="Write simple anchorfile with block ends [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    anchorfile, newanchorfile = args
+    anchorfile, newanchorfile = args.anchorfile, args.newanchorfile
     ac = AnchorFile(anchorfile)
-    idsfile = opts.ids
-    seqidsfile = opts.seqids
-    seqpairsfile = opts.seqpairs
-    minspan = opts.minspan
-    minsize = opts.minsize
-    osimple = opts.simple
-    nointra = opts.nointra
+    idsfile = args.ids
+    seqidsfile = args.seqids
+    seqpairsfile = args.seqpairs
+    minspan = args.minspan
+    minsize = args.minsize
+    osimple = args.simple
+    nointra = args.nointra
     ids, seqids, seqpairs = None, None, None
 
     if idsfile:
@@ -985,14 +899,7 @@ def summary(args):
     """
     from maize.utils.cbook import SummaryStats
 
-    p = OptionParser(summary.__doc__)
-    p.add_option("--prefix", help="Generate per block stats [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    anchorfile, = args
+    anchorfile = args.anchorfile
     ac = AnchorFile(anchorfile)
     clusters = ac.blocks
     if clusters == [[]]:
@@ -1007,7 +914,7 @@ def summary(args):
     print >> sys.stderr, "Stats:", SummaryStats(nanchors)
     print >> sys.stderr, "NR stats:", SummaryStats(nranchors)
 
-    prefix = opts.prefix
+    prefix = args.prefix
     if prefix:
         pad = len(str(nclusters))
         for i, c in enumerate(clusters):
@@ -1023,13 +930,7 @@ def stats(args):
     """
     from maize.utils.cbook import percentage
 
-    p = OptionParser(stats.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    blocksfile, = args
+    blocksfile = args.blocksfile
     fp = open(blocksfile)
     counts = defaultdict(int)
     total = orthologous = 0
@@ -1097,30 +998,13 @@ def mcscan(args):
     If --mergetandem=tandem_file is specified, tandem_file should have each
     tandem cluster as one line, tab separated.
     """
-    p = OptionParser(mcscan.__doc__)
-    p.add_option("--iter", default=100, type="int",
-                 help="Max number of chains to output [default: %default]")
-    p.add_option("--ascii", default=False, action="store_true",
-                 help="Output symbols rather than gene names [default: %default]")
-    p.add_option("--Nm", default=10, type="int",
-                 help="Clip block ends to allow slight overlaps [default: %default]")
-    p.add_option("--trackids", action="store_true",
-                 help="Track block IDs in separate file [default: %default]")
-    p.add_option("--mergetandem", default=None,
-                 help="merge tandems genes in output acoording to PATH-TO-TANDEM_FILE, "\
-                 "cannot be used with --ascii")
-    p.set_outfile()
-    opts, args = p.parse_args(args)
 
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    bedfile, anchorfile = args
-    ascii = opts.ascii
-    clip = opts.Nm
-    trackids = opts.trackids
-    ofile = opts.outfile
-    mergetandem = opts.mergetandem
+    bedfile, anchorfile = args.bedfile, anchorfile
+    ascii = args.ascii
+    clip = args.Nm
+    trackids = args.trackids
+    ofile = args.outfile
+    mergetandem = args.mergetandem
     bed = Bed(bedfile)
     order = bed.order
 
@@ -1164,7 +1048,7 @@ def mcscan(args):
     print >> sys.stderr, "Chain started: {0} blocks".format(len(ranges))
     iteration = 0
     while ranges:
-        if iteration >= opts.iter:
+        if iteration >= args.iter:
             break
 
         selected, score = range_chain(ranges)
@@ -1229,24 +1113,9 @@ def depth(args):
     """
     from maize.utils.range import range_depth
 
-    p = OptionParser(depth.__doc__)
-    p.add_option("--depthfile",
-                 help="Generate file with gene and depth [default: %default]")
-    p.add_option("--histogram", default=False, action="store_true",
-                 help="Plot histograms in PDF")
-    p.add_option("--xmax", type="int", help="x-axis maximum to display in plot")
-    p.add_option("--title", default=None, help="Title to display in plot")
-    p.add_option("--quota", help="Force to use this quota, e.g. 1:1, 1:2 ...")
-    p.set_beds()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    anchorfile, = args
+    anchorfile = args.anchorfile
     qbed, sbed, qorder, sorder, is_self = check_beds(anchorfile, p, opts)
-    depthfile = opts.depthfile
+    depthfile = args.depthfile
     ac = AnchorFile(anchorfile)
     qranges = []
     sranges = []
@@ -1282,7 +1151,7 @@ def depth(args):
         fw.close()
         logging.debug("Depth written to `{0}`.".format(depthfile))
 
-    if not opts.histogram:
+    if not args.histogram:
         return
 
     from maize.graphics.base import plt, quickplot_ax, savefig, normalize_axes
@@ -1291,9 +1160,9 @@ def depth(args):
     plt.figure(1, (6, 3))
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 
-    xmax = opts.xmax or max(4, max(dsq.keys() + dss.keys()))
-    if opts.quota:
-        speak, qpeak = opts.quota.split(":")
+    xmax = args.xmax or max(4, max(dsq.keys() + dss.keys()))
+    if args.quota:
+        speak, qpeak = args.quota.split(":")
         qpeak, speak = int(qpeak), int(speak)
     else:
         qpeak = find_peak(dsq)
@@ -1306,7 +1175,7 @@ def depth(args):
     quickplot_ax(ax2, dsq, 0, xmax, qtag, ylabel=None,
                  highlight=range(1, qpeak + 1))
 
-    title = opts.title or "{} vs {} syntenic depths\n{}:{} pattern"\
+    title = args.title or "{} vs {} syntenic depths\n{}:{} pattern"\
                     .format(qgenome, sgenome, speak, qpeak)
     root = f.add_axes([0, 0, 1, 1])
     vs, pattern = title.split('\n')
@@ -1362,25 +1231,13 @@ def breakpoint(args):
     from maize.formats.blast import bed
     from maize.utils.range import range_interleave
 
-    p = OptionParser(breakpoint.__doc__)
-    p.add_option("--xdist", type="int", default=20,
-                 help="xdist (in related genome) cutoff [default: %default]")
-    p.add_option("--ydist", type="int", default=200000,
-                 help="ydist (in current genome) cutoff [default: %default]")
-    p.add_option("-n", type="int", default=5,
-                 help="number of markers in a block [default: %default]")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    blastfile, bedfile = args
+    blastfile, bedfile = args.blastfile, args.bedfile
     order = Bed(bedfile).order
     blastbedfile = bed([blastfile])
     bbed = Bed(blastbedfile)
     for scaffold, bs in bbed.sub_beds():
         blocks = get_blocks(scaffold, bs, order,
-                            xdist=opts.xdist, ydist=opts.ydist, N=opts.n)
+                            xdist=args.xdist, ydist=args.ydist, N=args.n)
         sblocks = []
         for block in blocks:
             xx, yy = zip(*block)
@@ -1396,15 +1253,9 @@ def scan(args):
 
     pull out syntenic anchors from blastfile based on single-linkage algorithm
     """
-    p = OptionParser(scan.__doc__)
-    p.add_option("-n", "--min_size", dest="n", type="int", default=4,
-            help="minimum number of anchors in a cluster [default: %default]")
-    p.add_option("--liftover",
-            help="Scan BLAST file to find extra anchors [default: %default]")
-    p.set_stripnames()
 
-    blast_file, anchor_file, dist, opts = add_options(p, args, dist=20)
-    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, p, opts)
+    blast_file, anchor_file, dist = args.blastfile, args.anchorfile, args.dist
+    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, args)
 
     filtered_blast = read_blast(blast_file, qorder, sorder, \
                                 is_self=is_self, ostrip=False)
@@ -1412,7 +1263,7 @@ def scan(args):
     fw = open(anchor_file, "w")
     logging.debug("Chaining distance = {0}".format(dist))
 
-    clusters = batch_scan(filtered_blast, xdist=dist, ydist=dist, N=opts.n)
+    clusters = batch_scan(filtered_blast, xdist=dist, ydist=dist, N=args.n)
     for cluster in clusters:
         print >>fw, "###"
         for qi, si, score in cluster:
@@ -1422,12 +1273,12 @@ def scan(args):
     fw.close()
     summary([anchor_file])
 
-    lo = opts.liftover
+    lo = args.liftover
     if not lo:
         return anchor_file
 
-    bedopts = ["--qbed=" + opts.qbed, "--sbed=" + opts.sbed]
-    ostrip = [] if opts.strip_names else ["--no_strip_names"]
+    bedopts = ["--qbed=" + args.qbed, "--sbed=" + args.sbed]
+    ostrip = [] if args.strip_names else ["--no_strip_names"]
     newanchorfile = liftover([lo, anchor_file] + bedopts + ostrip)
     return newanchorfile
 
@@ -1443,14 +1294,12 @@ def liftover(args):
         geneA geneB
         geneC geneD
     """
-    p = OptionParser(liftover.__doc__)
-    p.set_stripnames()
 
-    blast_file, anchor_file, dist, opts = add_options(p, args)
-    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, p, opts)
+    blast_file, anchor_file, dist = args.blastfile, args.anchorfile, args.dist
+    qbed, sbed, qorder, sorder, is_self = check_beds(blast_file, args)
 
     filtered_blast = read_blast(blast_file, qorder, sorder,
-                            is_self=is_self, ostrip=opts.strip_names)
+                            is_self=is_self, ostrip=args.strip_names)
     blast_to_score = dict(((b.qi, b.si), int(b.score)) for b in filtered_blast)
     accepted = dict(((b.query, b.subject), str(int(b.score))) \
                      for b in filtered_blast)
@@ -1484,26 +1333,177 @@ def liftover(args):
 
     return newanchorfile
 
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'catalog utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("scan", 
+            help = 'get anchor list using single-linkage algorithm',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument("--n", "--min_size", dest="n", type=int, default=4,
+            help="minimum number of anchors in a cluster")
+    sp1.add_argument('blastfile', help = 'blast file')
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--dist", default=20, type=int, help="Extent of flanking regions to search")
+    sp1.add_argument("--liftover", help="Scan BLAST file to find extra anchors")
+    sp1.set_defaults(func = scan)
+    
+    sp1 = sp.add_parser("summary", 
+            help = 'provide statistics for pairwise blocks',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--prefix", help="Generate per block stats")
+    sp1.set_defaults(func = summary)
+    
+    sp1 = sp.add_parser("liftover", 
+            help = 'given anchor list, pull adjacent pairs from blast file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blastfile', help = 'blast file')
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--dist", default=10, type=int, help="Extent of flanking regions to search")
+    sp1.set_defaults(func = liftover)
+    
+    sp1 = sp.add_parser("mcscan", 
+            help = 'stack synteny blocks on a reference bed',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('bedfile', help = 'bed file')
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--iter", default=100, type=int,
+                 help="Max number of chains to output")
+    sp1.add_argument("--ascii", action="store_true",
+                 help="Output symbols rather than gene names")
+    sp1.add_argument("--Nm", default=10, type=int,
+                 help="Clip block ends to allow slight overlaps")
+    sp1.add_argument("--trackids", action="store_true", 
+    			 help="Track block IDs in separate file")
+    sp1.add_argument("--mergetandem", default=None,
+                 help="merge tandems genes in output acoording to PATH-TO-TANDEM_FILE, "\
+                 "cannot be used with --ascii")
+    sp1.set_defaults(func = mcscan)
+    
+    sp1 = sp.add_parser("mcscanq", 
+            help = 'query multiple synteny blocks',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('qids', help = 'query.ids')
+    sp1.add_argument('blocksfile', help = 'blocks file')
+    sp1.add_argument("--color", help="Add color highlight, used in plotting")
+    sp1.add_argument("--invert", action="store_true", help="Invert query and subject")
+    sp1.set_defaults(func = mcscanq)
+    
+    sp1 = sp.add_parser("screen", 
+            help = 'extract subset of blocks from anchorfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument('newanchorfile', help = 'new anchor file')
+    sp1.add_argument("--ids", help="File with block IDs (0-based)")
+    sp1.add_argument("--seqids", help="File with seqids")
+    sp1.add_argument("--seqpairs", help="File with seqpairs")
+    sp1.add_argument("--nointra", action="store_true", help="Remove intra-chromosomal blocks")
+    sp1.add_argument("--minspan", default=0, type=int, help="Only blocks with span >= ")
+    sp1.add_argument("--minsize", default=0, type=int, help="Only blocks with anchors >= ")
+    sp1.add_argument("--simple", action="store_true", help="Write simple anchorfile with block ends")    
+    sp1.set_defaults(func = screen)
+    
+    sp1 = sp.add_parser("simple", 
+            help = 'convert anchorfile to simple block descriptions',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--rich", action="store_true", help="Output additional columns")
+    sp1.add_argument("--coords", action="store_true",
+    	help="Output columns with base coordinates")
+    sp1.add_argument("--bed", action="store_true", 
+    	help="Generate BED file for the blocks")
+    sp1.add_argument("--noheader", action="store_true", help="Don't output header")    
+    sp1.set_defaults(func = simple)
+    
+    sp1 = sp.add_parser("stats", 
+            help = 'provide statistics for mscan blocks',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blocksfile', help = 'blocks file')
+    sp1.set_defaults(func = stats)
+    
+    sp1 = sp.add_parser("depth", 
+            help = 'calculate the depths in the two genomes in comparison',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument("--depthfile", help="Generate file with gene and depth")
+    sp1.add_argument("--histogram", action="store_true", help="Plot histograms in PDF")
+    sp1.add_argument("--xmax", type=int, help="x-axis maximum to display in plot")
+    sp1.add_argument("--title", default=None, help="Title to display in plot")
+    sp1.add_argument("--quota", help="Force to use this quota, e.g. 1:1, 1:2 ...")
+    sp1.set_defaults(func = depth)
+    
+    sp1 = sp.add_parser("breakpoint", 
+            help = 'identify breakpoints where collinearity ends',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blastfile', help = 'blast file')
+    sp1.add_argument('bedfile', help = 'bed file')
+    sp1.add_argument("--xdist", type=int, default=20,
+                 help="xdist (in related genome) cutoff")
+    sp1.add_argument("--ydist", type=int, default=200000,
+                 help="ydist (in current genome) cutoff")
+    sp1.add_argument("--n", type=int, default=5, help="number of markers in a block")
+    sp1.set_defaults(func = breakpoint)
+    
+    sp1 = sp.add_parser("matrix", 
+            help = 'make oxford grid based on anchors file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('bedfile', help = 'all.bed')
+    sp1.add_argument('anchorfile', help = 'anchor file')
+    sp1.add_argument('matrixfile', help = 'matrix file')
+    sp1.add_argument("--seqids", help="File with seqids")
+    sp1.set_defaults(func = matrix)
+    
+    sp1 = sp.add_parser("coge", 
+            help = 'convert CoGe file to anchors file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('cogefile', help = 'coge file')
+    sp1.set_defaults(func = coge)
+    
+    sp1 = sp.add_parser("spa", 
+            help = 'convert chr ordering from SPA to simple lists',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('spafiles', help = 'spa files')
+    sp1.add_argument("--unmapped", action="store_true",
+            help="Include unmapped scaffolds in the list")
+    sp1.set_defaults(func = spa)
+    
+    sp1 = sp.add_parser("layout", 
+            help = 'compute layout based on .simple file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('simplefile', help = 'query.subject.simple')
+    sp1.add_argument('qseqids', help = 'query.seqids')
+    sp1.add_argument('sseqids', help = 'subject.seqids')
+    sp1.add_argument("--cpus", type=int, default=32, help='cpus')
+    sp1.set_defaults(func = layout)
+    
+    sp1 = sp.add_parser("rebuild", 
+            help = 'rebuild anchors file from prebuilt blocks file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blocksfile', help = 'blocks file')
+    sp1.add_argument('blastfile', help = 'blast file')
+    sp1.add_argument("--header", action="store_true", help="First line is header")
+    sp1.add_argument("--write_blast", action="store_true", 
+            help="Get blast records of rebuilt anchors")
+    sp1.set_defaults(func = rebuild)
+    
+    sp1 = sp.add_parser("fromaligns", 
+            help = 'convert aligns file to anchors file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('alignsfile', help = 'fromaligns')
+    sp1.add_argument('outfile', help = 'out.aligns')
+    sp1.set_defaults(func = fromaligns)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+    
 if __name__ == '__main__':
-    actions = (
-        ('scan', 'get anchor list using single-linkage algorithm'),
-        ('summary', 'provide statistics for pairwise blocks'),
-        ('liftover', 'given anchor list, pull adjacent pairs from blast file'),
-        ('mcscan', 'stack synteny blocks on a reference bed'),
-        ('mcscanq', 'query multiple synteny blocks'),
-        ('screen', 'extract subset of blocks from anchorfile'),
-        ('simple', 'convert anchorfile to simple block descriptions'),
-        ('stats', 'provide statistics for mscan blocks'),
-        ('depth', 'calculate the depths in the two genomes in comparison'),
-        ('breakpoint', 'identify breakpoints where collinearity ends'),
-        ('matrix', 'make oxford grid based on anchors file'),
-        ('coge', 'convert CoGe file to anchors file'),
-        ('spa', 'convert chr ordering from SPA to simple lists'),
-        ('layout', 'compute layout based on .simple file'),
-        ('rebuild', 'rebuild anchors file from prebuilt blocks file'),
-        ('fromaligns', 'convert aligns file to anchors file'),
-            )
-
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    main()
