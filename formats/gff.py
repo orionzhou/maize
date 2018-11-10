@@ -529,14 +529,7 @@ def fixpartials(args):
     Given a gff file of features, fix partial (5'/3' incomplete) transcripts
     by trying to locate nearest in-frame start/stop codon
     """
-    p = OptionParser(fixpartials.__doc__)
-    p.set_outfile()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 3:
-        sys.exit(not p.print_help())
-
-    gffile, gfasta, partials, = args
+    gffile, gfasta, partials = args.gff, args.fasta, args.partials
 
     gff = make_index(gffile)
     genome = Fasta(gfasta, index=True)
@@ -650,22 +643,10 @@ def cluster(args):
     If `slop` is enabled, clustering/consolidation will collapse any variation
     in terminal UTR lengths, keeping only the longest as representative.
     """
-    from jcvi.utils.grouper import Grouper
+    from maize.utils.grouper import Grouper
     from itertools import combinations
 
-    p = OptionParser(cluster.__doc__)
-    p.add_argument("--slop", default=False, action="store_true",
-            help="allow minor variation in terminal 5'/3' UTR" + \
-                 " start/stop position [default: %default]")
-    p.add_argument("--inferUTR", default=False, action="store_true",
-            help="infer presence of UTRs from exon coordinates")
-    p.set_outfile()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
+    gffile = args.gff
     slop = args.slop
     inferUTR = args.inferUTR
 
@@ -940,7 +921,7 @@ def fix(args):
                 g.set_attr("Parent", gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
-    elif opt == 'jcvi':
+    elif opt == 'maize':
         for g in gff:
             if g.type == 'transposable_element':
                 g.type = 'transposable_element_gene'
@@ -1103,31 +1084,7 @@ def chain(args):
     Fill in parent features by chaining child features and return extent of the
     child coordinates.
     """
-    valid_merge_op = ('sum', 'min', 'max', 'mean', 'collapse')
-
-    p = OptionParser(chain.__doc__)
-    p.add_argument("--key", dest="attrib_key", default=None,
-                help="Attribute to use as `key` for chaining operation")
-    p.add_argument("--chain_ftype", default="mRNA",
-                help="GFF feature type to use for chaining operation")
-    p.add_argument("--parent_ftype", default="gene",
-                help="GFF feature type to use for the chained coordinates")
-    p.add_argument("--break", dest="break_chain", action="store_true",
-                help="Break long chains which are non-contiguous")
-    p.add_argument("--transfer_attrib", dest="attrib_list",
-                help="Attributes to transfer to parent feature; accepts comma" + \
-                " separated list of attribute names [default: %default]")
-    p.add_argument("--transfer_score", dest="score_merge_op", choices=valid_merge_op,
-                help="Transfer value stored in score field to parent feature." + \
-                " Score is reported based on chosen operation")
-    p.set_outfile()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
+    gffile = args.gff
     attrib_key = args.attrib_key
     attrib_list = args.attrib_list
     score_merge_op = args.score_merge_op
@@ -1239,80 +1196,7 @@ def format(args):
     """
     from maize.formats.obo import load_GODag, validate_term
 
-    valid_multiparent_ops = ["split", "merge"]
-
-    p = OptionParser(format.__doc__)
-
-    g1 = OptionGroup(p, "Parameter(s) used to modify GFF attributes (9th column)")
-    g1.add_argument("--name", help="Add Name attribute from two-column file [default: %default]")
-    g1.add_argument("--note", help="Add Note attribute from two-column file [default: %default]")
-    g1.add_argument("--add_attribute", dest="attrib_files", help="Add new attribute(s) " + \
-                "from two-column file(s); attribute name comes from filename; " + \
-                "accepts comma-separated list of files [default: %default]")
-    g1.add_argument("--add_dbxref", dest="dbxref_files", help="Add new Dbxref value(s) (DBTAG:ID) " + \
-                "from two-column file(s). DBTAG comes from filename, ID comes from 2nd column; " + \
-                "accepts comma-separated list of files [default: %default]")
-    g1.add_argument("--nostrict", default=False, action="store_true",
-                 help="Disable strict parsing of GFF file and/or mapping file [default: %default]")
-    g1.add_argument("--remove_attr", dest="remove_attrs", help="Specify attributes to remove; " + \
-                "accepts comma-separated list of attribute names [default: %default]")
-    g1.add_argument("--copy_id_attr_to_name", default=False, action="store_true",
-                 help="Copy `ID` attribute value to `Name`, when `Name` is not defined")
-    g1.add_argument("--invent_name_attr", default=False, action="store_true",
-                 help="Invent `Name` attribute for 2nd level child features; " + \
-                "Formatted like PARENT:FEAT_TYPE:FEAT_INDEX")
-    g1.add_argument("--no_keep_attr_order", default=False, action="store_true",
-                 help="Do not maintain attribute order [default: %default]")
-    p.add_argument_group(g1)
-
-    g2 = OptionGroup(p, "Parameter(s) used to modify content within columns 1-8")
-    g2.add_argument("--seqid", help="Switch seqid from two-column file. If not" + \
-                " a file, value will globally replace GFF seqid [default: %default]")
-    g2.add_argument("--source", help="Switch GFF source from two-column file. If not" + \
-                " a file, value will globally replace GFF source [default: %default]")
-    g2.add_argument("--type", help="Switch GFF feature type from two-column file. If not" + \
-                " a file, value will globally replace GFF type [default: %default]")
-    g2.add_argument("--fixphase", default=False, action="store_true",
-                 help="Change phase 1<->2, 2<->1 [default: %default]")
-    p.add_argument_group(g2)
-
-    g3 = OptionGroup(p, "Other parameter(s) to perform manipulations to the GFF " + \
-                 "file content")
-    g3.add_argument("--unique", default=False, action="store_true",
-                 help="Make IDs unique [default: %default]")
-    g3.add_argument("--chaindup", default=None, dest="duptype",
-                 help="Chain duplicate features of a particular GFF3 `type`," + \
-                      " sharing the same ID attribute [default: %default]")
-    g3.add_argument("--multiparents", default=None, choices=valid_multiparent_ops,
-                 help="Split/merge identical features (same `seqid`, `source`, `type` " + \
-                 "`coord-range`, `strand`, `phase`) mapping to multiple parents " + \
-                 "[default: %default]")
-    g3.add_argument("--remove_feats", help="Comma separated list of features to remove by type" + \
-                " [default: %default]")
-    g3.add_argument("--remove_feats_by_ID", help="List of features to remove by ID;" + \
-                " accepts comma-separated list or list file [default: %default]")
-    g3.add_argument("--gsac", default=False, action="store_true",
-                 help="Fix GSAC GFF3 file attributes [default: %default]")
-    g3.add_argument("--invent_protein_feat", default=False, action="store_true",
-                 help="Invent a protein feature span (chain CDS feats)")
-    g3.add_argument("--process_ftype", default=None, type="str",
-                 help="Specify feature types to process; "
-                 "accepts comma-separated list of feature types [default: %default]")
-    g3.add_argument("--gff3", default=False, action="store_true",
-                 help="Print output in GFF3 format [default: %default]")
-    g3.add_argument("--make_gff_store", default=False, action="store_true",
-                 help="Store entire GFF file in memory during first iteration [default: %default]")
-    p.add_argument_group(g3)
-
-    p.set_outfile()
-    p.set_SO_opts()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    gffile, = args
+    gffile = args.gff
     mapfile = args.seqid
     names = args.name
     note = args.note
@@ -1662,7 +1546,7 @@ def get_piles(allgenes):
     of redundant features we want to get rid of. Input are a list of GffLines
     features. Output are list of list of features distinct "piles".
     """
-    from jcvi.utils.range import Range, range_piles
+    from maize.utils.range import Range, range_piles
 
     ranges = [Range(a.seqid, a.start, a.end, 0, i) \
                     for i, a in enumerate(allgenes)]
@@ -2354,15 +2238,7 @@ def splicecov(args):
     from pybedtools import BedTool
     from maize.utils.cbook import SummaryStats
 
-    p = OptionParser(splicecov.__doc__)
-    p.set_outfile()
-
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(not p.print_help())
-
-    gfffile, juncsbed, = args
+    gfffile, juncsbed = args.gff, args.bed
     tagged = "{0}.{1}.gff3".format(gfffile.rsplit(".", 1)[0], "tag_introns")
 
     gff3, junc = BedTool(gfffile), BedTool(juncsbed)
@@ -2426,7 +2302,7 @@ if __name__ == '__main__':
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("summary", help = "mary stats for features of different types",
+    sp1 = sp.add_parser("summary", help = "print summary stats for features of different types",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input gtf file')
     sp1.add_argument("--isoform", default=False, action="store_true",
@@ -2434,30 +2310,40 @@ if __name__ == '__main__':
     sp1.add_argument("--ids", help="Only include features from certain IDs")
     sp1.set_defaults(func = summary)
 
-    sp1 = sp.add_parser("filter", help = "filter the gff file based on criteria",
+    sp1 = sp.add_parser("filter", help = "filter the gff file based on  Identity and Coverage",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input gtf file')
     sp1.add_argument("--type", default="mRNA", help="The feature to scan for the attributes")
-    sp1.add_argument("--id", default=95, type=float, help="Minimum identity")
-    sp1.add_argument("--coverage", default=90, type=float, help="Minimum coverage")
-    sp1.add_argument("--nocase", default=False, action="store_true", help="Case insensitive lookup of attribute names")
-    sp1.add_argument("--child_ftype", default=None, help="Child featuretype to consider")
-    sp1.add_argument("--child_bp", default=None, type=int, help="Filter by total bp of children of chosen ftype")
+    g1 = sp1.add_argument_group('group1', 'Filter by identity/coverage attribute values')
+    g1.add_argument("--id", default=95, type=float, help="Minimum identity")
+    g1.add_argument("--coverage", default=90, type=float, help="Minimum coverage")
+    g1.add_argument("--nocase", default=False, action="store_true", help="Case insensitive lookup of attribute names")
+    g2 = sp1.add_argument_group('group2', 'Filter by child feature bp length')
+    g2.add_argument("--child_ftype", default=None, help="Child featuretype to consider")
+    g2.add_argument("--child_bp", default=None, type=int, help="Filter by total bp of children of chosen ftype")
     sp1.set_defaults(func = filter)
 
-    sp1 = sp.add_parser('fix', help = 'fix gff fields/tags',
+    sp1 = sp.add_parser('fix', help = 'fix gff fields using various options',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
-    opts = 'genbank tair phytozome jcvi ensembl mo17 w22 ph207 phb47'.split()
+    opts = 'genbank tair phytozome maize ensembl mo17 w22 ph207 phb47'.split()
     sp1.add_argument('--opt', default='ensembl', choices=opts, help = 'fix option')
     sp1.set_defaults(func = fix)
     
-    sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries',
+    sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries of parent features by range chaining child features',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument("--type", default="gene", help="Feature type for which to adjust boundaries")
     sp1.add_argument("--child_ftype", default="mRNA", help="Child featuretype(s) to use for identifying boundaries")
     sp1.set_defaults(func = fixboundaries)
+    
+    sp1 = sp.add_parser('fixpartials', help = 'fix 5/3 prime partial transcripts, locate nearest in-frame start/stop',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gff', help = 'input GFF3 file')
+    sp1.add_argument('fasta', help = 'genome fasta')
+    sp1.add_argument('partials', help = 'partials ids')
+    sp1.add_argument('outfile', help = 'output file')
+    sp1.set_defaults(func = fixpartials)
     
     sp1 = sp.add_parser('index', help = 'index gff db')
     sp1.add_argument('fi', help = 'input GFF3 file')
@@ -2469,11 +2355,98 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument("--contigs", help="Extract features from certain contigs")
     sp1.add_argument("--names", help="Extract features with certain names")
-    sp1.add_argument("--types", default=None, help="Extract features of certain feature types")
+    sp1.add_argument("--types", help="Extract features of certain feature types")
     sp1.add_argument("--children", default=0, choices=["1", "2"], help="Specify number of iterations: `1` grabs children, `2` grabs grand-children")
     sp1.add_argument("--tag", default="ID", help="Scan the tags for the names")
-    sp1.add_argument("--fasta", default=False, action="store_true", help="Write FASTA if available")
+    sp1.add_argument("--fasta", action="store_true", help="Write FASTA if available")
     sp1.set_defaults(func = extract)
+
+    sp1 = sp.add_parser('cluster', help = 'cluster transcripts based on shared splicing structure',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gff', help = 'input GFF3 file')
+    sp1.add_argument('outfile', help = 'output file')
+    sp1.add_argument("--slop", action="store_true",
+            help="allow minor variation in terminal 5'/3' UTR start/stop position")
+    sp1.add_argument("--inferUTR", action="store_true",
+            help="infer presence of UTRs from exon coordinates")
+    sp1.set_defaults(func = cluster)
+    
+    sp1 = sp.add_parser('chain', help = 'fill in parent features by chaining children',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gff', help = 'input GFF3 file')
+    sp1.add_argument('outfile', help = 'output file')
+    sp1.add_argument("--key", dest="attrib_key", default=None,
+                help="Attribute to use as `key` for chaining operation")
+    sp1.add_argument("--chain_ftype", default="mRNA",
+                help="GFF feature type to use for chaining operation")
+    sp1.add_argument("--parent_ftype", default="gene",
+                help="GFF feature type to use for the chained coordinates")
+    sp1.add_argument("--break", dest="break_chain", action="store_true",
+                help="Break long chains which are non-contiguous")
+    sp1.add_argument("--transfer_attrib", dest="attrib_list",
+                help="Attributes to transfer to parent feature; accepts comma" + \
+                " separated list of attribute names")
+    valid_merge_op = ('sum', 'min', 'max', 'mean', 'collapse')
+    sp1.add_argument("--transfer_score", dest="score_merge_op", choices=valid_merge_op,
+                help="Transfer value stored in score field to parent feature." + \
+                " Score is reported based on chosen operation")
+    sp1.set_defaults(func = chain)
+
+    sp1 = sp.add_parser('format', help = 'format gff file, change seqid, etc.',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gff', help = 'input GFF3 file')
+    sp1.add_argument('outfile', help = 'output file')
+    valid_multiparent_ops = ["split", "merge"]
+    g1 = sp1.add_argument_group('group1', 'Parameter(s) used to modify GFF attributes (9th column)')
+    g1.add_argument("--name", help="Add Name attribute from two-column file")
+    g1.add_argument("--note", help="Add Note attribute from two-column file")
+    g1.add_argument("--add_attribute", dest="attrib_files", help="Add new attribute(s) " + \
+                "from two-column file(s); attribute name comes from filename; " + \
+                "accepts comma-separated list of files")
+    g1.add_argument("--add_dbxref", dest="dbxref_files", help="Add new Dbxref value(s) (DBTAG:ID) " + \
+                "from two-column file(s). DBTAG comes from filename, ID comes from 2nd column; " + \
+                "accepts comma-separated list of files")
+    g1.add_argument("--nostrict", action="store_true",
+                 help="Disable strict parsing of GFF file and/or mapping file")
+    g1.add_argument("--remove_attr", dest="remove_attrs", help="Specify attributes to remove; " + \
+                "accepts comma-separated list of attribute names")
+    g1.add_argument("--copy_id_attr_to_name", action="store_true",
+                 help="Copy `ID` attribute value to `Name`, when `Name` is not defined")
+    g1.add_argument("--invent_name_attr", action="store_true",
+                 help="Invent `Name` attribute for 2nd level child features; " + \
+                "Formatted like PARENT:FEAT_TYPE:FEAT_INDEX")
+    g1.add_argument("--no_keep_attr_order", action="store_true",
+                 help="Do not maintain attribute order")
+    g2 = sp1.add_argument_group('group2', 'Parameter(s) used to modify content within columns 1-8')
+    g2.add_argument("--seqid", help="Switch seqid from two-column file. If not" + \
+                " a file, value will globally replace GFF seqid")
+    g2.add_argument("--source", help="Switch GFF source from two-column file. If not" + \
+                " a file, value will globally replace GFF source")
+    g2.add_argument("--type", help="Switch GFF feature type from two-column file. If not" + \
+                " a file, value will globally replace GFF type")
+    g2.add_argument("--fixphase", action="store_true", help="Change phase 1<->2, 2<->1")
+    g3 = sp1.add_argument_group('group3', 'Other parameter(s) to perform manipulations to the GFF file content')
+    g3.add_argument("--unique", action="store_true", help="Make IDs unique")
+    g3.add_argument("--chaindup", dest="duptype",
+                 help="Chain duplicate features of a particular GFF3 `type`," + \
+                      " sharing the same ID attribute")
+    g3.add_argument("--multiparents", default=None, choices=valid_multiparent_ops,
+                 help="Split/merge identical features (same `seqid`, `source`, `type` " + \
+                 "`coord-range`, `strand`, `phase`) mapping to multiple parents")
+    g3.add_argument("--remove_feats", help="Comma separated list of features to remove by type")
+    g3.add_argument("--remove_feats_by_ID", help="List of features to remove by ID;" + \
+                " accepts comma-separated list or list file")
+    g3.add_argument("--gsac", action="store_true",
+                 help="Fix GSAC GFF3 file attributes")
+    g3.add_argument("--invent_protein_feat", action="store_true",
+                 help="Invent a protein feature span (chain CDS feats)")
+    g3.add_argument("--process_ftype", default=None,
+                 help="Specify feature types to process; "
+                 "accepts comma-separated list of feature types")
+    g3.add_argument("--gff3", action="store_true", help="Print output in GFF3 format")
+    g3.add_argument("--make_gff_store", action="store_true",
+                 help="Store entire GFF file in memory during first iteration")
+    sp1.set_defaults(func = format)
 
     sp1 = sp.add_parser('note', help = 'extract certain attribute field for each feature',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
@@ -2481,8 +2454,15 @@ if __name__ == '__main__':
     sp1.add_argument("--type", default='gene', help="Only process certain types, multiple types allowed with comma")
     sp1.add_argument("--attribute", default="Note", help="Attribute field to extract, multiple fields allowd with comma")
     sp1.add_argument("--AED", type=float, help="Only extract lines with AED score <=")
-    sp1.add_argument("--exoncount", default=False, action="store_true", help="Get the exon count for each mRNA feat")
+    sp1.add_argument("--exoncount", action="store_true", help="Get the exon count for each mRNA feat")
     sp1.set_defaults(func = note)
+    
+    sp1 = sp.add_parser('splicecov', help = 'extract certain attribute field for each feature',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('gff', help = 'input GFF3 file')
+    sp1.add_argument('bed', help = 'junctions bed')
+    sp1.add_argument('outfile', help = 'output file')
+    sp1.set_defaults(func = splicecov)
 
     sp1 = sp.add_parser('picklong', help = 'pick longest transcript')
     sp1.add_argument('fi', help = 'input GFF3 file')

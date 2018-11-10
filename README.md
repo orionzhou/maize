@@ -80,7 +80,7 @@ that are often used are:
 - [Kent tools](http://hgdownload.cse.ucsc.edu/admin/jksrc.zip)
 
 Most of the scripts in this package contains multiple actions. To use
-the `fasta` example:
+the `fasta` or `gff` example:
 
 ```bash
 usage: fasta [-h]
@@ -109,12 +109,47 @@ available commands:
     cleanid             clean sequence IDs in a fasta file
     2aln                convert fasta alignment file to clustal format
     translate           translate nucleotide seqs to amino acid seqs
+
+usage: gff [-h]
+           {summary,filter,fix,fixboundaries,fixpartials,index,extract,cluster,chain,format,note,splicecov,picklong,2gtf,2tsv,2bed12,2fas,fromgtf,merge}
+           ...
+
+gff utilities
+
+optional arguments:
+  -h, --help            show this help message and exit
+
+available commands:
+  {summary,filter,fix,fixboundaries,fixpartials,index,extract,cluster,chain,format,note,splicecov,picklong,2gtf,2tsv,2bed12,2fas,fromgtf,merge}
+    summary             print summary stats for features of different types
+    filter              filter the gff file based on Identity and Coverage
+    fix                 fix gff fields using various options
+    fixboundaries       fix boundaries of parent features by range chaining
+                        child features
+    fixpartials         fix 5/3 prime partial transcripts, locate nearest in-
+                        frame start/stop
+    index               index gff db
+    extract             extract contig or features from gff file
+    cluster             cluster transcripts based on shared splicing structure
+    chain               fill in parent features by chaining children
+    format              format gff file, change seqid, etc.
+    note                extract certain attribute field for each feature
+    splicecov           extract certain attribute field for each feature
+    picklong            pick longest transcript
+    2gtf                convert gff3 to gtf format
+    2tsv                convert gff3 to tsv format
+    2bed12              convert gff3 to bed12 format
+    2fas                extract feature (e.g. CDS) seqs and concatenate
+    fromgtf             convert gtf to gff3 format
+    merge               merge several gff files into one
 ```
 
 Then you need to use one action, you can just do:
 
 ```bash
 python -m maize.formats.fasta size
+
+python -m maize.formats.gff fix
 ```
 
 This will tell you the options and arguments it expects.
