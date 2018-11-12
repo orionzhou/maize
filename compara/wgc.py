@@ -261,6 +261,72 @@ def callvnt(args):
             print('unknown type: %s' % opt)
     fhv.close()
 
+def wgc2vcf(args):
+    fo1, fo2 = args.tvcf, args.qvcf
+    qry, tgt = args.qry, args.tgt
+    fho1 = open(fo1, 'w')
+    fho2 = open(fo2, 'w')
+    vcfhead = '#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT'.split(' ')
+    fho1.write("##fileformat=VCFv4.2\n")
+    fho2.write("##fileformat=VCFv4.2\n")
+    fho1.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+    fho2.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+    fho1.write("\t".join(vcfhead + [qry]) + "\n")
+    fho2.write("\t".join(vcfhead + [tgt]) + "\n")
+    for line in must_open(args.fi):
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        tName, tStart, tEnd, srd, qName, qStart, qEnd, cid, opt, tseq, qseq = line.split()[:12]
+        tStart, tEnd, qStart, qEnd = int(tStart), int(tEnd), int(qStart), int(qEnd)
+        tsize, qsize = tEnd - tStart, qEnd - qStart
+        trow = [tName, tStart, '.', tseq, qseq, 50, '.', '.', 'GT', '1/1']
+        qrow = [qName, qStart, '.', qseq, tseq, 50, '.', '.', 'GT', '1/1']
+        if opt == 'snp':
+            assert len(qseq) == 1 and len(tseq) == 1, "error in seq size"
+            trow[1], qrow[1] = tStart + 1, qStart + 1
+            if srd == '-':
+                qrow[3], qrow[4] = revcomp(qseq), revcomp(tseq)
+        elif opt == 'indel':
+            if tseq[1:-1] == qseq[1:-1]:
+                continue
+            trow[3], trow[4] = tseq[:-1], qseq[:-1]
+            qrow[3], qrow[4] = qseq[:-1], tseq[:-1]
+            if srd == '-':
+                qrow[3], qrow[4] = revcomp(qseq[1:]), revcomp(tseq[1:])
+        else:
+            logging.error("unknown vnt type: %s" % opt)
+        fho1.write("\t".join(map(str, trow)) + "\n")
+        fho2.write("\t".join(map(str, qrow)) + "\n")
+    fho1.close()
+    fho2.close()
+
+def parseEff(args):
+    fhi = must_open(args.fi)
+    for line in fhi:
+        if line.startswith("#"):
+            continue
+        row = line.strip("\n").split("\t")
+        chrom, pos, vid, ref, alt, qual, filt, info = row[:8]
+        pos = int(pos)
+        refl, altl = len(ref), len(alt)
+        vnttype = ''
+        if refl == 1 and altl == 1:
+            vnttype = 'snp'
+        elif refl == 1 and altl > 1:
+            vnttype = 'ins'
+        elif refl > 1 and altl == 1:
+            vnttype = 'del'
+        else:
+            assert refl > 1 and altl > 1, "error: %s" % line
+            vnttype = 'mix'
+        if info == '.':
+            continue
+        ps = info.replace("ANN=",'').split("|")
+        allele, anno, impact, gname, gid, ttyppe, tid = ps[:7]
+        print("\t".join([chrom, str(pos), str(refl), str(altl), vnttype, 
+            anno, impact, gid, tid]))
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(
@@ -276,6 +342,20 @@ if __name__ == "__main__":
     sp1.add_argument('--vnt', default = 'vnt.bed', help = 'output variant BED file')
     sp1.set_defaults(func = callvnt)
     
+    sp1 = sp.add_parser("bed2vcf",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = "generate Vcf from wgc output Bed")
+    sp1.add_argument('fi', help = 'input 11-col Bed file')
+    sp1.add_argument('tvcf', help = 'output tgt vcf')
+    sp1.add_argument('qvcf', help = 'output qry vcf')
+    sp1.add_argument('--tgt', default = 'tgt', help = 'sample name for tgt')
+    sp1.add_argument('--qry', default = 'qry', help = 'sample name for qry')
+    sp1.set_defaults(func = wgc2vcf)
+    
+    sp1 = sp.add_parser("parseEff", help = "parse snpEff output")
+    sp1.add_argument('fi', help = 'input vcf file (snpEff output)')
+    sp1.set_defaults(func = parseEff)
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

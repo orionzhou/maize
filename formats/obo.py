@@ -301,6 +301,60 @@ def validate_term(term, so=None, method="verify"):
         logging.debug("Resolved term `{0}` to `{1}`".format(oterm, term))
     return term
 
+def get_lev2_ancestors(G, node):
+    ancs = nx.descendants(G, node)
+    ancs_lev1 = set(x for x in ancs if G.out_degree(x) == 0)
+    ancs_lev2 = set()
+    for x in ancs:
+        for y in G.successors(x):
+            if y in ancs_lev1:
+                ancs_lev2.add(x)
+                break
+    return ancs_lev2
+
+def gene_table(args):
+    (fi, fg, fd) = (args.fi, args.fg, args.fd)
+
+    if args.download:
+        if op.isfile(args.obo):
+            os.remove(args.obo)
+        url = "http://geneontology.org/ontology/go-basic.obo"
+        download_file(url, args.obo)
+    assert op.isfile(args.obo), "go-basic.obo not found: %s" % args.obo
+
+    dag = obo_parser.GODag(args.obo)
+    fhd = open(fd, "w")
+    fhd.write("goid\tnamespace\tlevel\tdepth\tname\n")
+    for go, node in dag.items():
+        if node.is_obsolete:
+            continue
+        fhd.write("%s\t%s\t%d\t%d\t%s\n" % (go, node.namespace,
+            node.level, node.depth, node.name))
+    fhd.close()
+    
+    fhi = open(fi, "r")
+    fhg = open(fg, "w")
+    for line in fhi:
+        line = line.strip("\n")
+        gid, gostr = line.split("\t")
+        gos = gostr.split(";")
+        gos = [x for x in gos if x]
+        gset = set()
+        for go in gos:
+            if not go in dag:
+                continue
+            ancs = dag[go].get_all_parents()
+            if len(ancs) == 0:
+                continue
+            gset.add(go)
+            if not args.no_propagate:
+                gset |= ancs
+        if len(gset) > 0:
+            for go in gset:
+                fhg.write("%s\t%s\n" % (gid, go))
+    fhi.close()
+    fhg.close()
+
 def plot(args):
     g = GODag(args.fi)
     g.write_dag()
@@ -319,7 +373,6 @@ def obo2tsv(args):
 
 if __name__ == '__main__':
     import argparse
-    import configparser
     parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'obo_file utilities'
@@ -331,9 +384,8 @@ if __name__ == '__main__':
             help = 'plot GO lineage'
     )
     sp1.add_argument('fi', help = 'obo file')
-    sp1.add_argument('--term', default = None, 
-            help = "write the parents and children" \
-            "of the query term")
+    sp1.add_argument('--term', default = None,
+            help = "write the parents and children of the query term")
     sp1.set_defaults(func = plot)
 
     sp1 = sp.add_parser("2tsv",
@@ -342,6 +394,18 @@ if __name__ == '__main__':
     )
     sp1.add_argument('fi', help = 'obo file')
     sp1.set_defaults(func = obo2tsv)
+
+    sp1 = sp.add_parser("gene_table",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'generate Gene2Go file'
+    )
+    sp1.add_argument('fi', help = 'input tsv file')
+    sp1.add_argument('fg', help = 'output gene2go table')
+    sp1.add_argument('fd', help = 'output GO discription table')
+    sp1.add_argument('--no_propagate', action='store_true', help='do not propogate counts to parent terms')
+    sp1.add_argument('--download', action='store_true', help='download/update go-basic.obo')
+    sp1.add_argument('--obo', default='/home/springer/zhoux379/data/db/go/go-basic.obo', help='path to go-basic.obo')
+    sp1.set_defaults(func = gene_table)
 
     args = parser.parse_args()
     if args.command:

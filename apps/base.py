@@ -361,6 +361,25 @@ def expand(args):
         sh(cmd)
         seen.add(oa)
 
+def mvfolder(args):
+    dirw = args.dirw
+    print("working in %s" % dirw)
+    os.chdir(dirw)
+    ary = os.listdir(dirw)
+    for item in ary:
+        print(item)
+        if item == 'temp' or item.startswith("sna"):
+            continue
+        cmd = "cp -rf %s %s.bak" % (item, item)
+        print("  " + cmd)
+        os.system(cmd)
+        cmd = "rm -rf %s" % item
+        print("  " + cmd)
+        os.system(cmd)
+        cmd = "mv %s.bak %s" % (item, item)
+        print("  " + cmd)
+        os.system(cmd)
+
 def fname():
     return sys._getframe().f_back.f_code.co_name
 
@@ -712,14 +731,19 @@ if __name__ == '__main__':
     sp1.add_argument('pos', help = 'file position')
     sp1.set_defaults(func = less)
 
-    sp2 = sp.add_parser("timestamp", help = "record timestamps for all files in the current folder")
-    sp2.add_argument('dir', help = 'directory path')
-    sp2.set_defaults(func = timestamp)
-   
-    sp3 = sp.add_parser("expand", help = "move files in subfolders into the current folder")
-    sp3.add_argument('subdir', nargs = "+", help = 'sub-directory path')
-    sp3.add_argument("--symlink", action="store_true", help="create symlink")
-    sp3.set_defaults(func = expand)
+    sp1 = sp.add_parser("timestamp", help = "record timestamps for all files in the current folder")
+    sp1.add_argument('dir', help = 'directory path')
+    sp1.set_defaults(func = timestamp)
+
+    sp1 = sp.add_parser("mvfolder", help='recursively move files/folders',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('dirw', nargs='?', default='/scratch.global/zhoux379', help='workding direcotry')
+    sp1.set_defaults(func = mvfolder)
+
+    sp1 = sp.add_parser("expand", help = "move files in subfolders into the current folder")
+    sp1.add_argument('subdir', nargs = "+", help = 'sub-directory path')
+    sp1.add_argument("--symlink", action="store_true", help="create symlink")
+    sp1.set_defaults(func = expand)
     
     args = parser.parse_args()
     if args.command:

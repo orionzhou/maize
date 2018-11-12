@@ -71,7 +71,7 @@ def translate(args):
         aa = rcd.seq.translate(to_stop = True)
         nrcd = SeqRecord(aa, id = sid, description = "")
         SeqIO.write(nrcd, sys.stdout, "fasta")
- 
+
 def extract(args):
     import re
     from maize.formats.bed import Bed
@@ -211,6 +211,34 @@ def merge(args):
             description = '') for rcd in seq_it]
         SeqIO.write(seqs, sys.stdout, "fasta")
         fh.close()
+
+def merge_pe(args):
+    (fi1, fi2, fo) = (args.fi1, args.fi2, args.fo)
+    assert op.isfile(fi1), "cannot read %s" % fi1
+    assert op.isfile(fi2), "cannot read %s" % fi2
+    
+    fhi2 = open(fi1, "rb")
+    fhi1 = open(fi2, "rb")
+    fho = open(fo, "wb")
+    
+    for lst1, lst2 in zip(read_fasta(fi1, fhi1), read_fasta(fi2, fhi2)):
+        seqid1, seq1 = lst1
+        seqid2, seq2 = lst2
+        assert seqid1 == seqid2 and len(seq1) == len(seq2), \
+                "%s: seq[%d] != %s: seq[%d]" % \
+                (seqid1, len(seq1), seqid2, len(seq2))
+        if args.join:
+            fho.write((">%s\n%s\n" % (seqid1, seq1+seq2)).encode('utf8'))
+        else:
+            if args.nosuffix:
+                fho.write((">%s\n%s\n" % (seqid1, seq1)).encode('utf8'))
+                fho.write((">%s\n%s\n" % (seqid2, seq2)).encode('utf8'))
+            else:
+                fho.write((">%s.1\n%s\n" % (seqid1, seq1)).encode('utf8'))
+                fho.write((">%s.2\n%s\n" % (seqid2, seq2)).encode('utf8'))
+    fhi1.close()
+    fhi2.close()
+    fho.close()
 
 def gaps(args):
     import re
@@ -384,10 +412,6 @@ if __name__ == "__main__":
     sp1.add_argument('--step', type = int, default = 50, help = 'window step')
     sp1.set_defaults(func = tile)
 
-    sp1 = sp.add_parser("merge", help = 'merge multiple fasta files and update IDs')
-    sp1.add_argument('cfg', help = 'config file (a text file with identifier followed by the absolute path of fasta in each line)')
-    sp1.set_defaults(func = merge)
- 
     sp1 = sp.add_parser("gaps", help = "report gap ('N's) locations in fasta sequences",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input file (fasta)')
@@ -407,20 +431,34 @@ if __name__ == "__main__":
     sp1.add_argument('--prefix_ctg', default = 'ctg', help = 'prefix for short scaffolds/contigs')
     sp1.set_defaults(func = rename)
     
-    sp1 = sp.add_parser("rmdot", help = 'replace periods (.) in an alignment fasta by dashes (-)')
-    sp1.add_argument('fi', help = 'input fasta file')
+    sp1 = sp.add_parser("merge", help='merge multiple fasta files and update IDs')
+    sp1.add_argument('cfg', help='config file (a text file with identifier followed by the absolute path of fasta in each line)')
+    sp1.set_defaults(func = merge)
+ 
+    sp1 = sp.add_parser("merge_pe",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'merge two (paired) fasta files into one')
+    sp1.add_argument('fi1', help='input fasta 1')
+    sp1.add_argument('fi2', help='input fasta 2')
+    sp1.add_argument('fo', help='output fasta file')
+    sp1.add_argument('--nosuffix', action="store_true", help='disable adding *.1 and *.2 sufix')
+    sp1.add_argument('--join', action="store_true", help='join seqs of two reads to make one long read')
+    sp1.set_defaults(func = merge_pe)
+
+    sp1 = sp.add_parser("rmdot", help='replace periods (.) in an alignment fasta by dashes (-)')
+    sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = rmdot)
     
-    sp2 = sp.add_parser("cleanid", help = 'clean sequence IDs in a fasta file')
-    sp2.add_argument('fi', help = 'input fasta file')
+    sp2 = sp.add_parser("cleanid", help='clean sequence IDs in a fasta file')
+    sp2.add_argument('fi', help='input fasta file')
     sp2.set_defaults(func = cleanid)
     
-    sp1 = sp.add_parser("2aln", help = 'convert fasta alignment file to clustal format')
-    sp1.add_argument('fi', help = 'input alignment (.fas)')
+    sp1 = sp.add_parser("2aln", help='convert fasta alignment file to clustal format')
+    sp1.add_argument('fi', help='input alignment (.fas)')
     sp1.set_defaults(func = fas2aln)
 
-    sp1 = sp.add_parser("translate", help = 'translate nucleotide seqs to amino acid seqs')
-    sp1.add_argument('fi', help = 'input fasta file')
+    sp1 = sp.add_parser("translate", help='translate nucleotide seqs to amino acid seqs')
+    sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = translate)
     
     args = parser.parse_args()
