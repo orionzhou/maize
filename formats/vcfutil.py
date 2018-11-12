@@ -238,7 +238,7 @@ def wgc2vcf(args):
         fho2.write("\t".join(map(str, qrow)) + "\n")
     fho1.close()
     fho2.close()
- 
+
 def ase(args):
     lsth = ["chr", "pos", "ref", "alt", "qual", "depth", "dpr", "dpa"]
     print("\t".join(lsth))
@@ -289,8 +289,8 @@ def hybrid(args):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'vcf utilities'
+        formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+        description = 'vcf utilities'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
     

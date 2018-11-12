@@ -195,12 +195,12 @@ class GODag(dict):
         try:
             rec = self[term]
         except:
-            print >>sys.stderr, "Term %s not found!" % term
+            logging.error("Term %s not found!" % term)
             return
-        print >>sys.stderr, rec
+        logging.error(rec)
         if verbose:
-            print >>sys.stderr, "all parents:", rec.get_all_parents()
-            print >>sys.stderr, "all children:", rec.get_all_children()
+            logging.error("all parents:", rec.get_all_parents())
+            logging.error("all children:", rec.get_all_children())
 
         return rec
 
@@ -245,10 +245,10 @@ class GODag(dict):
                 continue
 
         if verbose:
-            print >>sys.stderr, G.to_string()
+            logging.error(G.to_string())
 
-        print >>sys.stderr, "lineage info for terms %s written to %s" % \
-                ([rec.id for rec in recs], lineage_img)
+        logging.error("lineage info for terms %s written to %s" % \
+                ([rec.id for rec in recs], lineage_img))
 
         G.draw(lineage_img, prog="dot")
 
@@ -263,7 +263,7 @@ class GODag(dict):
                     bad_terms.add(term)
             terms.update(parents)
         if bad_terms:
-            print >>sys.stderr, "terms not found:", bad_terms
+            logging.error("terms not found:", bad_terms)
 
 def load_GODag():
     """

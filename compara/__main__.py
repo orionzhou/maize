@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
-Cluster of comparative genomics analysis methods: SynFind and QUOTA-ALIGN algorithms, synteny analysis, QC, etc. 
+Cluster of comparative genomics analysis methods: SynFind and QUOTA-ALIGN algorithms, synteny analysis, QC, etc.
 """
 
 from maize.apps.base import dmain

@@ -341,12 +341,12 @@ def bigraph_test():
     g.add_edge(7, 1, ">", ">")
     g.add_edge(7, 5, "<", ">")
     g.add_edge(8, 6, ">", "<")
-    print g
+    print(g)
     g.write()
     for path in g.iter_paths():
         p, oo = g.path(path)
-        print p
-        print oo
+        print(p)
+        print(oo)
 
     #g.draw("demo.png", verbose=True)
 
@@ -479,6 +479,22 @@ def longest_path_weighted_nodes(G, source, target, weights=None):
 
     path = [tree[x] for x in path[::-1]]
     return path, score[ti]
+
+def connected_component(args):
+    fho = open(args.fo, "w")
+    
+    ary = np.genfromtxt(args.fi, names = True, dtype = None)
+    edges = map(lambda ary: (ary[0], ary[1]), ary)
+    G = nx.Graph()
+    G.add_edges_from(edges)
+    conn = nx.connected_components(G)
+    
+    fho.write("clu\tid\n")
+    cluster = 1
+    for names in conn:
+        for name in names:
+            fho.write("%d\t%s\n" % (cluster, str(name, 'utf-8')))
+        cluster += 1
 
 if __name__ == '__main__':
     import doctest

@@ -1,0 +1,12 @@
+#PBS -l nodes=1:ppn=1,walltime=50:00:00
+#PBS -m ae
+#PBS -M zhoux379@umn.edu
+#PBS -q small
+
+QRY=${QRY:-HM340.PB}
+TGT=${TGT:-HM101}
+
+echo QRY=$QRY
+echo TGT=$TGT
+
+

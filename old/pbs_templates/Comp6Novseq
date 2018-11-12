@@ -1,0 +1,34 @@
+#PBS -l nodes=1:ppn=24,walltime=20:00:00
+#PBS -m ae
+#PBS -M zhoux379@umn.edu
+#PBS -q small
+
+PPN=${PPN:-24}
+QRY=${QRY:-HM004}
+TGT=${TGT:-HM101}
+
+echo QRY = $QRY
+echo TGT = $TGT
+
+qry_fas=$data/genome/$QRY/11_genome.fas
+tgt_fas=$data/genome/$TGT/11_genome.fas
+qry_2bit=$data/db/blat/$QRY.2bit
+tgt_2bit=$data/db/blat/$TGT.2bit
+qry_size=$data/genome/$QRY/15.sizes
+tgt_size=$data/genome/$TGT/15.sizes
+qry_size_bed=$data/genome/$QRY/15.bed
+tgt_size_bed=$data/genome/$TGT/15.bed
+qry_gap=$data/genome/$QRY/16.gap.bed
+tgt_gap=$data/genome/$TGT/16.gap.bed
+
+dirw=$data/misc3/${QRY}_${TGT}/41_novseq
+cd $dirw
+
+NR=/panfs/roc/rissdb/blast/current/nt
+blastn -db $NR -outfmt \
+  '6 qseqid qstart qend qlen sseqid sstart send slen length nident mismatch gaps evalue bitscore qseq sseq' \
+  -evalue 0.1 -word_size 15 -gapopen 5 -gapextend 2 \
+  -reward 2 -penalty -3 -max_target_seqs 50 -num_threads $PPN \
+  -query 01.fas -out 11.blastnr.1.tbl
+
+touch $data/misc3/${QRY}_${TGT}/cps/${JOB}

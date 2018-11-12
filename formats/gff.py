@@ -23,37 +23,25 @@ Valid_strands = ('+', '-', '?', '.')
 Valid_phases = ('0', '1', '2', '.')
 FastaTag = "##FASTA"
 RegionTag = "##sequence-region"
-valid_gff_parent_child = {"match": "match_part",
-                          "cDNA_match": "match_part",
-                          "EST_match": "match_part",
-                          "nucleotide_to_protein_match": "match_part",
-                          "expressed_sequence_match": "match_part",
-                          "protein_match": "match_part",
-                          "transposable_element": "transposon_fragment",
-                          "gene": "mRNA,rRNA,tRNA,miRNA,ncRNA,lnc_RNA,snRNA,snoRNA,pre_miRNA,SRP_RNA,RNase_MRP_RNA",
-                          "mRNA": "exon,CDS,five_prime_UTR,three_prime_UTR",
-                          "rRNA": "exon",
-                          "tRNA": "exon",
-                          "miRNA": "exon",
-                          "ncRNA": "exon",
-                          "lnc_RNA": "exon",
-                          "snRNA": "exon",
-                          "snoRNA": "exon",
-                          "pre_miRNA": "exon",
-                          #"SRP_miRNA": "exon",
-                          "SRP_RNA": "exon",
-                          "RNase_MRP_miRNA": "exon",
-                         }
-valid_gff_type = set(list(valid_gff_parent_child.keys()) + 
-        list(chain.from_iterable(x.split(",") for x in valid_gff_parent_child.values())))
-valid_gff_to_gtf_type = {"exon": "exon",
-                         "pseudogenic_exon": "exon",
-                         "CDS": "CDS",
-                         "start_codon": "start_codon",
-                         "stop_codon": "stop_codon",
-                         "five_prime_UTR": "5UTR",
-                         "three_prime_UTR": "3UTR"
-                        }
+valid_gene_type = 'gene'
+valid_rna_type = """
+    mRNA rRNA tRNA
+    miRNA ncRNA lnc_RNA snRNA snoRNA pre_miRNA SRP_RNA RNase_MRP_RNA
+    pseudogenic_transcript
+""".split()
+valid_mrna_child_type = "exon CDS five_prime_UTR three_prime_UTR".split()
+d1 = {x: ["match_part"] for x in 'match cDNA_match EST_match nucleotide_to_protein_match expressed_sequence_match protein_match'.split()}
+d2 = {"transposable_element": ["transposon_fragment"]}
+d3 = {"gene": valid_rna_type, 'mRNA': valid_mrna_child_type}
+d4 = {x: ['exon'] for x in valid_rna_type if x != 'mRNA'}
+valid_gff_parent_child = {**d1, **d2, **d3, **d4}
+valid_gff_type = set(list(valid_gff_parent_child.keys()) +
+        list(chain.from_iterable(valid_gff_parent_child.values())))
+valid_gff_to_gtf_type = {
+    "exon": "exon", "pseudogenic_exon": "exon", "CDS": "CDS",
+    "start_codon": "start_codon", "stop_codon": "stop_codon",
+    "five_prime_UTR": "5UTR", "three_prime_UTR": "3UTR"
+}
 reserved_gff_attributes = ("ID", "Name", "Alias", "Parent", "Target",
                            "Gap", "Derives_from", "Note", "Dbxref",
                            "Ontology_term", "Is_circular")
@@ -930,8 +918,8 @@ def fix(args):
                 g.set_attr("Note", "[%s]%s" % (g.get_attr("Note"), conf))
             print(g)
     elif opt == 'ensembl':
-        #chrids = ["%d" % x for x in range(1, 11)]
         seqtypes = ["chromosome", "contig",'supercontig','biological_region']
+        id_map = dict()
         for g in gff:
             if g.type in seqtypes:
                 continue
@@ -940,16 +928,18 @@ def fix(args):
             elif g.type == 'pseudogene':
                 g.type = 'gene'
             elif g.type == 'pseudogenic_transcript':
-                g.type = 'mRNA'
-            elif g.type not in valid_gff_type:
-                logging.info("type[%s] not allowed" % g.type)
-                sys.exit(1)
-            elif g.type == "transcript":
+                valid_pseudo_biotype = { 'pseudogene':'mRNA',
+                                        'tRNA_pseudogene':'tRNA' }
                 biotype = g.get_attr('biotype')
-                if biotype and biotype == 'protein_coding':
-                    g.type = "mRNA"
-                else:
-                    continue
+                assert biotype and biotype in valid_pseudo_biotype, \
+                    'unknown biotype: %s' % g.get_attr("ID")
+                #g.type = valid_pseudo_biotype[biotype]
+            elif g.type not in valid_gff_type:
+                logging.error("type[%s] not allowed" % g.type)
+                sys.exit(1)
+            elif g.type in valid_mrna_child_type:
+                if g.get_attr("ID"):
+                    g.set_attr("ID", None)
             if g.get_attr("ID"):
                 ary = g.get_attr("ID").split(":")
                 if len(ary) == 2:
@@ -959,6 +949,16 @@ def fix(args):
                 if len(ary) == 2:
                     g.set_attr("Parent", ary[1])
             g.update_attributes()
+            if g.type in valid_rna_type and g.get_attr("ID") == g.get_attr("Parent"):
+                oid = g.get_attr("ID")
+                nid = g.get_attr("ID") + ".1"
+                g.set_attr("ID", nid)
+                assert oid not in id_map, 'more than 2 children: %s' % oid
+                id_map[oid] = nid
+                g.update_attributes()
+            if g.type in ['exon','CDS'] and g.get_attr("Parent") in id_map:
+                g.set_attr("Parent", id_map[g.get_attr("Parent")])
+                g.update_attributes()
             print(g)
     elif opt == 'mo17':
         gdic = dict()
@@ -1012,7 +1012,7 @@ def fix(args):
             print(g)
     else:
         logging.error("unknown opt: %s" % opt)
- 
+
 def extract(args):
     """
     %prog extract gffile
@@ -1734,8 +1734,7 @@ def get_upstream_coords(uSite, uLen, seqlen, feat, children_list, gffdb):
             children.append((c.start, c.stop))
 
         if not children:
-            print >>sys.stderr, "[warning] %s has no children with type %s" \
-                                    % (feat.id, ','.join(children_list))
+            logging.error("%s has no children with type %s" % (feat.id, ','.join(children_list)))
             return None, None
 
         cds_start, cds_stop = range_minmax(children)
@@ -1751,8 +1750,7 @@ def get_upstream_coords(uSite, uLen, seqlen, feat, children_list, gffdb):
 
     actual_uLen = upstream_stop - upstream_start + 1
     if actual_uLen < uLen:
-        print >>sys.stderr, "[warning] sequence upstream of {0} ({1} bp) is less than upstream length {2}" \
-                .format(feat.id, actual_uLen, uLen)
+        logging.error("sequence upstream of {0} ({1} bp) is less than upstream length {2}" .format(feat.id, actual_uLen, uLen))
         return None, None
 
     return upstream_start, upstream_stop
@@ -1797,11 +1795,13 @@ def parse_feature_param(feature):
 def pick_longest(args):
     gffile = args.fi
     g = make_index(gffile)
-    for gene in g.features_of_type('gene'):
+    for gene in g.features_of_type("gene"):
         rnaP, rnalenP = None, 0
         for rna in g.children(gene, level = 1):
+            #if gene['ID'][0].startswith("EPlORYSAT000373610"):
+            #    logging.debug(gene['ID'][0], rna.featuretype, rna['ID'])
             rnalen = 0
-            if rna.featuretype == 'mRNA':
+            if rna.featuretype == "mRNA":
                 for cds in g.children(rna, featuretype = 'CDS'):
                     rnalen += cds.end - cds.start + 1
             else:
@@ -1871,8 +1871,10 @@ def gff2tsv(args):
             for feat in db.children(rna):
                 chrom0, start, end, srd0, etype = feat.chrom, feat.start, \
                         feat.end, feat.strand, feat.featuretype
-                assert chrom0 == chrom and srd0 == srd, 'sub-feat error'
-                ary = (gid, tid, ttype, etype, chrom, start, end, srd)
+                assert chrom0 == chrom, 'sub-feat chrom error: %s' % rna["ID"]
+                if srd0 != srd:
+                    logging.warning("sub-feat strand != parent: %s" % rna["ID"])
+                ary = (gid, tid, ttype, etype, chrom, start, end, srd0)
                 print("\t".join(str(x) for x in ary))
 
 def gff2gb(args):
@@ -2069,7 +2071,7 @@ def gff2fas(args):
                     children.append((child, c))
 
                 if not children:
-                    print >>sys.stderr, "[warning] %s has no children with type %s" % (feat.id, ','.join(children_list))
+                    logging.error("%s has no children with type %s" % (feat.id, ','.join(children_list)))
                     continue
             else:
                 rc = True if feat.strand == '-' else False

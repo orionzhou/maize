@@ -1,0 +1,8 @@
+#PBS -l nodes=1:ppn=1,walltime=10:00:00
+#PBS -m ae
+#PBS -M zhoux379@umn.edu
+#PBS -q small
+
+module load sratoolkit/2.5.4
+cd /home/springer/zhoux379/Data/misc2/rnaseq/ril105/03.sra
+fastq-dump --gzip --split-files -outdir ../05.reads SRR650905.sra

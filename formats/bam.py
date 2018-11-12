@@ -6,20 +6,22 @@ import os.path as op
 import sys
 import logging
 from astropy.table import Table, Column
+import numpy as np
+from string import Template
 import pysam
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
-from maize.formats.pbs import PbsJob, create_job_chain
 
 class BamStat(object):
+    
     def __init__(self):
         stats = '''
             pair unpair
             pair_bad pair_dup
             unpair_bad unpair_dup
             pair_map pair_orphan pair_unmap
-            unpair_map unpair_unmap 
+            unpair_map unpair_unmap
             pair_map_hq pair_orphan_hq unpair_map_hq
             pair_map0 pair_orphan0 unpair_map0
             pair_map_hq0 pair_orphan_hq0 unpair_map_hq0'''.split()
@@ -63,7 +65,7 @@ def is_perfect_match(aln):
         return True
     else:
         return False
-    
+
 def bam_stat(args):
     bam = pysam.AlignmentFile(args.fi)
     s = BamStat()
@@ -208,7 +210,6 @@ def bam_binstat(args):
 
 if __name__ == "__main__":
     import argparse
-    import configparser
     parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             description = 'BAM utilities'
@@ -227,17 +228,17 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = 'filter SAM/BAM file'
     )
-    sp1.add_argument('fi', help = 'input SAM/BAM file')
-    sp1.add_argument('fo', help = 'output BAM file')
+    sp1.add_argument('fi', help='input SAM/BAM file')
+    sp1.add_argument('fo', help='output BAM file')
     sp1.set_defaults(func = bam_filter)
 
     sp1 = sp.add_parser("binstat",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = 'count reads in bins'
     )
-    sp1.add_argument('fi', help = 'input SAM/BAM file')
-    sp1.add_argument('--ws', default = 1, help = 'window size - 1: 1Mb, 2: 100Kb')
-    sp1.add_argument('--mq', default = 1, help = 'mapping quality threshold- 1: 20, 2: 10')
+    sp1.add_argument('fi', help='input SAM/BAM file')
+    sp1.add_argument('--ws', default=1, help='window size - 1: 1Mb, 2: 100Kb')
+    sp1.add_argument('--mq', default=1, help='mapping quality threshold- 1: 20, 2: 10')
     sp1.set_defaults(func = bam_binstat)
 
     args = parser.parse_args()

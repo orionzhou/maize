@@ -152,10 +152,10 @@ class BlockFile (BaseFile):
         ngenes = ei - si + 1
         if debug:
             r = "{0}:{1}-{2}".format(chr, start.start, end.end)
-            print >> sys.stderr, "Column {0}: {1} - {2} ({3})".\
-                    format(i, start.accn, end.accn, r)
-            print >> sys.stderr, "  {0} .. {1} ({2}) features .. {3}".\
-                    format(chr, ngenes, len(ocol), orientation)
+            logging.error("Column {0}: {1} - {2} ({3})".\
+                    format(i, start.accn, end.accn, r))
+            logging.error("  {0} .. {1} ({2}) features .. {3}".\
+                    format(chr, ngenes, len(ocol), orientation))
 
         span = abs(start.start - end.end)
 
@@ -236,8 +236,7 @@ class SimpleFile (object):
             if order and a not in order:
                 if c not in order:
                     check = True
-                    print >> sys.stderr, \
-                    '''{} {} {} {} can not found in bed files.'''.format(a, b, c, d)
+                    logging.error('''{} {} {} {} can not found in bed files.'''.format(a, b, c, d))
                 else:
                     a, b, c, d = c, d, a, b
             if orientation == '-':
@@ -245,8 +244,8 @@ class SimpleFile (object):
             score = int(score)
             self.blocks.append((a, b, c, d, score, orientation, hl))
         if check:
-            print >> sys.stderr, '''Error: some genes in blocks can't be found,
-please rerun after making sure that bed file agree with simple file.'''
+            logging.error('''Error: some genes in blocks can't be found,
+please rerun after making sure that bed file agree with simple file.''')
             exit(1)
 
 def _score(cluster):
@@ -411,7 +410,7 @@ def get_bed_filenames(hintfile, args):
             logging.debug("Assuming --qbed={0} --sbed={1}".\
                          format(args.qbed, args.sbed))
         except:
-            print >> sys.stderr, "Options --qbed and --sbed are required"
+            logging.error("Options --qbed and --sbed are required")
             sys.exit(1)
 
     return args.qbed, args.sbed
@@ -790,12 +789,12 @@ def simple(args):
     logging.debug("A total of {0} blocks written to `{1}`.".format(i + 1, simplefile))
 
     if coords:
-        print >> sys.stderr, "Total block span in {0}: {1}".format(qbed.filename, \
-                        human_size(atotalbase, precision=2))
-        print >> sys.stderr, "Total block span in {0}: {1}".format(sbed.filename, \
-                        human_size(btotalbase, precision=2))
-        print >> sys.stderr, "Ratio: {0:.1f}x".format(\
-                        max(atotalbase, btotalbase) * 1. / min(atotalbase, btotalbase))
+        logging.info("Total block span in {0}: {1}".format(qbed.filename, \
+                        human_size(atotalbase, precision=2)))
+        logging.info("Total block span in {0}: {1}".format(sbed.filename, \
+                        human_size(btotalbase, precision=2)))
+        logging.info("Ratio: {0:.1f}x".format(\
+                        max(atotalbase, btotalbase) * 1. / min(atotalbase, btotalbase)))
 
     if bed:
         bedfile = simplefile + ".bed"
@@ -909,10 +908,10 @@ def summary(args):
     nclusters = len(clusters)
     nanchors = [len(c) for c in clusters]
     nranchors = [_score(c) for c in clusters]  # non-redundant anchors
-    print >> sys.stderr, "A total of {0} (NR:{1}) anchors found in {2} clusters.".\
-                  format(sum(nanchors), sum(nranchors), nclusters)
-    print >> sys.stderr, "Stats:", SummaryStats(nanchors)
-    print >> sys.stderr, "NR stats:", SummaryStats(nranchors)
+    logging.info("A total of {0} (NR:{1}) anchors found in {2} clusters.".\
+                  format(sum(nanchors), sum(nranchors), nclusters))
+    logging.info("Stats:", SummaryStats(nanchors))
+    logging.info("NR stats:", SummaryStats(nranchors))
 
     prefix = args.prefix
     if prefix:
@@ -942,24 +941,22 @@ def stats(args):
         if atoms[1] != '.':
             orthologous += 1
 
-    print >> sys.stderr, "Total lines: {0}".format(total)
+    logging.info("Total lines: {0}".format(total))
     for i, n in sorted(counts.items()):
-        print >> sys.stderr, "Count {0}: {1}".format(i, percentage(n, total))
+        logging.info("Count {0}: {1}".format(i, percentage(n, total)))
 
-    print >> sys.stderr
+    logging.info("")
 
     matches = sum(n for i, n in counts.items() if i != 0)
-    print >> sys.stderr, "Total lines with matches: {0}".\
-                format(percentage(matches, total))
+    logging.info("Total lines with matches: {0}".format(percentage(matches, total)))
     for i, n in sorted(counts.items()):
         if i == 0:
             continue
 
-        print >> sys.stderr, "Count {0}: {1}".format(i, percentage(n, matches))
+        logging.info("Count {0}: {1}".format(i, percentage(n, matches)))
 
-    print >> sys.stderr
-    print >> sys.stderr, "Orthologous matches: {0}".\
-                format(percentage(orthologous, matches))
+    logging.info("")
+    logging.info("Orthologous matches: {0}".format(percentage(orthologous, matches)))
 
 def get_best_pair(qs, ss, ts):
     pairs = {}
@@ -1045,7 +1042,7 @@ def mcscan(args):
     fw = must_open(ofile, "w")
 
     tracks = []
-    print >> sys.stderr, "Chain started: {0} blocks".format(len(ranges))
+    logging.info("Chain started: {0} blocks".format(len(ranges)))
     iteration = 0
     while ranges:
         if iteration >= args.iter:
@@ -1064,7 +1061,7 @@ def mcscan(args):
         else:
             msg += " done!"
 
-        print >> sys.stderr, msg
+        logging.info(msg)
         iteration += 1
 
     mbed = []
@@ -1134,7 +1131,7 @@ def depth(args):
     qgenome = op.basename(qbed.filename).split(".")[0]
     sgenome = op.basename(sbed.filename).split(".")[0]
     qtag = "Genome {0} depths".format(qgenome)
-    print >> sys.stderr, "{}:".format(qtag)
+    logging.info("{}:".format(qtag))
     dsq, details = range_depth(qranges, len(qbed))
     if depthfile:
         fw = open(depthfile, "w")
@@ -1144,7 +1141,7 @@ def depth(args):
         return
 
     stag = "Genome {0} depths".format(sgenome)
-    print >> sys.stderr, "{}:".format(stag)
+    logging.info("{}:".format(stag))
     dss, details = range_depth(sranges, len(sbed))
     if depthfile:
         write_details(fw, details, sbed)
@@ -1182,7 +1179,7 @@ def depth(args):
     root.text(.5, .97, vs, ha="center", va="center", color="darkslategray")
     root.text(.5, .925, pattern, ha="center", va="center",
                                  color="tomato", size=16)
-    print >> sys.stderr, title
+    logging.info(title)
 
     normalize_axes(root)
 

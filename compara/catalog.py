@@ -578,10 +578,9 @@ def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
     longest_family = max(families, key=lambda x: len(x))
 
     # generate reports
-    print >>sys.stderr, "Proximal paralogues (dist=%d):" % N
-    print >>sys.stderr, "Total %d genes in %d families" % (ngenes, nfamilies)
-    print >>sys.stderr, "Longest families (%d): %s" % (len(longest_family),
-        ",".join(longest_family))
+    logging.info("Proximal paralogues (dist=%d):" % N)
+    logging.info("Total %d genes in %d families" % (ngenes, nfamilies))
+    logging.info("Longest families (%d): %s" % (len(longest_family), ",".join(longest_family)))
 
     return families
 
