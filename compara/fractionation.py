@@ -121,7 +121,7 @@ def main():
     else:
         print('Error: need to specify a sub command\n')
         parser.print_help()
-        
+
 def offdiag(args):
     """
     %prog offdiag diploid.napus.1x1.lifted.anchors

@@ -106,9 +106,9 @@ def extract(args):
                         end = len(db[sid])
                         bed.add("%s\t%d\t%d\n" % (sid, beg, end))
                     else:
-                        eprint("%s not in db => skipped" % sid)
+                        logging.error("%s not in db => skipped" % sid)
                 else:
-                    eprint("%s: unknown locstr => skipped" % loc)
+                    logging.error("%s: unknown locstr => skipped" % loc)
     
     rcds = []
     for b in bed:

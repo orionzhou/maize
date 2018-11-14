@@ -14,11 +14,10 @@ from itertools import groupby
 from pyfaidx import Fasta
 from pyliftover import LiftOver
 
-from jcvi.formats.base import must_open
-from jcvi.formats.sizes import Sizes
-from jcvi.utils.cbook import percentage
-from jcvi.apps.base import OptionParser, ActionDispatcher, need_update, sh
-
+from maize.formats.base import must_open
+from maize.formats.sizes import Sizes
+from maize.utils.cbook import percentage
+from maize.apps.base import need_update, sh
 
 class VcfLine:
 
@@ -41,7 +40,6 @@ class VcfLine:
             self.alt, self.qual, self.filter, self.info,
             self.format, self.genotype
             ))
-
 
 class UniqueLiftover(object):
 
@@ -99,29 +97,72 @@ class UniqueLiftover(object):
             logging.error(exception_string)
         return None, None
 
-
-CM = dict(zip([str(x) for x in range(1, 23)],
-          ["chr{0}".format(x) for x in range(1, 23)]) + \
-          [("X", "chrX"), ("Y", "chrY"), ("MT", "chrM")])
-
+CM = {**{str(x): "chr%d" % x for x in range(1,23)}, **{"X":"chrX", "Y":"chrY", "MT":"chrM"}}
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'vcf utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('from23andme', 'convert 23andme file to vcf file'),
-        ('fromimpute2', 'convert impute2 output to vcf file'),
-        ('liftover', 'lift over coordinates in vcf file'),
-        ('location', 'given SNP locations characterize the locations'),
-        ('mstmap', 'convert vcf format to mstmap input'),
-        ('refallele', 'make refAllele file'),
-        ('sample', 'sample subset of vcf file'),
-        ('summary', 'summarize the genotype calls in table'),
-        ('uniq', 'retain only the first entry in vcf file'),
-        ('validate', 'fast validation of vcf file'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
+    sp1 = sp.add_parser('from23andme', help='convert 23andme file to vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = from23andme)
 
+    sp1 = sp.add_parser('fromimpute2', help='convert impute2 output to vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = fromimpute2)
+
+    sp1 = sp.add_parser('liftover', help='lift over coordinates in vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+
+    sp1.set_defaults(func = liftover)
+    sp1 = sp.add_parser('location', help='given SNP locations characterize the locations',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = location)
+
+    sp1 = sp.add_parser('mstmap', help='convert vcf format to mstmap input',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = mstmap)
+
+    sp1 = sp.add_parser('refallele', help='make refAllele file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = refallele)
+
+    sp1 = sp.add_parser('sample', help='sample subset of vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = sample)
+
+    sp1 = sp.add_parser('summary', help='summarize the genotype calls in table',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = summary)
+
+    sp1 = sp.add_parser('uniq', help='retain only the first entry in vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = uniq)
+
+    sp1 = sp.add_parser('validate', help='fast validation of vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = validate)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def validate(args):
     """
@@ -161,7 +202,6 @@ def validate(args):
     logging.debug("Match REF: {}".format(percentage(match_ref, total)))
     logging.debug("Match ALT: {}".format(percentage(match_alt, total)))
 
-
 def uniq(args):
     """
     %prog uniq vcffile
@@ -181,7 +221,7 @@ def uniq(args):
     data = []
     for row in fp:
         if row[0] == '#':
-            print row.strip()
+            print(row.strip())
             continue
         v = VcfLine(row)
         data.append(v)
@@ -189,11 +229,10 @@ def uniq(args):
     for pos, vv in groupby(data, lambda x: x.pos):
         vv = list(vv)
         if len(vv) == 1:
-            print vv[0]
+            print(vv[0])
             continue
         bestv = max(vv, key=lambda x: float(parse_qs(x.info)["R2"][0]))
-        print bestv
-
+        print(bestv)
 
 def sample(args):
     """
@@ -231,9 +270,8 @@ def sample(args):
     logging.debug("{0} records kept to `{1}`".format(nkept, kept))
     logging.debug("{0} records withheld to `{1}`".format(nwithheld, withheld))
 
-
 def get_vcfstanza(fastafile, fasta, sampleid="SAMP_001"):
-    from jcvi.formats.base import timestamp
+    from maize.formats.base import timestamp
     # VCF spec
     m = "##fileformat=VCFv4.1\n"
     m += "##fileDate={0}\n".format(timestamp())
@@ -246,7 +284,6 @@ def get_vcfstanza(fastafile, fasta, sampleid="SAMP_001"):
     header = "CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n".split() + [sampleid]
     m += "#" + "\t".join(header)
     return m
-
 
 def fromimpute2(args):
     """
@@ -264,7 +301,7 @@ def fromimpute2(args):
 
     impute2file, fastafile, chr = args
     fasta = Fasta(fastafile)
-    print get_vcfstanza(fastafile, fasta)
+    print(get_vcfstanza(fastafile, fasta))
     fp = open(impute2file)
     seen = set()
     for row in fp:
@@ -275,10 +312,9 @@ def fromimpute2(args):
         seen.add(pos)
         code = max((float(aa), "0/0"), (float(ab), "0/1"), (float(bb), "1/1"))[-1]
         tag = "PR" if snp_id == chr else "IM"
-        print "\t".join(str(x) for x in \
+        print("\t".join(str(x) for x in \
                 (chr, pos, rsid, ref, alt, ".", ".", tag, \
-                "GT:GP", code + ":" + ",".join((aa, ab, bb))))
-
+                "GT:GP", code + ":" + ",".join((aa, ab, bb)))))
 
 def read_rsid(seqid, legend):
     if seqid in ["Y", "MT"]:
@@ -306,7 +342,6 @@ def read_rsid(seqid, legend):
     logging.debug("A total of {0} sites imported from `{1}`".\
                     format(len(register), legend))
     return register
-
 
 def from23andme(args):
     """
@@ -415,7 +450,6 @@ def from23andme(args):
     logging.debug("duplicates={0} skipped={1} missing={2}".\
                     format(duplicates, skipped, missing))
 
-
 def refallele(args):
     """
     %prog refallele vcffile > out.refAllele
@@ -436,8 +470,7 @@ def refallele(args):
         atoms = row.split()
         marker = "{0}:{1}".format(*atoms[:2])
         ref = atoms[3]
-        print "\t".join((marker, ref))
-
+        print("\t".join((marker, ref)))
 
 def location(args):
     """
@@ -446,8 +479,8 @@ def location(args):
     Given SNP locations, summarize the locations in the sequences. For example,
     find out if there are more 3`-SNPs than 5`-SNPs.
     """
-    from jcvi.formats.bed import BedLine
-    from jcvi.graphics.histogram import stem_leaf_plot
+    from maize.formats.bed import BedLine
+    from maize.graphics.histogram import stem_leaf_plot
 
     p = OptionParser(location.__doc__)
     p.add_option("--dist", default=100, type="int",
@@ -483,7 +516,6 @@ def location(args):
     title = "Locations within the gene [0=Five-prime, 100=Three-prime]"
     stem_leaf_plot(percentages, 0, 100, bins, title=title)
 
-
 def summary(args):
     """
     %prog summary txtfile fastafile
@@ -497,8 +529,8 @@ def summary(args):
     Only three-column file is supported:
     locus_id    intra- genotype    inter- genotype
     """
-    from jcvi.utils.cbook import thousands
-    from jcvi.utils.table import tabulate
+    from maize.utils.cbook import thousands
+    from maize.utils.table import tabulate
 
     p = OptionParser(summary.__doc__)
     p.add_option("--counts",
@@ -595,9 +627,7 @@ def summary(args):
     logging.debug("SNP counts per contig is written to `{0}`.".\
                   format(snpcountsfile))
 
-
 g2x = {"0/0": 'A', "0/1": 'X', "1/1": 'B', "./.": '-', ".": '-'}
-
 
 def encode_genotype(s, mindepth=3, depth_index=2, nohet=False):
     """
@@ -624,14 +654,13 @@ def encode_genotype(s, mindepth=3, depth_index=2, nohet=False):
         return 'B'
     return '-'
 
-
 def mstmap(args):
     """
     %prog mstmap bcffile/vcffile > matrixfile
 
     Convert bcf/vcf format to mstmap input.
     """
-    from jcvi.assembly.geneticmap import MSTMatrix
+    from maize.assembly.geneticmap import MSTMatrix
 
     p = OptionParser(mstmap.__doc__)
     p.add_option("--dh", default=False, action="store_true",

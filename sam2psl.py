@@ -787,7 +787,7 @@ if __name__ == '__main__':
     # running
     sam2psl(
         options.input_filename,
-        options.output_filename, 
+        options.output_filename,
         use_cigar_13 = (not options.skip_conversion_cigar_13),
         replace_string = t,
         read_sequence = options.read_sequence

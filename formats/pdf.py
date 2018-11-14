@@ -12,19 +12,28 @@ import traceback
 
 from PyPDF2 import PdfFileMerger, parse_filename_page_ranges
 from PyPDF2.pagerange import PAGE_RANGE_HELP
-from jcvi.formats.base import must_open
-from jcvi.utils.natsort import natsorted
-from jcvi.apps.base import OptionParser, ActionDispatcher
-
+from maize.formats.base import must_open
+from maize.utils.natsort import natsorted
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = ''
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('cat', 'concatenate pages from pdf files into a single pdf file'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    sp1 = sp.add_parser('cat', help='concatenate pages from pdf files into a single pdf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = catx)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def cat(args):
     """
@@ -49,9 +58,9 @@ def cat(args):
             In case you don't want chapter 10 before chapter 2.
     """
     p = OptionParser(cat.__doc__.format(page_range_help=PAGE_RANGE_HELP))
-    p.add_option("--nosort", default=False, action="store_true",
+    sp1.add_argument("--nosort", default=False, action="store_true",
                  help="Do not sort file names")
-    p.add_option("--cleanup", default=False, action="store_true",
+    sp1.add_argument("--cleanup", default=False, action="store_true",
                  help="Remove individual pdfs after merging")
     p.set_outfile()
     p.set_verbose(help="Show page ranges as they are being read")
@@ -60,15 +69,15 @@ def cat(args):
     if len(args) < 1:
         sys.exit(not p.print_help())
 
-    outfile = opts.outfile
+    outfile = args.outfile
     if outfile in args:
         args.remove(outfile)
 
-    if not opts.nosort:
+    if not args.nosort:
         args = natsorted(args)
 
     filename_page_ranges = parse_filename_page_ranges(args)
-    verbose = opts.verbose
+    verbose = args.verbose
     fw = must_open(outfile, "wb")
 
     merger = PdfFileMerger()
@@ -87,11 +96,10 @@ def cat(args):
     merger.write(fw)
     fw.close()
 
-    if opts.cleanup:
+    if args.cleanup:
         logging.debug("Cleaning up {} files".format(len(args)))
         for arg in args:
             os.remove(arg)
-
 
 if __name__ == '__main__':
     main()

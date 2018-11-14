@@ -298,7 +298,7 @@ def psl2bed(args):
             else:
                 print("%s\t%d\t%d\t%s\t%s_%d_%d_%s" % 
                     (p.tName, tbeg, tend, p.qstrand, qstr))
- 
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(

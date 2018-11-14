@@ -7,7 +7,6 @@ import time
 import threading
 import unicodedata
 
-
 class SpinCursor(threading.Thread):
     """
     A console spin cursor class based on:
@@ -93,7 +92,6 @@ ATTRIBUTES.update(DARKCOLORS)
 
 RESET = '\033[0m'
 
-
 class ColoredText:
 
     def __init__(self, text, attrs=None):
@@ -130,7 +128,6 @@ class ColoredText:
 
     __repr__ = __str__
 
-
 grey = gray = lambda s: str(ColoredText(s, "grey"))
 red = lambda s: str(ColoredText(s, "red"))
 green = lambda s: str(ColoredText(s, "green"))
@@ -140,7 +137,6 @@ magenta = lambda s: str(ColoredText(s, "magenta"))
 cyan = lambda s: str(ColoredText(s, "cyan"))
 white = lambda s: str(ColoredText(s, "white"))
 dark = lambda s: str(ColoredText(s, "dark"))
-
 
 def test():
     # test spin cursor
@@ -183,7 +179,6 @@ def test():
         'red|on_grey|underline'))
     print(ColoredText('Reversed green on red color',
         'green|on_red|reverse'))
-
 
 if __name__ == '__main__':
     test()

@@ -10,7 +10,6 @@ import logging
 
 import networkx as nx
 from collections import deque
-from string import maketrans
 
 from maize.utils.iter import pairwise
 from maize.formats.base import must_open
@@ -19,7 +18,7 @@ from maize.formats.base import must_open
 Bidirectional graph.
 """
 dirs = (">", "<")
-trans = maketrans("+?-", ">><")
+trans = str.maketrans("+?-", ">><")
 
 class BiNode (object):
 

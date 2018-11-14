@@ -24,18 +24,32 @@ from maize.utils.iter import pairwise
 from maize.compara.synteny import AnchorFile, check_beds
 from maize.formats.bed import Bed
 from maize.formats.blast import BlastLine
-from maize.apps.base import OptionParser, ActionDispatcher, need_update, sh
-
+from maize.apps.base import need_update, sh
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = ''
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('cluster', 'cluster the segments'),
-        ('pad', 'test and reconstruct candidate PADs'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    sp1 = sp.add_parser('cluster', help='cluster the segments',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = cluster)
+    
+    sp1 = sp.add_parser('pad', help='test and reconstruct candidate PADs',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = pad)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def make_arrays(blastfile, qpadbed, spadbed, qpadnames, spadnames):
     """
@@ -95,7 +109,6 @@ def make_arrays(blastfile, qpadbed, spadbed, qpadnames, spadnames):
 
     return logmp
 
-
 def pad(args):
     """
     %prog pad blastfile cdtfile --qbed q.pad.bed --sbed s.pad.bed
@@ -151,13 +164,12 @@ def pad(args):
             significant.append((qparts[i], sparts[j], score))
 
     for a, b, score in significant:
-        print "|".join(a), "|".join(b), score
+        print("|".join(a), "|".join(b), score)
 
     logging.debug("Collected {0} PAR comparisons significant at (P < {1}).".\
                     format(len(significant), pvalue_cutoff))
 
     return significant
-
 
 def get_segments(ranges, extra, minsegment=40):
     """
@@ -194,7 +206,6 @@ def get_segments(ranges, extra, minsegment=40):
             yield current_left, a - 1
             current_left = a
 
-
 def write_PAD_bed(bedfile, prefix, pads, bed):
 
     fw = open(bedfile, "w")
@@ -216,7 +227,6 @@ def write_PAD_bed(bedfile, prefix, pads, bed):
     npads = len(pads)
     logging.debug("{0} partition written in `{1}`.".format(npads, bedfile))
     return npads, padnames
-
 
 def cluster(args):
     """
@@ -297,7 +307,6 @@ def cluster(args):
     cdtfile = pf + ".cdt"
     if need_update(matrixfile, cdtfile):
         sh(cmd)
-
 
 if __name__ == '__main__':
     main()

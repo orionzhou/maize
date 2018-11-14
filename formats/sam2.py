@@ -16,14 +16,11 @@ import logging
 from collections import defaultdict
 from itertools import groupby
 
-from jcvi.formats.base import LineFile, must_open
-from jcvi.formats.fasta import Fasta
-from jcvi.formats.sizes import Sizes
-from jcvi.utils.cbook import fill
-from jcvi.assembly.base import Astat
-from jcvi.apps.base import OptionParser, ActionDispatcher, Popen, PIPE, \
-            need_update, sh, mkdir, glob, popen, get_abs_path
-
+from maize.formats.base import LineFile, must_open
+from maize.formats.fasta import Fasta
+from maize.formats.sizes import Sizes
+from maize.utils.cbook import fill
+from maize.apps.base import need_update, sh, mkdir, glob, get_abs_path
 
 class SamLine (object):
 
@@ -68,7 +65,6 @@ class SamLine (object):
         qpos = self.cigar.split('H', 1)[0]
         return "%s:%s\t%s:%s" % (self.qname, qpos, self.rname, self.pos)
 
-
 class Sam (LineFile):
 
     def __init__(self, filename, callback=None):
@@ -81,7 +77,6 @@ class Sam (LineFile):
             if callback:
                 callback(s)
 
-
 def output_bam(cmd, outfile, cpus=8):
     bam = outfile.endswith(".bam")
     if not bam:
@@ -92,7 +87,6 @@ def output_bam(cmd, outfile, cpus=8):
 
     return cmd
 
-
 class GenomeCoverageLine (object):
 
     def __init__(self, row):
@@ -102,7 +96,6 @@ class GenomeCoverageLine (object):
         self.positions = int(args[2])
         self.length = int(args[3])
         self.freq = float(args[4])
-
 
 class GenomeCoverageFile (LineFile):
 
@@ -121,12 +114,10 @@ class GenomeCoverageFile (LineFile):
                 counts += r.depth * r.positions
             yield seqid, counts * 1. / length
 
-
 def get_prefix(readfile, dbfile):
     rdpf = op.basename(readfile).replace(".gz", "").rsplit(".", 1)[0]
     dbpf = op.basename(dbfile).split(".")[0]
     return ".".join((rdpf, dbpf))
-
 
 def get_samfile(readfile, dbfile, bam=False, mapped=False,
                 unmapped=False, bowtie=False):
@@ -137,7 +128,6 @@ def get_samfile(readfile, dbfile, bam=False, mapped=False,
     mapped = (prefix + ".mapped" + ext) if mapped else None
     unmapped = (prefix + ".unmapped" + ext) if unmapped else None
     return samfile, mapped, unmapped
-
 
 def get_minibam(bamfile, region, overwrite=True):
     xregion = region.replace(":", "_").replace("-", "_").replace(",", "")
@@ -157,7 +147,6 @@ def get_minibam(bamfile, region, overwrite=True):
     sh("samtools index {0}".format(minibamfile))
 
     return minibamfile
-
 
 def get_minibam_bed(bamfile, bedfile, minibam=None):
     """ samtools view -L could do the work, but it is NOT random access. Here we
@@ -190,35 +179,78 @@ def get_minibam_bed(bamfile, bedfile, minibam=None):
     sh("samtools index {0}".format(minibamfile))
     return minibamfile
 
-
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'SAM utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        # Alter read names
-        ('append', 'append or prepend string to read names'),
-        # Extract info
-        ('bed', 'convert bam files to bed'),
-        ('fastq', 'convert bam files to paired fastq'),
-        ('pair', 'parse sam file and get pairs'),
-        ('pairs', 'print paired-end reads from BAM file'),
-        ('chimera', 'parse sam file from `bwasw` and list multi-hit reads'),
-        ('noclip', 'remove clipped reads from bam'),
-        ('ace', 'convert sam file to ace'),
-        ('consensus', 'convert bam alignments to consensus FASTA'),
-        ('fpkm', 'calculate FPKM values from BAM file'),
-        ('coverage', 'calculate depth for BAM file'),
-        ('vcf', 'call SNPs on a set of bam files'),
-        ('mapped', 'extract mapped/unmapped reads from samfile'),
-        ('count', 'count the number of reads mapped using htseq'),
-        ('merge', 'merge bam files'),
-        # Convenience function
-        ('index', 'convert to bam, sort and then index'),
-        ('mini', 'extract mini-bam for a single region'),
-            )
-
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    # Alter read names
+    sp1 = sp.add_parser("append", help = 'append or prepend string to read names',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('bam', help = 'sam/bam file')
+    sp1.add_argument("--prepend", help="Prepend string to read names")
+    sp1.set_defaults(func = append)
+ 
+    # Extract info
+    sp1 = sp.add_parser('bed', help='convert bam files to bed',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = bed)
+    sp1 = sp.add_parser('fastq', help='convert bam files to paired fastq',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = fastq)
+    sp1 = sp.add_parser('pair', help='parse sam file and get pairs',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = pair)
+    sp1 = sp.add_parser('pairs', help='print paired-end reads from BAM file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = pairs)
+    sp1 = sp.add_parser('chimera', help='parse sam file from `bwasw` and list multi-hit reads',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = chimera)
+    sp1 = sp.add_parser('noclip', help='remove clipped reads from bam',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = noclip)
+    sp1 = sp.add_parser('ace', help='convert sam file to ace',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = ace)
+    sp1 = sp.add_parser('consensus', help='convert bam alignments to consensus FASTA',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = consensus)
+    sp1 = sp.add_parser('fpkm', help='calculate FPKM values from BAM file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = fpkm)
+    sp1 = sp.add_parser('coverage', help='calculate depth for BAM file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = coverage)
+    sp1 = sp.add_parser('vcf', help='call SNPs on a set of bam files',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = vcf)
+    sp1 = sp.add_parser('mapped', help='extract mapped/unmapped reads from samfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = mapped)
+    sp1 = sp.add_parser('count', help='count the number of reads mapped using htseq',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = count)
+    sp1 = sp.add_parser('merge', help='merge bam files',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = merge)
+    # Convenience function
+    sp1 = sp.add_parser('index', help='convert to bam, sort and then index',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = index)
+    sp1 = sp.add_parser('mini', help='extract mini-bam for a single region',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.set_defaults(func = mini)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def fastq(args):
     """
@@ -246,7 +278,6 @@ def fastq(args):
         os.remove(singletons)
     return a, b
 
-
 def mini(args):
     """
     %prog mini bamfile region
@@ -261,7 +292,6 @@ def mini(args):
 
     bamfile, region = args
     get_minibam(bamfile, region)
-
 
 def noclip(args):
     """
@@ -283,7 +313,6 @@ def noclip(args):
 
     sh("samtools index {}".format(noclipbam))
 
-
 def append(args):
     """
     %prog append bamfile
@@ -291,15 +320,8 @@ def append(args):
     Append /1 or /2 to read names. Useful for using the Tophat2 bam file for
     training AUGUSTUS gene models.
     """
-    p = OptionParser(append.__doc__)
-    p.add_option("--prepend", help="Prepend string to read names")
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    bamfile, = args
-    prepend = opts.prepend
+    bamfile = args.bam
+    prepend = args.prepend
 
     icmd = "samtools view -h {0}".format(bamfile)
     bamfile = bamfile.rsplit(".", 1)[0] + ".append.bam"
@@ -315,7 +337,6 @@ def append(args):
             else:
                 s.update_readname()
             print >> p.stdin, s
-
 
 def bed(args):
     """
@@ -335,7 +356,6 @@ def bed(args):
         cmd = "bamToBed -i {0}".format(bamfile)
         sh(cmd, outfile=bedfile, append=True)
 
-
 def merge(args):
     """
     %prog merge merged_bams bams1_dir bams2_dir ...
@@ -343,7 +363,7 @@ def merge(args):
     Merge BAM files. Treat the bams with the same prefix as a set.
     Output the commands first.
     """
-    from jcvi.apps.grid import MakeManager
+    from maize.apps.grid import MakeManager
 
     p = OptionParser(merge.__doc__)
     p.set_sep(sep="_", help="Separator to group per prefix")
@@ -363,7 +383,7 @@ def merge(args):
 
     logging.debug("Found a total of {0} BAM files.".format(len(bams)))
 
-    sep = opts.sep
+    sep = args.sep
     key = lambda x: op.basename(x).split(sep)[0]
     bams.sort(key=key)
     mm = MakeManager()
@@ -381,7 +401,6 @@ def merge(args):
             mm.add(files, target, cmd, remove=True)
     mm.write()
 
-
 def count(args):
     """
     %prog count bamfile gtf
@@ -389,7 +408,7 @@ def count(args):
     Count the number of reads mapped using `htseq-count`.
     """
     p = OptionParser(count.__doc__)
-    p.add_option("--type", default="exon",
+    sp1.add_argument("--type", default="exon",
                  help="Only count feature type")
     p.set_cpus(cpus=8)
     opts, args = p.parse_args(args)
@@ -398,7 +417,7 @@ def count(args):
         sys.exit(not p.print_help())
 
     bamfile, gtf = args
-    cpus = opts.cpus
+    cpus = args.cpus
     pf = bamfile.split(".")[0]
     countfile = pf + ".count"
     if not need_update(bamfile, countfile):
@@ -414,10 +433,9 @@ def count(args):
 
     if need_update(nsortedsam, countfile):
         cmd = "htseq-count --stranded=no --minaqual=10"
-        cmd += " -t {0}".format(opts.type)
+        cmd += " -t {0}".format(args.type)
         cmd += " {0} {1}".format(nsortedsam, gtf)
         sh(cmd, outfile=countfile)
-
 
 def coverage(args):
     """
@@ -427,10 +445,10 @@ def coverage(args):
     --nosort.
     """
     p = OptionParser(coverage.__doc__)
-    p.add_option("--format", default="bigwig",
+    sp1.add_argument("--format", default="bigwig",
                  choices=("bedgraph", "bigwig", "coverage"),
                  help="Output format")
-    p.add_option("--nosort", default=False, action="store_true",
+    sp1.add_argument("--nosort", default=False, action="store_true",
                  help="Do not sort BAM")
     p.set_outfile()
     opts, args = p.parse_args(args)
@@ -439,8 +457,8 @@ def coverage(args):
         sys.exit(not p.print_help())
 
     fastafile, bamfile = args
-    format = opts.format
-    if opts.nosort:
+    format = args.format
+    if args.nosort:
         logging.debug("BAM sorting skipped")
     else:
         bamfile = index([bamfile, "--fasta={0}".format(fastafile)])
@@ -467,11 +485,10 @@ def coverage(args):
         sh(cmd, outfile=coveragefile)
 
     gcf = GenomeCoverageFile(coveragefile)
-    fw = must_open(opts.outfile, "w")
+    fw = must_open(args.outfile, "w")
     for seqid, cov in gcf.iter_coverage_seqid():
         print >> fw, "\t".join((seqid, "{0:.1f}".format(cov)))
     fw.close()
-
 
 def fpkm(args):
     """
@@ -501,12 +518,11 @@ def fpkm(args):
     cmd = "cuffdiff {0} {1}".format(gffile, " ".join(bamfiles))
     sh(cmd)
 
-
 def pairs(args):
     """
     See __doc__ for OptionParser.set_pairs().
     """
-    import jcvi.formats.bed
+    import maize.formats.bed
 
     p = OptionParser(pairs.__doc__)
     p.set_pairs()
@@ -523,8 +539,7 @@ def pairs(args):
 
     args[args.index(samfile)] = bedfile
 
-    return jcvi.formats.bed.pairs(args)
-
+    return maize.formats.bed.pairs(args)
 
 def consensus(args):
     """
@@ -533,9 +548,9 @@ def consensus(args):
     Convert bam alignments to consensus FASTQ/FASTA.
     """
     p = OptionParser(consensus.__doc__)
-    p.add_option("--fasta", default=False, action="store_true",
+    sp1.add_argument("--fasta", default=False, action="store_true",
             help="Generate consensus FASTA sequences [default: %default]")
-    p.add_option("--mask", default=0, type="int",
+    sp1.add_argument("--mask", default=0, type="int",
             help="Mask bases with quality lower than")
     opts, args = p.parse_args(args)
 
@@ -543,7 +558,7 @@ def consensus(args):
         sys.exit(not p.print_help())
 
     fastafile, bamfile = args
-    fasta = opts.fasta
+    fasta = args.fasta
     suffix = "fasta" if fasta else "fastq"
     pf = bamfile.rsplit(".", 1)[0]
     cnsfile = pf + ".cns.{0}".format(suffix)
@@ -551,10 +566,9 @@ def consensus(args):
     vcf([fastafile, bamfile, "-o", vcfgzfile])
     cmd += "zcat {0} | vcfutils.pl vcf2fq".format(vcfgzfile)
     if fasta:
-        cmd += " | seqtk seq -q {0} -A -".format(opts.mask)
+        cmd += " | seqtk seq -q {0} -A -".format(args.mask)
 
     sh(cmd, outfile=cnsfile)
-
 
 def vcf(args):
     """
@@ -562,14 +576,14 @@ def vcf(args):
 
     Call SNPs on bam files.
     """
-    from jcvi.apps.grid import Jobs
+    from maize.apps.grid import Jobs
 
     valid_callers = ("mpileup", "freebayes")
     p = OptionParser(vcf.__doc__)
     p.set_outfile(outfile="out.vcf.gz")
-    p.add_option("--nosort", default=False, action="store_true",
+    sp1.add_argument("--nosort", default=False, action="store_true",
                  help="Do not sort the BAM files")
-    p.add_option("--caller", default="mpileup", choices=valid_callers,
+    sp1.add_argument("--caller", default="mpileup", choices=valid_callers,
                  help="Use variant caller [default: %default]")
     opts, args = p.parse_args(args)
 
@@ -578,10 +592,10 @@ def vcf(args):
 
     fastafile = args[0]
     bamfiles = args[1:]
-    caller = opts.caller
+    caller = args.caller
 
     unsorted = [x for x in bamfiles if ".sorted." not in x]
-    if opts.nosort:
+    if args.nosort:
         bamfiles = unsorted
     else:
         jargs = [[[x, "--unique"]] for x in unsorted]
@@ -597,8 +611,7 @@ def vcf(args):
     elif caller == "freebayes":
         cmd = "freebayes -f"
         cmd += " {0} {1}".format(fastafile, " ".join(bamfiles))
-    sh(cmd, outfile=opts.outfile)
-
+    sh(cmd, outfile=args.outfile)
 
 def breakpoint(r):
     op_prev = None
@@ -611,7 +624,6 @@ def breakpoint(r):
         op_prev = op
         cum_length += length
 
-
 def chimera(args):
     """
     %prog chimera bamfile
@@ -619,7 +631,7 @@ def chimera(args):
     Parse BAM file from `bwasw` and list multi-hit reads and breakpoints.
     """
     import pysam
-    from jcvi.utils.natsort import natsorted
+    from maize.utils.natsort import natsorted
 
     p = OptionParser(chimera.__doc__)
     p.set_verbose()
@@ -634,14 +646,13 @@ def chimera(args):
     for r in samfile.fetch():
         rstore[r.query_name] += list(breakpoint(r))
         hstore[r.query_name] += 1
-        if opts.verbose:
-            print >> sys.stderr, r.query_name, "+-"[r.is_reverse], \
-                        sum(l for o, l in r.cigartuples), r.cigarstring, list(breakpoint(r))
+        if args.verbose:
+            logging.error(r.query_name, "+-"[r.is_reverse], \
+                        sum(l for o, l in r.cigartuples), r.cigarstring, list(breakpoint(r)))
 
     for rn, bps in natsorted(rstore.items()):
         bps = "|".join(str(x) for x in sorted(bps)) if bps else "na"
-        print "\t".join((rn, str(hstore[rn]), bps))
-
+        print("\t".join((rn, str(hstore[rn]), bps)))
 
 def index(args):
     """
@@ -650,9 +661,9 @@ def index(args):
     If SAM file, convert to BAM, sort and then index, using SAMTOOLS
     """
     p = OptionParser(index.__doc__)
-    p.add_option("--fasta", dest="fasta", default=None,
+    sp1.add_argument("--fasta", dest="fasta", default=None,
             help="add @SQ header to the BAM file [default: %default]")
-    p.add_option("--unique", default=False, action="store_true",
+    sp1.add_argument("--unique", default=False, action="store_true",
             help="only retain uniquely mapped reads [default: %default]")
     p.set_cpus()
     opts, args = p.parse_args(args)
@@ -661,8 +672,8 @@ def index(args):
         sys.exit(p.print_help())
 
     samfile, = args
-    cpus = opts.cpus
-    fastafile = opts.fasta
+    cpus = args.cpus
+    fastafile = args.fasta
     if fastafile:
         assert op.exists(fastafile)
 
@@ -678,7 +689,7 @@ def index(args):
                 format(samfile, bamfile)
 
     cmd += " -@ {0}".format(cpus)
-    if opts.unique:
+    if args.unique:
         cmd += " -q 1"
 
     if samfile.endswith(".sam") and need_update(samfile, bamfile):
@@ -702,7 +713,6 @@ def index(args):
 
     return sortedbamfile
 
-
 def mapped(args):
     """
     %prog mapped sam/bamfile
@@ -711,7 +721,7 @@ def mapped(args):
     Optionally, extract the unmapped reads into a separate file
     """
     import pysam
-    from jcvi.apps.grid import Jobs
+    from maize.apps.grid import Jobs
 
     p = OptionParser(mapped.__doc__)
     p.set_sam_options(extra=False)
@@ -726,29 +736,28 @@ def mapped(args):
     oext, mopts = (".sam", ["-S"]) \
             if samfile.endswith(".sam") else (".bam", [])
 
-    flag, ext = ("-b", ".bam") if opts.bam else ("-h", ".sam")
-    mopts.append(flag)
+    flag, ext = ("-b", ".bam") if args.bam else ("-h", ".sam")
+    margs.append(flag)
 
-    if opts.uniq:
-        mopts.append("-q1")
+    if args.uniq:
+        margs.append("-q1")
         ext = ".uniq{0}".format(ext)
 
-    if opts.unmapped:
+    if args.unmapped:
         uopts = [x for x in mopts]
         uoutfile = samfile.replace(oext, ".unmapped{0}".format(ext))
-        uopts.extend(["-f4", samfile, "-o{0}".format(uoutfile)])
-        view_opts.append(uopts)
+        uargs.extend(["-f4", samfile, "-o{0}".format(uoutfile)])
+        view_args.append(uopts)
 
     outfile = samfile.replace(oext, ".mapped{0}".format(ext))
-    mopts.extend(["-F4", samfile, "-o{0}".format(outfile)])
-    view_opts.append(mopts)
+    margs.extend(["-F4", samfile, "-o{0}".format(outfile)])
+    view_args.append(mopts)
 
     for vo in view_opts:
         logging.debug('samtools view {0}'.format(" ".join(vo)))
 
     jobs = Jobs(pysam.view, [(z for z in x) for x in view_opts])
     jobs.run()
-
 
 def pair(args):
     """
@@ -764,9 +773,8 @@ def pair(args):
         sys.exit(p.print_help())
 
     def callback(s):
-        print s.pairline
+        print(s.pairline)
     Sam(args[0], callback=callback)
-
 
 def cigar_to_seq(a, gap='*'):
     """
@@ -818,7 +826,6 @@ def cigar_to_seq(a, gap='*'):
 
     return "".join(subseqs), npadded
 
-
 def ace(args):
     """
     %prog ace bamfile fastafile
@@ -830,17 +837,17 @@ def ace(args):
     assembler.
     """
     p = OptionParser(ace.__doc__)
-    p.add_option("--splitdir", dest="splitdir", default="outRoot",
+    sp1.add_argument("--splitdir", dest="splitdir", default="outRoot",
             help="split the ace per contig to dir [default: %default]")
-    p.add_option("--unpaired", dest="unpaired", default=False,
+    sp1.add_argument("--unpaired", dest="unpaired", default=False,
             help="remove read pairs on the same contig [default: %default]")
-    p.add_option("--minreadno", dest="minreadno", default=3, type="int",
+    sp1.add_argument("--minreadno", dest="minreadno", default=3, type="int",
             help="minimum read numbers per contig [default: %default]")
-    p.add_option("--minctgsize", dest="minctgsize", default=100, type="int",
+    sp1.add_argument("--minctgsize", dest="minctgsize", default=100, type="int",
             help="minimum contig size per contig [default: %default]")
-    p.add_option("--astat", default=False, action="store_true",
+    sp1.add_argument("--astat", default=False, action="store_true",
             help="create .astat to list repetitiveness [default: %default]")
-    p.add_option("--readids", default=False, action="store_true",
+    sp1.add_argument("--readids", default=False, action="store_true",
             help="create file of mapped and unmapped ids [default: %default]")
 
     from pysam import Samfile
@@ -851,8 +858,8 @@ def ace(args):
         sys.exit(not p.print_help())
 
     bamfile, fastafile = args
-    astat = opts.astat
-    readids = opts.readids
+    astat = args.astat
+    readids = args.readids
 
     f = Fasta(fastafile)
     prefix = bamfile.split(".")[0]
@@ -934,7 +941,6 @@ def ace(args):
             print >> fw
             print >> fw, qs
             print >> fw
-
 
 if __name__ == '__main__':
     main()

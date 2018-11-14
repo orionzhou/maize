@@ -245,11 +245,10 @@ if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'quota align'
+            description = 'blast filter'
     )
     p.add_argument("blast_file", help = 'input blast file')
-    p.add_argument("--tandems_only", dest="tandems_only",
-            action="store_true", default=False,
+    p.add_argument("--tandems_only", dest="tandems_only", action="store_true",
             help="only calculate tandems, write .localdup file and exit.")
     p.add_argument("--tandem_Nmax", type=int, default=10,
             help="merge tandem genes within distance")

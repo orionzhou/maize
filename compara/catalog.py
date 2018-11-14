@@ -499,19 +499,20 @@ def ortholog(args):
         make_ortholog(qblocks, rbh, qortho)
 
 def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
-    evalue=.01, strip_name=".", ofile=sys.stderr, genefam=False):
+    evalue=.01, strip_name=".", genefam=False):
 
     if genefam:
         N = 1e5
 
     # get the sizes for the CDS first
     f = Fasta(cds_file)
-    sizes = dict(f.itersizes())
+    # sizes = dict(f.itersizes())
+    sizes = {x: len(x) for x in f.keys()}
 
     # retrieve the locations
     bed = Bed(bed_file)
     order = bed.order
-
+    
     if is_self:
         # filter the blast file
         g = Grouper()
@@ -523,8 +524,8 @@ def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
             if b.hitlen < min(query_len, subject_len)*P/100.:
                 continue
 
-            query = gene_name(b.query, strip_name)
-            subject = gene_name(b.subject, strip_name)
+            query = gene_name(b.query, sep=strip_name)
+            subject = gene_name(b.subject, sep=strip_name)
             qi, q = order[query]
             si, s = order[subject]
 
@@ -546,8 +547,8 @@ def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
             if b.evalue > evalue:
                 continue
 
-            query = gene_name(b.query, strip_name)
-            subject = gene_name(b.subject, strip_name)
+            query = gene_name(b.query, sep=strip_name)
+            subject = gene_name(b.subject, sep=strip_name)
             homologs.join(query, subject)
 
         if genefam:
@@ -565,12 +566,11 @@ def tandem_main(blast_file, cds_file, bed_file, N=3, P=50, is_self=True, \
                         g.join(bed[i-x].accn, atom.accn)
 
     # dump the grouper
-    fw = must_open(ofile, "w")
     ngenes, nfamilies = 0, 0
     families = []
     for group in sorted(g):
         if len(group) >= 2:
-            print >>fw, ",".join(sorted(group))
+            print(",".join(sorted(group)))
             ngenes += len(group)
             nfamilies += 1
             families.append(sorted(group))
@@ -599,42 +599,40 @@ def tandem(args):
     P = args.percent_overlap
     is_self = not args.not_self
     sep = args.sep
-    ofile = args.out_file
-
+    
     tandem_main(blast_file, cds_file, bed_file, N=N, P=P, is_self=is_self, \
-        evalue=args.evalue, strip_name=sep, ofile=ofile, genefam=args.genefam)
+        evalue=args.evalue, strip_name=sep, genefam=args.genefam)
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'catalog utilities'
+        formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+        description = 'catalog utilities'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
     sp1 = sp.add_parser("tandem", 
-            help = 'identify tandem gene groups within certain distance',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('blast_file', help = 'blast file')
-    sp1.add_argument('cds_file', help = 'cds file')
-    sp1.add_argument('bed_file', help = 'bed file')
-    sp1.add_argument('out_file', help = 'out file')
+        help = 'identify tandem gene groups within certain distance',
+        formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('blast_file', help='blast file')
+    sp1.add_argument('cds_file', help='cds file')
+    sp1.add_argument('bed_file', help='bed file')
     sp1.add_argument("--tandem_Nmax", dest="tandem_Nmax", type=int, default=3,
-               help="merge tandem genes within distance")
+        help="merge tandem genes within distance")
     sp1.add_argument("--percent_overlap", type=int, default=50,
-               help="tandem genes have >=x%% aligned sequence, x=0-100")
-    sp1.add_argument("--evalue", type=float, default=0.01, help = 'evalue')
+        help="tandem genes have >=x%% aligned sequence, x=0-100")
+    sp1.add_argument("--evalue", type=float, default=.01, help='evalue')
     sp1.add_argument("--not_self", action="store_true",
-                 help="provided is not self blast file")
-    sp1.add_argument("--strip_gene_name", dest="sep", default=".",
-               help="strip alternative splicing. Use None for no stripping")
+        help="provided is not self blast file")
+    sp1.add_argument("--strip_gene_name", dest="sep", default="@",
+        help="strip alternative splicing. Use None for no stripping")
     sp1.add_argument("--genefamily", dest="genefam", action="store_true",
-                 help="compile gene families based on similarity")
+        help="compile gene families based on similarity")
     sp1.set_defaults(func = tandem)
 
     sp1 = sp.add_parser("ortholog", 
-            help = 'run a combined synteny and RBH pipeline to call orthologs',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+        help = 'run a combined synteny and RBH pipeline to call orthologs',
+        formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('species_a', help = 'species A')
     sp1.add_argument('species_b', help = 'species B')
     sp1.add_argument("--dbtype", default="nucl", choices=("nucl", "prot"),

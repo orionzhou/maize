@@ -3,7 +3,7 @@
 
 """
 This module contains methods to interface with DEAP evolutionary computation
-framewor, including a Genetic Algorithm (GA) based method to solve scaffold
+framework, including a Genetic Algorithm (GA) based method to solve scaffold
 ordering and orientation problem.
 """
 
@@ -15,8 +15,7 @@ import multiprocessing
 
 from deap import base, creator, tools
 from deap.algorithms import varAnd
-from jcvi.algorithms.lis import longest_monotonic_subseq_length
-
+from maize.algorithms.lis import longest_monotonic_subseq_length
 
 def make_data(POINTS, SCF):
     seq = range(POINTS)
@@ -27,14 +26,12 @@ def make_data(POINTS, SCF):
         scaffolds.append(p)
     return scaffolds
 
-
 def colinear_evaluate(tour, scaffolds):
     series = []
     for t in tour:
         series.extend(scaffolds[t])
     score, diff = longest_monotonic_subseq_length(series)
     return score,
-
 
 def genome_mutation(candidate):
     """Return the mutants created by inversion mutation on the candidates.
@@ -62,7 +59,6 @@ def genome_mutation(candidate):
         candidate.insert(p, cq)
         return candidate,
 
-
 def genome_mutation_orientation(candidate):
     size = len(candidate)
     prob = random.random()
@@ -79,7 +75,6 @@ def genome_mutation_orientation(candidate):
         candidate[p] = -candidate[p]
     return candidate,
 
-
 def GA_setup(guess, weights=(1.0,)):
     creator.create("FitnessMax", base.Fitness, weights=weights)
     creator.create("Individual", array.array, typecode='i', fitness=creator.FitnessMax)
@@ -92,7 +87,6 @@ def GA_setup(guess, weights=(1.0,)):
     toolbox.register("mutate", genome_mutation)
     toolbox.register("select", tools.selTournament, tournsize=3)
     return toolbox
-
 
 def eaSimpleConverge(population, toolbox, cxpb, mutpb, ngen, stats=None,
              halloffame=None, callback=None, verbose=True):
@@ -158,7 +152,6 @@ def eaSimpleConverge(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
     return population
 
-
 def GA_run(toolbox, ngen=500, npop=100, seed=666, cpus=1, callback=None):
     logging.debug("GA setup: ngen={0} npop={1} cpus={2} seed={3}".\
                     format(ngen, npop, cpus, seed))
@@ -180,7 +173,6 @@ def GA_run(toolbox, ngen=500, npop=100, seed=666, cpus=1, callback=None):
         pool.terminate()
     return tour, tour.fitness
 
-
 if __name__ == "__main__":
     POINTS, SCF = 200, 20
     scaffolds = make_data(POINTS, SCF)
@@ -189,9 +181,9 @@ if __name__ == "__main__":
     guess = range(SCF)
     guess[5:15] = guess[5:15][::-1]
     guess[7:18] = guess[7:18][::-1]
-    print guess
+    print(guess)
 
     toolbox = GA_setup(guess)
     toolbox.register("evaluate", colinear_evaluate, scaffolds=scaffolds)
     tour, tour.fitness = GA_run(toolbox, cpus=8)
-    print tour, tour.fitness
+    print(tour, tour.fitness)

@@ -8,19 +8,15 @@ Matrix related subroutines
 import math
 import numpy as np
 
-
 is_symmetric = lambda M: (M.T == M).all()
-
 
 def moving_sum(a, window=10):
     kernel = np.repeat(1, window)
     return np.convolve(a, kernel, mode="same")
 
-
 def moving_average(a, window=10):
     kernel = np.repeat(1., window) / window
     return np.convolve(a, kernel)
-
 
 def chunk_average(a, window=10, offset=None):
     # Fixed size window, take average within the window
@@ -33,7 +29,6 @@ def chunk_average(a, window=10, offset=None):
         r[i] = np.average(a[start: start + window])
         start += offset
     return r
-
 
 def determine_positions(nodes, edges):
     """
@@ -63,7 +58,6 @@ def determine_positions(nodes, edges):
     s = spring_system(A, K, L)
     return np.array([0] + [int(round(x, 0)) for x in s])
 
-
 def determine_signs(nodes, edges, cutoff=1e-10):
     """
     Construct the orientation matrix for the pairs on N molecules.
@@ -79,14 +73,12 @@ def determine_signs(nodes, edges, cutoff=1e-10):
 
     return get_signs(M, cutoff=cutoff, validate=False)
 
-
 def symmetrize(M):
     """
     If M only has a triangle filled with values, all the rest are zeroes,
     this function will copy stuff to the other triangle
     """
     return M + M.T - np.diag(M.diagonal())
-
 
 def get_signs(M, cutoff=1e-10, validate=True, ambiguous=True):
     """
@@ -133,7 +125,6 @@ def get_signs(M, cutoff=1e-10, validate=True, ambiguous=True):
 
     return sign_array
 
-
 def spring_system(A, K, L):
     """
     Solving the equilibrium positions of the objects, linked by springs of
@@ -170,7 +161,6 @@ def spring_system(A, K, L):
     x = np.linalg.solve(left, right)
 
     return x
-
 
 if __name__ == '__main__':
     import doctest

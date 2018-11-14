@@ -150,7 +150,6 @@ import math
 import re
 import logging
 
-
 def _reversedict(d):
     """
     Internal helper for generating reverse mappings; given a
@@ -159,11 +158,9 @@ def _reversedict(d):
     """
     return dict(list(zip(list(d.values()), list(d.keys()))))
 
-
 HEX_COLOR_RE = re.compile(r'^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$')
 
 SUPPORTED_SPECIFICATIONS = ('html4', 'css2', 'css21', 'css3')
-
 
 # Mappings of color names to normalized hexadecimal color values.
 #################################################################
@@ -349,7 +346,6 @@ css21_hex_to_names = _reversedict(css21_names_to_hex)
 
 css3_hex_to_names = _reversedict(css3_names_to_hex)
 
-
 # Normalization routines.
 #################################################################
 
@@ -395,7 +391,6 @@ def normalize_hex(hex_value):
         hex_digits = ''.join([2 * s for s in hex_digits])
     return '#%s' % hex_digits.lower()
 
-
 def normalize_integer_triplet(rgb_triplet):
     """
     Normalize an integer ``rgb()`` triplet so that all values are
@@ -414,7 +409,6 @@ def normalize_integer_triplet(rgb_triplet):
 
     """
     return tuple([_normalize_integer_rgb(value) for value in rgb_triplet])
-
 
 def _normalize_integer_rgb(value):
     """
@@ -445,7 +439,6 @@ def _normalize_integer_rgb(value):
     if value > 255:
         return 255
 
-
 def normalize_percent_triplet(rgb_triplet):
     """
     Normalize a percentage ``rgb()`` triplet to that all values are
@@ -462,7 +455,6 @@ def normalize_percent_triplet(rgb_triplet):
 
     """
     return tuple([_normalize_percent_rgb(value) for value in rgb_triplet])
-
 
 def _normalize_percent_rgb(value):
     """
@@ -498,7 +490,6 @@ def _normalize_percent_rgb(value):
         return '0%'
     if percent > 100:
         return '100%'
-
 
 # Conversions from color names to various formats.
 #################################################################
@@ -544,7 +535,6 @@ def name_to_hex(name, spec='css3'):
         raise ValueError("'%s' is not defined as a named color in %s." % (name, spec))
     return hex_value
 
-
 def name_to_rgb(name, spec='css3'):
     """
     Convert a color name to a 3-tuple of integers suitable for use in
@@ -571,7 +561,6 @@ def name_to_rgb(name, spec='css3'):
     """
     return hex_to_rgb(name_to_hex(name, spec=spec))
 
-
 def name_to_rgb_percent(name, spec='css3'):
     """
     Convert a color name to a 3-tuple of percentages suitable for use
@@ -597,7 +586,6 @@ def name_to_rgb_percent(name, spec='css3'):
 
     """
     return rgb_to_rgb_percent(name_to_rgb(name, spec=spec))
-
 
 # Conversions from hexadecimal color values to various formats.
 #################################################################
@@ -646,7 +634,6 @@ def hex_to_name(hex_value, spec='css3'):
         raise ValueError("'%s' has no defined color name in %s." % (hex_value, spec))
     return name
 
-
 def hex_to_rgb(hex_value):
     """
     Convert a hexadecimal color value to a 3-tuple of integers
@@ -665,7 +652,6 @@ def hex_to_rgb(hex_value):
     hex_digits = normalize_hex(hex_value)
     return tuple([int(s, 16) for s in (hex_digits[1:3], hex_digits[3:5], hex_digits[5:7])])
 
-
 def hex_to_rgb_percent(hex_value):
     """
     Convert a hexadecimal color value to a 3-tuple of percentages
@@ -682,7 +668,6 @@ def hex_to_rgb_percent(hex_value):
 
     """
     return rgb_to_rgb_percent(hex_to_rgb(hex_value))
-
 
 # Conversions from  integer rgb() triplets to various formats.
 #################################################################
@@ -710,7 +695,6 @@ def rgb_to_name(rgb_triplet, spec='css3'):
     """
     return hex_to_name(rgb_to_hex(normalize_integer_triplet(rgb_triplet)), spec=spec)
 
-
 def rgb_to_hex(rgb_triplet):
     """
     Convert a 3-tuple of integers, suitable for use in an ``rgb()``
@@ -725,7 +709,6 @@ def rgb_to_hex(rgb_triplet):
 
     """
     return '#%02x%02x%02x' % normalize_integer_triplet(rgb_triplet)
-
 
 def rgb_to_rgb_percent(rgb_triplet):
     """
@@ -759,7 +742,6 @@ def rgb_to_rgb_percent(rgb_triplet):
     return tuple([specials.get(d, '%.02f%%' % ((d / 255.0) * 100)) \
                   for d in normalize_integer_triplet(rgb_triplet)])
 
-
 # Conversions from percentage rgb() triplets to various formats.
 #################################################################
 
@@ -788,7 +770,6 @@ def rgb_percent_to_name(rgb_percent_triplet, spec='css3'):
     """
     return rgb_to_name(rgb_percent_to_rgb(normalize_percent_triplet(rgb_percent_triplet)), spec=spec)
 
-
 def rgb_percent_to_hex(rgb_percent_triplet):
     """
     Convert a 3-tuple of percentages, suitable for use in an ``rgb()``
@@ -807,7 +788,6 @@ def rgb_percent_to_hex(rgb_percent_triplet):
     """
     return rgb_to_hex(rgb_percent_to_rgb(normalize_percent_triplet(rgb_percent_triplet)))
 
-
 def _percent_to_integer(percent):
     """
     Internal helper for converting a percentage value to an integer
@@ -817,7 +797,6 @@ def _percent_to_integer(percent):
     num = float(percent.split('%')[0]) / 100.0 * 255
     e = num - math.floor(num)
     return e < 0.5 and int(math.floor(num)) or int(math.ceil(num))
-
 
 def rgb_percent_to_rgb(rgb_percent_triplet):
     """
@@ -844,7 +823,6 @@ def rgb_percent_to_rgb(rgb_percent_triplet):
     """
     return tuple(map(_percent_to_integer, normalize_percent_triplet(rgb_percent_triplet)))
 
-
 def color_diff(rgb1, rgb2):
     """
     Calculate distance between two RGB colors. See discussion:
@@ -864,7 +842,6 @@ def color_diff(rgb1, rgb2):
     lab2 = rgb2lab(rgb2)
     return deltaE_cmc(lab1, lab2, kL=2, kC=1)[0, 0]
 
-
 def closest_color(requested_color):
     """
     Find closest color name for the request RGB tuple.
@@ -878,7 +855,6 @@ def closest_color(requested_color):
     min_diff, min_color = min(colors)
 
     return min_color
-
 
 if __name__ == '__main__':
     import doctest

@@ -16,11 +16,9 @@ both genomes, similar to the SUPERMAP algorithm. This operation is symmetrical.
 import sys
 import logging
 
-from jcvi.apps.base import OptionParser
-from jcvi.formats.blast import BlastLine
-from jcvi.formats.coords import CoordsLine
-from jcvi.utils.range import Range, range_chain
-
+from maize.formats.blast import BlastLine
+from maize.formats.coords import CoordsLine
+from maize.utils.range import Range, range_chain
 
 def BlastOrCoordsLine(filename, filter="ref", dialect="blast", clip=0):
     allowed_filters = ("ref", "query")
@@ -67,7 +65,6 @@ def BlastOrCoordsLine(filename, filter="ref", dialect="blast", clip=0):
             end = end - cc
 
         yield Range(query, start, end, b.score, i)
-
 
 def supermap(blast_file, filter="intersection", dialect="blast", clip=0):
     # filter by query
@@ -128,7 +125,7 @@ def supermap(blast_file, filter="intersection", dialect="blast", clip=0):
     logging.debug("Write output file to `{0}`".format(supermapfile))
     fw.close()
 
-    from jcvi.formats.blast import sort
+    from maize.formats.blast import sort
     ofilter = "ref" if filter == "ref" else "query"
     args = [supermapfile, "--" + ofilter]
     if dialect == "coords":
@@ -138,18 +135,17 @@ def supermap(blast_file, filter="intersection", dialect="blast", clip=0):
 
     return supermapfile
 
-
 if __name__ == '__main__':
 
     p = OptionParser(__doc__)
 
     filter_choices = ("ref", "query", "intersection", "union")
     dialect_choices = ("blast", "coords")
-    p.add_option("--filter", choices=filter_choices, default="intersection",
+    sp1.add_argument("--filter", choices=filter_choices, default="intersection",
             help="Available filters [default: %default]")
-    p.add_option("--dialect", choices=dialect_choices,
+    sp1.add_argument("--dialect", choices=dialect_choices,
             help="Input format [default: guess]")
-    p.add_option("--clip", default=0, type="int",
+    sp1.add_argument("--clip", default=0, type="int",
             help="Clip ranges so that to allow minor overlaps [default: %default]")
 
     opts, args = p.parse_args()
@@ -159,10 +155,10 @@ if __name__ == '__main__':
 
     blast_file, = args
 
-    dialect = opts.dialect
+    dialect = args.dialect
     if not dialect:
         # guess from the suffix
         dialect = "coords" if blast_file.endswith(".coords") else "blast"
         logging.debug("dialect is %s" % dialect)
 
-    supermap(blast_file, filter=opts.filter, dialect=dialect, clip=opts.clip)
+    supermap(blast_file, filter=args.filter, dialect=dialect, clip=args.clip)

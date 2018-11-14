@@ -316,7 +316,7 @@ def collinear(args):
 
     fw.close()
 
-if __name__ == '__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
@@ -367,3 +367,5 @@ if __name__ == '__main__':
         print('Error: need to specify a sub command\n')
         parser.print_help()
 
+if __name__ == '__main__':
+    main()

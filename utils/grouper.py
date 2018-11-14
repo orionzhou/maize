@@ -73,7 +73,7 @@ class Grouper(object):
         Returns an iterator returning each of the disjoint sets as a list.
         """
         seen = set()
-        for elem, group in self._mapping.iteritems():
+        for elem, group in self._mapping.items():
             if elem not in seen:
                 yield group
                 seen.update(group)

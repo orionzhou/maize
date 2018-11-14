@@ -248,7 +248,7 @@ def merge(args):
 
     ref, query = args[:2]
     deltafiles = args[2:]
-    outfile = opts.outfile
+    outfile = args.outfile
 
     ref = get_abs_path(ref)
     query = get_abs_path(query)
@@ -321,7 +321,7 @@ def coverage(args):
     maize.algorithms.supermap --filter query
     """
     p = OptionParser(coverage.__doc__)
-    p.add_option("-c", dest="cutoff", default=0.5, type="float",
+    sp1.add_argument("-c", dest="cutoff", default=0.5, type="float",
             help="only report query with coverage greater than [default: %default]")
 
     opts, args = p.parse_args(args)
@@ -349,9 +349,9 @@ def coverage(args):
 
     coverages.sort(key=lambda x: (-x[1], x[0]))
     for query, cumulative_cutoff in coverages:
-        if cumulative_cutoff < opts.cutoff:
+        if cumulative_cutoff < args.cutoff:
             break
-        print "{0}\t{1:.2f}".format(query, cumulative_cutoff)
+        print("{0}\t{1:.2f}".format(query, cumulative_cutoff))
 
 def annotate(args):
     """
@@ -361,9 +361,9 @@ def annotate(args):
     overlaps: {0}.
     """
     p = OptionParser(annotate.__doc__.format(", ".join(Overlap_types)))
-    p.add_option("--maxhang", default=100, type="int",
+    sp1.add_argument("--maxhang", default=100, type="int",
                  help="Max hang to call dovetail overlap [default: %default]")
-    p.add_option("--all", default=False, action="store_true",
+    sp1.add_argument("--all", default=False, action="store_true",
                  help="Output all lines [default: terminal/containment]")
 
     opts, args = p.parse_args(args)
@@ -380,11 +380,11 @@ def annotate(args):
         except AssertionError:
             continue
 
-        ov = c.overlap(opts.maxhang)
-        if not opts.all and ov == 0:
+        ov = c.overlap(args.maxhang)
+        if not args.all and ov == 0:
             continue
 
-        print "{0}\t{1}".format(row.strip(), Overlap_types[ov])
+        print("{0}\t{1}".format(row.strip(), Overlap_types[ov]))
 
 def print_stats(qrycovered, refcovered, id_pct):
     from maize.utils.cbook import thousands
@@ -406,7 +406,7 @@ def summary(args):
     provide summary on id% and cov%, for both query and reference
     """
     p = OptionParser(summary.__doc__)
-    p.add_option("-s", dest="single", default=False, action="store_true",
+    sp1.add_argument("-s", dest="single", default=False, action="store_true",
             help="provide stats per reference seq")
 
     opts, args = p.parse_args(args)
@@ -428,15 +428,15 @@ def filter(args):
     """
     p = OptionParser(filter.__doc__)
     p.set_align(pctid=0, hitlen=0)
-    p.add_option("--overlap", default=False, action="store_true",
+    sp1.add_argument("--overlap", default=False, action="store_true",
             help="Print overlap status (e.g. terminal, contained)")
 
     opts, args = p.parse_args(args)
     if len(args) != 1:
         sys.exit(not p.print_help())
 
-    pctid = opts.pctid
-    hitlen = opts.hitlen
+    pctid = args.pctid
+    hitlen = args.hitlen
 
     filename, = args
     if pctid == 0 and hitlen == 0:
@@ -464,11 +464,11 @@ def filter(args):
             continue
         if c.len2 < hitlen:
             continue
-        if opts.overlap and not c.overlap:
+        if args.overlap and not c.overlap:
             continue
 
         outrow = row.rstrip()
-        if opts.overlap:
+        if args.overlap:
             ov = Overlap_types[c.overlap]
             outrow += "\t" + ov
         print >> fw, outrow
@@ -483,11 +483,11 @@ def bed(args):
     be beyond quality cutoff, say 50) in bed format
     """
     p = OptionParser(bed.__doc__)
-    p.add_option("--query", default=False, action="store_true",
+    sp1.add_argument("--query", default=False, action="store_true",
             help="print out query intervals rather than ref [default: %default]")
-    p.add_option("--pctid", default=False, action="store_true",
+    sp1.add_argument("--pctid", default=False, action="store_true",
             help="use pctid in score [default: %default]")
-    p.add_option("--cutoff", dest="cutoff", default=0, type="float",
+    sp1.add_argument("--cutoff", dest="cutoff", default=0, type="float",
             help="get all the alignments with quality above threshold " +\
                  "[default: %default]")
 
@@ -496,9 +496,9 @@ def bed(args):
         sys.exit(p.print_help())
 
     coordsfile, = args
-    query = opts.query
-    pctid = opts.pctid
-    quality_cutoff = opts.cutoff
+    query = args.query
+    pctid = args.pctid
+    quality_cutoff = args.cutoff
 
     coords = Coords(coordsfile)
 
@@ -506,16 +506,55 @@ def bed(args):
         if c.quality < quality_cutoff:
             continue
         line = c.qbedline(pctid=pctid) if query else c.bedline(pctid=pctid)
-        print line
+        print(line)
 
 if __name__ == '__main__':
-    actions = (
-        ('annotate', 'annotate overlap types in coordsfile'),
-        ('blast', 'convert to blast tabular output'),
-        ('filter', 'filter based on id% and cov%, write a new coords file'),
-        ('fromdelta', 'convert deltafile to coordsfile'),
-        ('merge', 'merge deltafiles'),
-        ('sort', 'sort coords file based on query or subject'),
-        ('summary', 'provide summary on id% and cov%'),
-            )
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'coords utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser('annotate', help='annotate overlap types in coordsfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = annotate)
+    
+    sp1 = sp.add_parser('blast', help='convert to blast tabular output',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = blast)
+    
+    sp1 = sp.add_parser('filter', help='filter based on id%% and cov%%, write a new coords file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = filter)
+    
+    sp1 = sp.add_parser('fromdelta', help='convert deltafile to coordsfile',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = fromdelta)
+    
+    sp1 = sp.add_parser('merge', help='merge deltafiles',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = merge)
+    
+    sp1 = sp.add_parser('sort', help='sort coords file based on query or subject',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = sort)
+    
+    sp1 = sp.add_parser('summary', help='provide summary on id%% and cov%%',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = summary)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 

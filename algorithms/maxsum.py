@@ -9,7 +9,6 @@ Implements the max sum segment algorithm, using Kadane's algorithm, see
 
 Infinity = 1e10000
 
-
 def max_sum(a):
     """
     For an input array a, output the range that gives the largest sum
@@ -36,12 +35,11 @@ def max_sum(a):
 
     return max_sum, max_start_index, max_end_index
 
-
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
 
     import numpy as np
     A = np.random.random_integers(-10, 10, 10)
-    print "max_sum(%s)" % list(A)
-    print max_sum(A)
+    print("max_sum(%s)" % list(A))
+    print(max_sum(A))

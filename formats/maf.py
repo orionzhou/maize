@@ -11,11 +11,10 @@ import sys
 from bx import interval_index_file
 from bx.align import maf
 
-from jcvi.formats.base import BaseFile
-from jcvi.apps.base import OptionParser, ActionDispatcher, need_update
-from jcvi.apps.lastz import blastz_score_to_ncbi_expectation, \
+from maize.formats.base import BaseFile
+from maize.apps.base import need_update
+from maize.apps.lastz import blastz_score_to_ncbi_expectation, \
             blastz_score_to_ncbi_bits
-
 
 class Maf (BaseFile, dict):
 
@@ -54,16 +53,30 @@ class Maf (BaseFile, dict):
         indexes.write(index_handle)
         index_handle.close()
 
-
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = ''
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('bed', 'convert MAF to BED format'),
-        ('blast', 'convert MAF to BLAST tabular format'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    sp1 = sp.add_parser('bed', help='convert MAF to BED format',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = bed)
+    
+    sp1 = sp.add_parser('blast', help='convert MAF to BLAST tabular format',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = blast)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def bed(args):
     """
@@ -90,11 +103,9 @@ def bed(args):
 
             for a, tag in zip((a, b), "ab"):
                 name = "{0}_{1:07d}{2}".format(prefix, j, tag)
-                print "\t".join(str(x) for x in (a.src, a.forward_strand_start, \
-                        a.forward_strand_end, name))
+                print("\t".join(str(x) for x in (a.src, a.forward_strand_start, a.forward_strand_end, name)))
 
             j += 1
-
 
 def alignment_details(a, b):
     nmatch = 0
@@ -115,7 +126,6 @@ def alignment_details(a, b):
     pctid = 100. * nmatch / l
     return pctid, nmismatch, ngaps
 
-
 def maf_to_blast8(f):
     reader = Maf(f).reader
     for rec in reader:
@@ -134,10 +144,9 @@ def maf_to_blast8(f):
         hitlen = len(a.text)
 
         pctid, nmismatch, ngaps = alignment_details(a.text, b.text)
-        print "\t".join(str(x) for x in (query, subject, pctid, hitlen,
+        print("\t".join(str(x) for x in (query, subject, pctid, hitlen,
             nmismatch, ngaps, qstart, qstop, sstart, sstop,
-            evalue, score))
-
+            evalue, score)))
 
 def blast(args):
     '''
@@ -155,7 +164,6 @@ def blast(args):
 
     for f in flist:
         maf_to_blast8(f)
-
 
 if __name__ == '__main__':
     main()

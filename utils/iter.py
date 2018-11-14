@@ -7,7 +7,6 @@ with some modifications.
 from itertools import *
 from collections import Iterable
 
-
 def take(n, iterable):
     "Return first n items of the iterable as a list"
     return list(islice(iterable, n))
@@ -65,13 +64,13 @@ def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
     next(b, None)
-    return izip(a, b)
+    return zip(a, b)
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
+    return zip_longest(fillvalue=fillvalue, *args)
 
 def roundrobin(*iterables):
     "roundrobin('ABC', 'D', 'EF') --> A D E B F C"
@@ -198,7 +197,7 @@ def chunked(iterable, n):
 
     """
     # Doesn't seem to run into any number-of-args limits.
-    for group in (list(g) for g in izip_longest(*[iter(iterable)] * n,
+    for group in (list(g) for g in zip_longest(*[iter(iterable)] * n,
                                                 fillvalue=_marker)):
         if group[-1] is _marker:
             # If this is the last group, shuck off the padding:

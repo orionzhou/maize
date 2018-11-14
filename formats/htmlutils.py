@@ -9,11 +9,10 @@ import os.path as op
 import sys
 import logging
 
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 from urlparse import urljoin
 
-from jcvi.apps.base import OptionParser, ActionDispatcher, download
-
+from maize.apps.base import download
 
 def main():
 
@@ -25,20 +24,19 @@ def main():
     p = ActionDispatcher(actions)
     p.dispatch(globals())
 
-
 def gallery(args):
     """
     %prog gallery folder link_prefix
 
     Convert a folder of figures to a HTML table. For example:
 
-    $ python -m jcvi.formats.html gallery Paper-figures/
+    $ python -m maize.formats.html gallery Paper-figures/
     https://dl.dropboxusercontent.com/u/15937715/Data/Paper-figures/
 
     Maps the images from local to remote.
     """
-    from jcvi.apps.base import iglob
-    from jcvi.utils.iter import grouper
+    from maize.apps.base import iglob
+    from maize.utils.iter import grouper
 
     p = OptionParser(gallery.__doc__)
     p.add_option("--columns", default=3, type="int",
@@ -54,19 +52,18 @@ def gallery(args):
     width = opts.width
     images = iglob(folder, "*.jpg,*.JPG,*.png")
     td = '<td>{0}<br><a href="{1}"><img src="{1}" width="{2}"></a></td>'
-    print "<table>"
+    print("<table>")
     for ims in grouper(images, opts.columns):
-        print '<tr height="{0}" valign="top">'.format(width + 5)
+        print('<tr height="{0}" valign="top">'.format(width + 5))
         for im in ims:
             if not im:
                 continue
             im = op.basename(im)
             pf = im.split('.')[0].replace('_', '-')
             link = link_prefix.rstrip("/") + "/" + im
-            print td.format(pf, link, width)
-        print "</tr>"
-    print "</table>"
-
+            print(td.format(pf, link, width))
+        print("</tr>")
+    print("</table>")
 
 def links(args):
     """
@@ -95,8 +92,7 @@ def links(args):
     for a in aa:
         link = a.get(src)
         link = urljoin(url, link)
-        print link
-
+        print(link)
 
 def unescape(s, unicode_action="replace"):
     """
@@ -108,7 +104,6 @@ def unescape(s, unicode_action="replace"):
     s = s.encode('ascii', unicode_action)
     s = s.replace("\n", "").strip()
     return s
-
 
 def table(args):
     """
@@ -150,7 +145,6 @@ def table(args):
             writer.writerow(row)
             nrows += 1
         logging.debug("Table with {0} rows written to `{1}`.".format(nrows, csvfile))
-
 
 if __name__ == '__main__':
     main()

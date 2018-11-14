@@ -20,11 +20,10 @@ from ConfigParser import NoOptionError, NoSectionError
 from multiprocessing import Pool
 from botocore.exceptions import ClientError, ParamValidationError
 
-from jcvi.formats.base import BaseFile, SetFile, timestamp
-from jcvi.apps.base import OptionParser, ActionDispatcher, datafile, get_config, popen, sh
+from maize.formats.base import BaseFile, SetFile, timestamp
+from maize.apps.base import datafile, get_config, sh
 
 AWS_CREDS_PATH = '%s/.aws/credentials' % (op.expanduser('~'),)
-
 
 class InstanceSkeleton(BaseFile):
 
@@ -100,21 +99,56 @@ class InstanceSkeleton(BaseFile):
         self.spec["LaunchSpec"]["ImageId"] = image_id
         self.save()
 
-
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = ''
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('cp', 'copy files with support for wildcards'),
-        ('ls', 'list files with support for wildcards'),
-        ('rm', 'remove files with support for wildcards'),
-        ('role', 'change aws role'),
-        ('start', 'start ec2 instance'),
-        ('stop', 'stop ec2 instance'),
-        ('ip', 'describe current instance'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
+    sp1 = sp.add_parser('cp', help='copy files with support for wildcards',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = cp)
+    
+    sp1 = sp.add_parser('ls', help='list files with support for wildcards',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = ls)
+    
+    sp1 = sp.add_parser('rm', help='remove files with support for wildcards',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = rm)
+    
+    sp1 = sp.add_parser('role', help='change aws role',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = role)
+    
+    sp1 = sp.add_parser('start', help='start ec2 instance',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = start)
+    
+    sp1 = sp.add_parser('stop', help='stop ec2 instance',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = stop)
+    
+    sp1 = sp.add_parser('ip', help='describe current instance',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = ip)
+    
 
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def ip(args):
     """
@@ -129,7 +163,6 @@ def ip(args):
     print >> sys.stderr, "IP address:", s.private_ip_address
     print >> sys.stderr, "Instance type:", s.instance_type
 
-
 def start(args):
     """
     %prog start
@@ -137,17 +170,17 @@ def start(args):
     Launch ec2 instance through command line.
     """
     p = OptionParser(start.__doc__)
-    p.add_option("--ondemand", default=False, action="store_true",
+    sp1.add_argument("--ondemand", default=False, action="store_true",
                  help="Do we want a more expensive on-demand instance")
-    p.add_option("--profile", default="mvrad-datasci-role", help="Profile name")
-    p.add_option("--price", default=4.0, type=float, help="Spot price")
+    sp1.add_argument("--profile", default="mvrad-datasci-role", help="Profile name")
+    sp1.add_argument("--price", default=4.0, type=float, help="Spot price")
     opts, args = p.parse_args(args)
 
     if len(args) != 0:
         sys.exit(not p.print_help())
 
     role(["htang"])
-    session = boto3.Session(profile_name=opts.profile)
+    session = boto3.Session(profile_name=args.profile)
     client = session.client('ec2')
     s = InstanceSkeleton()
 
@@ -160,7 +193,7 @@ def start(args):
     launch_spec = s.launch_spec
     instance_id = ""
 
-    if opts.ondemand:
+    if args.ondemand:
         # Launch on-demand instance
         response = client.run_instances(
             BlockDeviceMappings=s.block_device_mappings,
@@ -179,7 +212,7 @@ def start(args):
     else:
         # Launch spot instance
         response = client.request_spot_instances(
-            SpotPrice=str(opts.price),
+            SpotPrice=str(args.price),
             InstanceCount=1,
             Type="one-time",
             AvailabilityZoneGroup=s.availability_zone,
@@ -210,7 +243,7 @@ def start(args):
             status = response["InstanceStatuses"][0]["InstanceState"]["Name"]
 
     # Tagging
-    name = "htang-lx-ondemand" if opts.ondemand else "htang-lx-spot"
+    name = "htang-lx-ondemand" if args.ondemand else "htang-lx-spot"
     response = client.create_tags(
         Resources=[instance_id],
         Tags=[{"Key": k, "Value": v} for k, v in { \
@@ -236,7 +269,6 @@ def start(args):
 
     s.save_instance_id(instance_id, ip_address)
 
-
 def stop(args):
     """
     %prog stop
@@ -244,14 +276,14 @@ def stop(args):
     Stop EC2 instance.
     """
     p = OptionParser(stop.__doc__)
-    p.add_option("--profile", default="mvrad-datasci-role", help="Profile name")
+    sp1.add_argument("--profile", default="mvrad-datasci-role", help="Profile name")
     opts, args = p.parse_args(args)
 
     if len(args) != 0:
         sys.exit(not p.print_help())
 
     role(["htang"])
-    session = boto3.Session(profile_name=opts.profile)
+    session = boto3.Session(profile_name=args.profile)
     client = session.client('ec2')
     s = InstanceSkeleton()
 
@@ -301,7 +333,6 @@ def stop(args):
     s.save_image_id(new_image_id)
     s.save_instance_id("", "")
 
-
 def glob_s3(store, keys=None, recursive=False):
     store, cards = store.rsplit("/", 1)
     contents = ls_s3(store, recursive=recursive)
@@ -315,11 +346,9 @@ def glob_s3(store, keys=None, recursive=False):
 
     return filtered
 
-
 def rm_s3(store):
     cmd = "aws s3 rm {}".format(store)
     sh(cmd)
-
 
 def rm(args):
     """
@@ -338,12 +367,10 @@ def rm(args):
     for c in contents:
         rm_s3(c)
 
-
 def worker(work):
     c, target, force = work
     if force or not op.exists(target):
         pull_from_s3(c, target)
-
 
 def cp(args):
     """
@@ -352,7 +379,7 @@ def cp(args):
     Copy files to folder. Accepts list of s3 addresses as input.
     """
     p = OptionParser(cp.__doc__)
-    p.add_option("--force", default=False,
+    sp1.add_argument("--force", default=False,
                  action="store_true", help="Force overwrite if exists")
     p.set_cpus()
     opts, args = p.parse_args(args)
@@ -361,8 +388,8 @@ def cp(args):
         sys.exit(not p.print_help())
 
     store, folder = args
-    force = opts.force
-    cpus = opts.cpus
+    force = args.force
+    cpus = args.cpus
     if op.exists(store):
         contents = [x.strip().split(",") for x in open(store)]
     else:
@@ -386,7 +413,6 @@ def cp(args):
     worker_pool.close()
     worker_pool.join()
 
-
 def ls(args):
     """
     %prog ls "s3://hli-mv-data-science/htang/str/*.vcf.gz"
@@ -394,8 +420,8 @@ def ls(args):
     List files with support for wildcards.
     """
     p = OptionParser(ls.__doc__)
-    p.add_option("--keys", help="List of keys to include")
-    p.add_option("--recursive", default=False, action="store_true",
+    sp1.add_argument("--keys", help="List of keys to include")
+    sp1.add_argument("--recursive", default=False, action="store_true",
                  help="Recursive search")
     opts, args = p.parse_args(args)
 
@@ -403,17 +429,15 @@ def ls(args):
         sys.exit(not p.print_help())
 
     store, = args
-    keys = opts.keys
+    keys = args.keys
     if keys:
         keys = SetFile(keys)
-    print "\n".join(glob_s3(store, keys=keys, recursive=opts.recursive))
-
+    print("\n".join(glob_s3(store, keys=keys, recursive=args.recursive)))
 
 def s3ify(address):
     if not address.startswith("s3://"):
         address = "s3://" + address.lstrip("/")
     return address
-
 
 def push_to_s3(s3_store, obj_name):
     cmd = "sync" if op.isdir(obj_name) else "cp"
@@ -422,7 +446,6 @@ def push_to_s3(s3_store, obj_name):
     cmd = "aws s3 {0} {1} {2} --sse".format(cmd, obj_name, s3address)
     sh(cmd)
     return s3address
-
 
 def pull_from_s3(s3_store, file_name=None, overwrite=True):
     is_dir = s3_store.endswith("/")
@@ -438,7 +461,6 @@ def pull_from_s3(s3_store, file_name=None, overwrite=True):
             sh(cmd)
     return op.abspath(file_name)
 
-
 def sync_from_s3(s3_store, target_dir=None):
     s3_store = s3_store.rstrip("/")
     s3_store = s3ify(s3_store)
@@ -447,7 +469,6 @@ def sync_from_s3(s3_store, target_dir=None):
     cmd = "aws s3 sync {}/ {}/".format(s3_store, target_dir)
     sh(cmd)
     return target_dir
-
 
 def ls_s3(s3_store_obj_name, recursive=False):
     s3_store_obj_name = s3ify(s3_store_obj_name)
@@ -466,17 +487,14 @@ def ls_s3(s3_store_obj_name, recursive=False):
 
     return contents
 
-
 def check_exists_s3(s3_store_obj_name):
     s3_store_obj_name = s3ify(s3_store_obj_name)
     cmd = "aws s3 ls {0} | wc -l".format(s3_store_obj_name)
     counts = int(popen(cmd).read())
     return counts != 0
 
-
 def aws_configure(profile, key, value):
     sh('aws configure set profile.{0}.{1} {2}'.format(profile, key, value))
-
 
 def role(args):
     """
@@ -488,14 +506,14 @@ def role(args):
         "205134639408 htang 114692162163 mvrad-datasci-role".split()
 
     p = OptionParser(role.__doc__)
-    p.add_option("--profile", default="mvrad-datasci-role", help="Profile name")
-    p.add_option('--device',
+    sp1.add_argument("--profile", default="mvrad-datasci-role", help="Profile name")
+    sp1.add_argument('--device',
                     default="arn:aws:iam::" + src_acct + ":mfa/" + src_username,
                     metavar='arn:aws:iam::123456788990:mfa/dudeman',
                     help="The MFA Device ARN. This value can also be "
                     "provided via the environment variable 'MFA_DEVICE' or"
                     " the ~/.aws/credentials variable 'aws_mfa_device'.")
-    p.add_option('--duration',
+    sp1.add_argument('--duration',
                     type=int, default=3600,
                     help="The duration, in seconds, that the temporary "
                             "credentials should remain valid. Minimum value: "
@@ -504,17 +522,17 @@ def role(args):
                             "hour) when using '--assume-role'. This value "
                             "can also be provided via the environment "
                             "variable 'MFA_STS_DURATION'. ")
-    p.add_option('--assume-role', '--assume',
+    sp1.add_argument('--assume-role', '--assume',
                     default="arn:aws:iam::" + dst_acct + ":role/" + dst_role,
                     metavar='arn:aws:iam::123456788990:role/RoleName',
                     help="The ARN of the AWS IAM Role you would like to "
                     "assume, if specified. This value can also be provided"
                     " via the environment variable 'MFA_ASSUME_ROLE'")
-    p.add_option('--role-session-name',
+    sp1.add_argument('--role-session-name',
                     help="Friendly session name required when using "
                     "--assume-role",
                     default=getpass.getuser())
-    p.add_option('--force',
+    sp1.add_argument('--force',
                     help="Refresh credentials even if currently valid.",
                     action="store_true")
     opts, args = p.parse_args(args)
@@ -525,7 +543,6 @@ def role(args):
     # Use a config to check the expiration of session token
     config = get_config(AWS_CREDS_PATH)
     validate(opts, config)
-
 
 def validate(args, config):
     """Validate if the config file is properly structured
@@ -655,7 +672,6 @@ def validate(args, config):
     if should_refresh:
         get_credentials(profile, args, config)
 
-
 def get_credentials(profile, args, config):
     console_input = prompter()
     mfa_token = console_input('Enter AWS MFA code for device [%s] '
@@ -740,12 +756,10 @@ def get_credentials(profile, args, config):
         "Success! Your credentials will expire in %s seconds at: %s"
         % (args.duration, response['Credentials']['Expiration']))
 
-
 def log_error_and_exit(message):
     """Log an error message and exit with error"""
     logging.error(message)
     sys.exit(1)
-
 
 def prompter():
     """Ask for a string from the user"""
@@ -755,7 +769,6 @@ def prompter():
         console_input = input
 
     return console_input
-
 
 if __name__ == '__main__':
     main()

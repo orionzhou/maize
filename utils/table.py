@@ -6,7 +6,6 @@ def comment_banner(s, width=50):
     line = "#" * 50
     return "\n".join((line, "#", "# " + s.strip(), "#", line))
 
-
 def banner(header, rows, major='=', minor='-'):
     formatted = [header] + rows
     rulersize = max(max(len(z) for z in x.splitlines()) for x in formatted)
@@ -16,7 +15,6 @@ def banner(header, rows, major='=', minor='-'):
 
     return "\n".join((table_edge, header, table_sep, rows, table_sep))
 
-
 def loadtable(header, rows, major='=', minor='-', thousands=True):
     """
     Print a tabular output, with horizontal separators
@@ -25,7 +23,6 @@ def loadtable(header, rows, major='=', minor='-', thousands=True):
     header, rows = formatted[0], formatted[1:]
 
     return banner(header, rows)
-
 
 def tabulate(d, transpose=False, thousands=True, key_fun=None, sep=',', align=True):
     """
@@ -74,11 +71,10 @@ def tabulate(d, transpose=False, thousands=True, key_fun=None, sep=',', align=Tr
 
     return loadtable(header, table, thousands=thousands)
 
-
 def load_csv(header, contents, sep=",", thousands=False, align=True):
 
-    from jcvi.formats.base import is_number
-    from jcvi.utils.cbook import thousands as th
+    from maize.formats.base import is_number
+    from maize.utils.cbook import thousands as th
 
     allcontents = [header] + contents if header else contents
     cols = len(contents[0])
@@ -105,7 +101,6 @@ def load_csv(header, contents, sep=",", thousands=False, align=True):
 
     return formatted_contents
 
-
 def write_csv(header, contents, sep=",", filename="stdout", thousands=False,
               tee=False, align=True, comment=False):
     """
@@ -118,7 +113,7 @@ def write_csv(header, contents, sep=",", filename="stdout", thousands=False,
           1,     100
           2,     200
     """
-    from jcvi.formats.base import must_open
+    from maize.formats.base import must_open
 
     formatted = load_csv(header, contents,
                          sep=sep, thousands=thousands, align=align)
@@ -126,10 +121,9 @@ def write_csv(header, contents, sep=",", filename="stdout", thousands=False,
         formatted[0] = '#' + formatted[0][1:]
     formatted = "\n".join(formatted)
     fw = must_open(filename, "w")
-    print >> fw, formatted
+    fw.write(formatted + "\n")
     if tee and filename != "stdout":
-        print formatted
-
+        print(formatted)
 
 if __name__ == '__main__':
     import doctest

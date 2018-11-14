@@ -10,8 +10,7 @@ import numpy as np
 
 from math import log, exp, sqrt
 
-from jcvi.utils.cbook import human_size
-
+from maize.utils.cbook import human_size
 
 def mean_confidence_interval(data, confidence=0.95):
     # Compute the confidence interval around the mean
@@ -23,7 +22,6 @@ def mean_confidence_interval(data, confidence=0.95):
     h = se * scipy.stats.t._ppf((1 + confidence) / 2., n - 1)
     return m, m - h, m + h
 
-
 def confidence_interval(data, confidence=0.95):
     # Compute the confidence interval of the data
     # Note the difference from mean_confidence_interval()
@@ -33,7 +31,6 @@ def confidence_interval(data, confidence=0.95):
     h = 1.96 * stdev
     return m, m - h, m + h
 
-
 def MAD_interval(data):
     # Compute the MAD interval of the data
     A = 1.0 * np.array(data)
@@ -41,7 +38,6 @@ def MAD_interval(data):
     D = np.absolute(A - M)
     MAD = np.median(D)
     return M, M - MAD, M + MAD
-
 
 def erf(x):
     # save the sign of x
@@ -61,13 +57,11 @@ def erf(x):
     y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * exp(-x * x)
     return sign * y  # erf(-x) = -erf(x)
 
-
 def gaussian_prob_le(mu, sigma, x):
     if sigma == 0:
         return 1 if mu <= x else 0
     z = (x - mu) / (sigma * sqrt(2))
     return .5 + .5 * erf(z)
-
 
 def choose_insertsize(readlen=150, step=20, cutoff=.01):
     """
@@ -81,7 +75,6 @@ def choose_insertsize(readlen=150, step=20, cutoff=.01):
             continue
         print >> sys.stderr, "{0}bp\t{1}%".format(i, int(round(100 * p)))
 
-
 def get_kmeans(a, k, iter=100):
     from scipy.cluster.vq import vq, kmeans
 
@@ -90,7 +83,6 @@ def get_kmeans(a, k, iter=100):
     centroids.sort()
     idx, _ = vq(a, centroids)
     return idx
-
 
 def spearmanr(x, y):
     """
@@ -111,7 +103,6 @@ def spearmanr(x, y):
         return 0
     return 1 - distancematrix((x, y), dist="s")[1][0]
 
-
 def reject_outliers(a, threshold=3.5):
     """
     Iglewicz and Hoaglin's robust test for multiple outliers (two sided test).
@@ -131,7 +122,6 @@ def reject_outliers(a, threshold=3.5):
     lb, ub = outlier_cutoff(A, threshold=threshold)
     return np.logical_or(A > ub, A < lb)
 
-
 def outlier_cutoff(a, threshold=3.5):
     """
     Iglewicz and Hoaglin's robust, returns the cutoff values - lower bound and
@@ -143,7 +133,6 @@ def outlier_cutoff(a, threshold=3.5):
     MAD = np.median(D)
     C = threshold / .67449 * MAD
     return M - C, M + C
-
 
 def recomb_probability(cM, method="kosambi"):
     """
@@ -164,7 +153,6 @@ def recomb_probability(cM, method="kosambi"):
     elif method == "haldane":
         return (1 - exp(-2 * d)) / 2
 
-
 def jukesCantorD(p, L=100):
     """
     >>> jukesCantorD(.1)
@@ -180,7 +168,6 @@ def jukesCantorD(p, L=100):
 
     return D, varD
 
-
 def jukesCantorP(D):
     """
     >>> jukesCantorP(.1)
@@ -191,7 +178,6 @@ def jukesCantorP(D):
     rD = exp(-4. / 3 * D)
     p = .75 * (1 - rD)
     return p
-
 
 def velvet(readsize, genomesize, numreads, K):
     """
@@ -215,7 +201,6 @@ def velvet(readsize, genomesize, numreads, K):
 
     ram = human_size(ram * 1000, a_kilobyte_is_1024_bytes=True)
     print >> sys.stderr, "RAM usage: {0} (MAXKMERLENGTH=31)".format(ram)
-
 
 if __name__ == '__main__':
 

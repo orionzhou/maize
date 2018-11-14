@@ -73,11 +73,9 @@ __version__ = '2.3'
 
 '''Default ProgressBar widgets'''
 
-
 def format_updatable(updatable, pbar):
     if hasattr(updatable, 'update'): return updatable.update(pbar)
     else: return updatable
-
 
 class Widget(AbstractWidget):
     '''The base class for all widgets
@@ -100,7 +98,6 @@ class Widget(AbstractWidget):
         pbar - a reference to the calling ProgressBar
         '''
 
-
 class WidgetHFill(Widget):
     '''The base class for all variable width widgets.
 
@@ -116,7 +113,6 @@ class WidgetHFill(Widget):
         pbar - a reference to the calling ProgressBar
         width - The total width the widget must fill
         '''
-
 
 class Timer(Widget):
     'Widget which displays the elapsed seconds.'
@@ -139,7 +135,6 @@ class Timer(Widget):
 
         return self.format % self.format_time(pbar.seconds_elapsed)
 
-
 class ETA(Timer):
     'Widget which attempts to estimate the time of arrival.'
 
@@ -156,7 +151,6 @@ class ETA(Timer):
             elapsed = pbar.seconds_elapsed
             eta = elapsed * pbar.maxval / pbar.currval - elapsed
             return 'ETA:  %s' % self.format_time(eta)
-
 
 class FileTransferSpeed(Widget):
     'Widget for showing the transfer speed (useful for file transfers).'
@@ -179,7 +173,6 @@ class FileTransferSpeed(Widget):
             scaled = speed / 1000.**power
 
         return self.format % (scaled, self.prefixes[power], self.unit)
-
 
 class AnimatedMarker(Widget):
     '''An animated marker for the progress bar which defaults to appear as if
@@ -204,7 +197,6 @@ class AnimatedMarker(Widget):
 # Alias for backwards compatibility
 RotatingMarker = AnimatedMarker
 
-
 class Counter(Widget):
     'Displays the current count'
 
@@ -216,13 +208,11 @@ class Counter(Widget):
     def update(self, pbar):
         return self.format % pbar.currval
 
-
 class Percentage(Widget):
     'Displays the current percentage as a number with a percent sign.'
 
     def update(self, pbar):
         return '%3d%%' % pbar.percentage()
-
 
 class FormatLabel(Timer):
     'Displays a formatted label'
@@ -255,7 +245,6 @@ class FormatLabel(Timer):
 
         return self.format % context
 
-
 class SimpleProgress(Widget):
     'Returns progress as a count of the total (e.g.: "5 of 47")'
 
@@ -266,7 +255,6 @@ class SimpleProgress(Widget):
 
     def update(self, pbar):
         return '%d%s%d' % (pbar.currval, self.sep, pbar.maxval)
-
 
 class Bar(WidgetHFill):
     'A progress bar which stretches to fill the line.'
@@ -305,7 +293,6 @@ class Bar(WidgetHFill):
         else:
             return '%s%s%s' % (left, marker.rjust(width, self.fill), right)
 
-
 class ReverseBar(Bar):
     'A bar which has a marker which bounces from side to side.'
 
@@ -324,7 +311,6 @@ class ReverseBar(Bar):
         self.right = right
         self.fill = fill
         self.fill_left = fill_left
-
 
 class BouncingBar(Bar):
     def update(self, pbar, width):
@@ -347,7 +333,6 @@ class BouncingBar(Bar):
 
         return '%s%s%s%s%s' % (left, lpad, marker, rpad, right)
 
-
 '''Compatability methods and classes for the progressbar module'''
 # Python 3.x (and backports) use a modified iterator syntax
 # This will allow 2.x to behave with 3.x iterators
@@ -360,7 +345,6 @@ if not hasattr(__builtins__, 'next'):
             # Fallback in case of a "native" iterator
             return iter.next()
 
-
 # Python < 2.5 does not have "any"
 if not hasattr(__builtins__, 'any'):
    def any(iterator):
@@ -369,9 +353,7 @@ if not hasattr(__builtins__, 'any'):
 
       return False
 
-
 class UnknownLength: pass
-
 
 class ProgressBar(object):
     '''The ProgressBar class which updates and prints the bar.
@@ -627,7 +609,6 @@ class ProgressBar(object):
         if self.signal_set:
             signal.signal(signal.SIGWINCH, signal.SIG_DFL)
 
-
 examples = []
 def example(fn):
     try: name = 'Example %d' % int(fn.__name__[7:])
@@ -644,7 +625,6 @@ def example(fn):
     examples.append(wrapped)
     return wrapped
 
-
 @example
 def example0():
     pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=300).start()
@@ -652,7 +632,6 @@ def example0():
         time.sleep(0.01)
         pbar.update(i+1)
     pbar.finish()
-
 
 @example
 def example1():
@@ -663,7 +642,6 @@ def example1():
         # do something
         pbar.update(10*i+1)
     pbar.finish()
-
 
 @example
 def example2():
@@ -685,7 +663,6 @@ def example2():
         pbar.update(5*i+1)
     pbar.finish()
 
-
 @example
 def example3():
     widgets = [Bar('>'), ' ', ETA(), ' ', ReverseBar('<')]
@@ -694,7 +671,6 @@ def example3():
         # do something
         pbar.update(10*i+1)
     pbar.finish()
-
 
 @example
 def example4():
@@ -708,7 +684,6 @@ def example4():
         pbar.update(i)
     pbar.finish()
 
-
 @example
 def example5():
     pbar = ProgressBar(widgets=[SimpleProgress()], maxval=17).start()
@@ -716,7 +691,6 @@ def example5():
         time.sleep(0.2)
         pbar.update(i + 1)
     pbar.finish()
-
 
 @example
 def example6():
@@ -726,13 +700,11 @@ def example6():
         pbar.update(i + 1)
     pbar.finish()
 
-
 @example
 def example7():
     pbar = ProgressBar()  # Progressbar can guess maxval automatically.
     for i in pbar(range(80)):
         time.sleep(0.01)
-
 
 @example
 def example8():
@@ -740,13 +712,11 @@ def example8():
     for i in pbar((i for i in range(80))):
         time.sleep(0.01)
 
-
 @example
 def example9():
     pbar = ProgressBar(widgets=['Working: ', AnimatedMarker()])
     for i in pbar((i for i in range(50))):
         time.sleep(.08)
-
 
 @example
 def example10():
@@ -755,7 +725,6 @@ def example10():
     for i in pbar((i for i in range(150))):
         time.sleep(0.1)
 
-
 @example
 def example11():
     widgets = [FormatLabel('Processed: %(value)d lines (in: %(elapsed)s)')]
@@ -763,14 +732,12 @@ def example11():
     for i in pbar((i for i in range(150))):
         time.sleep(0.1)
 
-
 @example
 def example12():
     widgets = ['Balloon: ', AnimatedMarker(markers='.oO@* ')]
     pbar = ProgressBar(widgets=widgets)
     for i in pbar((i for i in range(24))):
         time.sleep(0.3)
-
 
 @example
 def example17():
@@ -780,7 +747,6 @@ def example17():
     pbar = ProgressBar(widgets=widgets)
     for i in pbar((i for i in range(180))):
         time.sleep(0.05)
-
 
 if __name__ == '__main__':
     try:
