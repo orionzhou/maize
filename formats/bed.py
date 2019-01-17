@@ -824,12 +824,11 @@ def filter(args):
     minscore = args.minscore
     total = []
     keep = []
-    fhi = must_open(args.fi)
-    for line in fhi:
+    for row in must_open(args.fi):
         try:
             b = BedLine(row)
         except IndexError:
-            print >> fw, row.strip()
+            logging.error(row.strip())
             continue
         span = b.span
         total.append(span)

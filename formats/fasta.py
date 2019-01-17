@@ -75,7 +75,7 @@ def translate(args):
 def extract(args):
     import re
     from maize.formats.bed import Bed
-    
+
     db = ""
     if op.isfile(args.db):
         db = Fasta(args.db)
@@ -88,7 +88,7 @@ def extract(args):
     reg2 = re.compile("^([\w\-]+)$")
     bed = Bed()
     if op.isfile(args.loc):
-        bed = Bed(args.loc)
+        bed = Bed(args.loc, sorted=False)
     else:
         for loc in args.loc.split(","):
             res = reg1.match(loc)
@@ -109,7 +109,7 @@ def extract(args):
                         logging.error("%s not in db => skipped" % sid)
                 else:
                     logging.error("%s: unknown locstr => skipped" % loc)
-    
+
     rcds = []
     for b in bed:
         sid, beg, end = b.seqid, b.start, b.end
@@ -288,7 +288,7 @@ def rename(args):
 
     nchrom = slst[-1][1][0]
     sdigits = ndigit(slst[-1][1][0])
-    cdigits = ndigit(clst[-1][1][0])
+    cdigits = ndigit(clst[-1][1][0]) if len(clst) > 0 else 1
     sfmt = "%s%%0%dd" % (prefix_chr, sdigits)
     cfmt = "%s%%0%dd" % (prefix_ctg, cdigits)
     logging.debug("%d chromosomes, %d scaffolds/contigs" % (len(sdic), len(cdic)))
@@ -310,7 +310,7 @@ def rename(args):
         nrcd = SeqRecord(Seq(str(fas[sid])), id = nsid, description = '')
         SeqIO.write(nrcd, fho, "fasta")
     i = nchrom + 1
-    if merge_short:
+    if len(clst) > 0 and merge_short:
         zid = "%sx" % prefix_chr
         if sdigits == 2:
             zid = "%s99" % prefix_chr

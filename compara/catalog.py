@@ -611,7 +611,7 @@ if __name__ == '__main__':
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("tandem", 
+    sp1 = sp.add_parser("tandem",
         help = 'identify tandem gene groups within certain distance',
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('blast_file', help='blast file')
@@ -630,7 +630,7 @@ if __name__ == '__main__':
         help="compile gene families based on similarity")
     sp1.set_defaults(func = tandem)
 
-    sp1 = sp.add_parser("ortholog", 
+    sp1 = sp.add_parser("ortholog",
         help = 'run a combined synteny and RBH pipeline to call orthologs',
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('species_a', help = 'species A')
@@ -651,14 +651,14 @@ if __name__ == '__main__':
             "(e.g. At5g06540.1 -> At5g06540)")
     sp1.set_defaults(func = ortholog)
 
-    sp1 = sp.add_parser("group", 
+    sp1 = sp.add_parser("group",
             help = 'cluster the anchors into ortho-groups',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('anchorfiles', nargs="+", help='one of more anchor files')
     sp1.add_argument('outfile', help='output file')
     sp1.set_defaults(func = group)
 
-    sp1 = sp.add_parser("omgprepare", 
+    sp1 = sp.add_parser("omgprepare",
             help = 'prepare weights file to run Sankoff OMG algorithm',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('ploidy', help='ploidy')
@@ -671,13 +671,13 @@ if __name__ == '__main__':
             help="C-score cutoff for RBH hits")
     sp1.set_defaults(func = omgprepare)
 
-    sp1 = sp.add_parser("omg", 
+    sp1 = sp.add_parser("omg",
             help = 'generate a series of Sankoff OMG algorithm inputs',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('weightsfiles', nargs="+", help='one of more weights files')
     sp1.set_defaults(func = omg)
 
-    sp1 = sp.add_parser("omgparse", 
+    sp1 = sp.add_parser("omgparse",
             help = 'parse the OMG outputs to get gene lists',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('work', help='work')

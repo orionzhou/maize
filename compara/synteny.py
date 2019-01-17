@@ -1338,7 +1338,7 @@ def main():
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("scan", 
+    sp1 = sp.add_parser("scan",
             help = 'get anchor list using single-linkage algorithm',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument("--n", "--min_size", dest="n", type=int, default=4,
@@ -1348,23 +1348,23 @@ def main():
     sp1.add_argument("--dist", default=20, type=int, help="Extent of flanking regions to search")
     sp1.add_argument("--liftover", help="Scan BLAST file to find extra anchors")
     sp1.set_defaults(func = scan)
-    
-    sp1 = sp.add_parser("summary", 
+
+    sp1 = sp.add_parser("summary",
             help = 'provide statistics for pairwise blocks',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('anchorfile', help = 'anchor file')
     sp1.add_argument("--prefix", help="Generate per block stats")
     sp1.set_defaults(func = summary)
-    
-    sp1 = sp.add_parser("liftover", 
+
+    sp1 = sp.add_parser("liftover",
             help = 'given anchor list, pull adjacent pairs from blast file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('blastfile', help = 'blast file')
     sp1.add_argument('anchorfile', help = 'anchor file')
     sp1.add_argument("--dist", default=10, type=int, help="Extent of flanking regions to search")
     sp1.set_defaults(func = liftover)
-    
-    sp1 = sp.add_parser("mcscan", 
+
+    sp1 = sp.add_parser("mcscan",
             help = 'stack synteny blocks on a reference bed',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('bedfile', help = 'bed file')
@@ -1375,14 +1375,14 @@ def main():
                  help="Output symbols rather than gene names")
     sp1.add_argument("--Nm", default=10, type=int,
                  help="Clip block ends to allow slight overlaps")
-    sp1.add_argument("--trackids", action="store_true", 
+    sp1.add_argument("--trackids", action="store_true",
     			 help="Track block IDs in separate file")
     sp1.add_argument("--mergetandem", default=None,
                  help="merge tandems genes in output acoording to PATH-TO-TANDEM_FILE, "\
                  "cannot be used with --ascii")
     sp1.set_defaults(func = mcscan)
-    
-    sp1 = sp.add_parser("mcscanq", 
+
+    sp1 = sp.add_parser("mcscanq",
             help = 'query multiple synteny blocks',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('qids', help = 'query.ids')
@@ -1390,8 +1390,8 @@ def main():
     sp1.add_argument("--color", help="Add color highlight, used in plotting")
     sp1.add_argument("--invert", action="store_true", help="Invert query and subject")
     sp1.set_defaults(func = mcscanq)
-    
-    sp1 = sp.add_parser("screen", 
+
+    sp1 = sp.add_parser("screen",
             help = 'extract subset of blocks from anchorfile',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('anchorfile', help = 'anchor file')
@@ -1402,28 +1402,28 @@ def main():
     sp1.add_argument("--nointra", action="store_true", help="Remove intra-chromosomal blocks")
     sp1.add_argument("--minspan", default=0, type=int, help="Only blocks with span >= ")
     sp1.add_argument("--minsize", default=0, type=int, help="Only blocks with anchors >= ")
-    sp1.add_argument("--simple", action="store_true", help="Write simple anchorfile with block ends")    
+    sp1.add_argument("--simple", action="store_true", help="Write simple anchorfile with block ends")
     sp1.set_defaults(func = screen)
-    
-    sp1 = sp.add_parser("simple", 
+
+    sp1 = sp.add_parser("simple",
             help = 'convert anchorfile to simple block descriptions',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('anchorfile', help = 'anchor file')
     sp1.add_argument("--rich", action="store_true", help="Output additional columns")
     sp1.add_argument("--coords", action="store_true",
     	help="Output columns with base coordinates")
-    sp1.add_argument("--bed", action="store_true", 
+    sp1.add_argument("--bed", action="store_true",
     	help="Generate BED file for the blocks")
-    sp1.add_argument("--noheader", action="store_true", help="Don't output header")    
+    sp1.add_argument("--noheader", action="store_true", help="Don't output header")
     sp1.set_defaults(func = simple)
-    
-    sp1 = sp.add_parser("stats", 
+
+    sp1 = sp.add_parser("stats",
             help = 'provide statistics for mscan blocks',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('blocksfile', help = 'blocks file')
     sp1.set_defaults(func = stats)
-    
-    sp1 = sp.add_parser("depth", 
+
+    sp1 = sp.add_parser("depth",
             help = 'calculate the depths in the two genomes in comparison',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('anchorfile', help = 'anchor file')
@@ -1433,8 +1433,8 @@ def main():
     sp1.add_argument("--title", default=None, help="Title to display in plot")
     sp1.add_argument("--quota", help="Force to use this quota, e.g. 1:1, 1:2 ...")
     sp1.set_defaults(func = depth)
-    
-    sp1 = sp.add_parser("breakpoint", 
+
+    sp1 = sp.add_parser("breakpoint",
             help = 'identify breakpoints where collinearity ends',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('blastfile', help = 'blast file')
@@ -1445,8 +1445,8 @@ def main():
                  help="ydist (in current genome) cutoff")
     sp1.add_argument("--n", type=int, default=5, help="number of markers in a block")
     sp1.set_defaults(func = breakpoint)
-    
-    sp1 = sp.add_parser("matrix", 
+
+    sp1 = sp.add_parser("matrix",
             help = 'make oxford grid based on anchors file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('bedfile', help = 'all.bed')
@@ -1454,22 +1454,22 @@ def main():
     sp1.add_argument('matrixfile', help = 'matrix file')
     sp1.add_argument("--seqids", help="File with seqids")
     sp1.set_defaults(func = matrix)
-    
-    sp1 = sp.add_parser("coge", 
+
+    sp1 = sp.add_parser("coge",
             help = 'convert CoGe file to anchors file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('cogefile', help = 'coge file')
     sp1.set_defaults(func = coge)
-    
-    sp1 = sp.add_parser("spa", 
+
+    sp1 = sp.add_parser("spa",
             help = 'convert chr ordering from SPA to simple lists',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('spafiles', help = 'spa files')
     sp1.add_argument("--unmapped", action="store_true",
             help="Include unmapped scaffolds in the list")
     sp1.set_defaults(func = spa)
-    
-    sp1 = sp.add_parser("layout", 
+
+    sp1 = sp.add_parser("layout",
             help = 'compute layout based on .simple file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('simplefile', help = 'query.subject.simple')
@@ -1477,30 +1477,30 @@ def main():
     sp1.add_argument('sseqids', help = 'subject.seqids')
     sp1.add_argument("--cpus", type=int, default=32, help='cpus')
     sp1.set_defaults(func = layout)
-    
-    sp1 = sp.add_parser("rebuild", 
+
+    sp1 = sp.add_parser("rebuild",
             help = 'rebuild anchors file from prebuilt blocks file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('blocksfile', help = 'blocks file')
     sp1.add_argument('blastfile', help = 'blast file')
     sp1.add_argument("--header", action="store_true", help="First line is header")
-    sp1.add_argument("--write_blast", action="store_true", 
+    sp1.add_argument("--write_blast", action="store_true",
             help="Get blast records of rebuilt anchors")
     sp1.set_defaults(func = rebuild)
-    
-    sp1 = sp.add_parser("fromaligns", 
+
+    sp1 = sp.add_parser("fromaligns",
             help = 'convert aligns file to anchors file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('alignsfile', help = 'fromaligns')
     sp1.add_argument('outfile', help = 'out.aligns')
     sp1.set_defaults(func = fromaligns)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)
     else:
         print('Error: need to specify a sub command\n')
         parser.print_help()
-    
+
 if __name__ == '__main__':
     main()

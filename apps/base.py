@@ -518,6 +518,7 @@ def is_valid_email(email):
     atom = '[^\\x00-\\x20\\x22\\x28\\x29\\x2c\\x2e\\x3a-\\x3c\\x3e\\x40\\x5b-\\x5d\\x7f-\\xff]+'
     quoted_pair = '\\x5c[\\x00-\\x7f]'
     domain_literal = "\\x5b(?:%s|%s)*\\x5d" % (dtext, quoted_pair)
+
     quoted_string = "\\x22(?:%s|%s)*\\x22" % (qtext, quoted_pair)
     domain_ref = atom
     sub_domain = "(?:%s|%s)" % (domain_ref, domain_literal)

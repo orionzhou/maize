@@ -10,9 +10,6 @@ import sys
 import string
 import logging
 
-from jcvi.apps.base import OptionParser, ActionDispatcher
-
-
 NameTemplate = """        {{
           name name {{
             last "{last}",
@@ -22,20 +19,30 @@ NameTemplate = """        {{
           }}
         }}"""
 
-
 class SubmissionTemplate (object):
     def __init__(self):
         raise NotImplementedError
 
-
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'genbank submission template utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('names', 'convert a list of names to sbt blocks'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
-
+    sp1 = sp.add_parser('names', help='convert a list of names to sbt blocks',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('namelist', help = 'name list file')
+    sp1.add_argument('template', help = 'template file')
+    sp1.set_defaults(func = names)
+    
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def get_name_parts(au):
     """
@@ -58,14 +65,13 @@ def get_name_parts(au):
 
     return last, first, initials
 
-
 def parse_names(lstfile):
     """
     This is the alternative format `lstfile`. In this format, there are two
     sections, starting with [Sequence] and [Manuscript], respectively, then
     followed by authors separated by comma.
     """
-    from jcvi.formats.base import read_block
+    from maize.formats.base import read_block
 
     fp = open(lstfile)
     all_authors = []
@@ -95,14 +101,12 @@ def parse_names(lstfile):
 
     return out
 
-
 def make_template(templatefile, out):
     template = open(templatefile).read()
     template = string.Template(template)
     outmapping = dict(("N{0}".format(i), x) for (i, x) in enumerate(out))
     t = template.substitute(outmapping)
-    print t
-
+    print(t)
 
 def names(args):
     """
@@ -131,13 +135,7 @@ def names(args):
     Often the template file can be retrieved from web form:
     <http://www.ncbi.nlm.nih.gov/WebSub/template.cgi>
     """
-    p = OptionParser(names.__doc__)
-    opts, args = p.parse_args(args)
-
-    if len(args) != 2:
-        sys.exit(p.print_help())
-
-    namelist, templatefile = args
+    namelist, templatefile = args.namelist, args.template
 
     # First check the alternative format
     if open(namelist).read()[0] == '[':
@@ -179,7 +177,6 @@ def names(args):
             len(selected)))
 
     make_template(templatefile, out)
-
 
 if __name__ == '__main__':
     import doctest

@@ -148,6 +148,16 @@ class GffLine (object):
         if update:
             self.update_attributes(gff3=self.gff3, urlquote=urlquote)
 
+    def rename_attr(self, okey, nkey, update=False, urlquote=False):
+        if okey in self.attributes:
+            vals = self.attributes[okey]
+            self.attributes[nkey] = vals
+            self.attributes.pop(okey, None)
+        else:
+            self.attributes[nkey] = []
+        if update:
+            self.update_attributes(gff3=self.gff3, urlquote=urlquote)
+
     def update_attributes(self, skipEmpty=True, gff3=True, gtf=None, urlquote=True):
         attributes = []
         if gtf:
@@ -918,7 +928,7 @@ def fix(args):
                 g.set_attr("Note", "[%s]%s" % (g.get_attr("Note"), conf))
             print(g)
     elif opt == 'ensembl':
-        seqtypes = ["chromosome", "contig",'supercontig','biological_region']
+        seqtypes = ["chromosome","contig",'supercontig','biological_region']
         id_map = dict()
         for g in gff:
             if g.type in seqtypes:
@@ -940,6 +950,9 @@ def fix(args):
             elif g.type in valid_mrna_child_type:
                 if g.get_attr("ID"):
                     g.set_attr("ID", None)
+            if g.type == 'gene':
+                g.rename_attr("Name", "note1")
+                g.rename_attr("description", "note2")
             if g.get_attr("ID"):
                 ary = g.get_attr("ID").split(":")
                 if len(ary) == 2:
@@ -970,6 +983,8 @@ def fix(args):
                 oid = g.get_attr('ID')
                 g.set_attr('ID', nid)
                 gdic[oid] = nid
+                g.rename_attr("Note", "note1")
+                g.rename_attr("gene", "note2")
             elif g.type.endswith('RNA'):
                 nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
                 oid = g.get_attr('ID')
@@ -2209,13 +2224,18 @@ def note(args):
     gff = Gff(gffile)
     seen = set()
     AED = args.AED
+    print("\t".join(['id'] + attrib))
     for g in gff:
         if type and g.type not in type:
             continue
         if AED is not None and float(g.attributes["_AED"][0]) > AED:
             continue
-        keyval = [g.accn] + [",".join(g.attributes[x]) \
-                            for x in attrib if x in g.attributes]
+        keyval = [g.accn]
+        for x in attrib:
+            if x in g.attributes:
+                keyval.append(",".join(g.attributes[x]))
+            else:
+                keyval.append('')
         if exoncounts:
             nexons = exoncounts.get(g.accn, 0)
             keyval.append(str(nexons))
@@ -2454,7 +2474,7 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument("--type", default='gene', help="Only process certain types, multiple types allowed with comma")
-    sp1.add_argument("--attribute", default="Note", help="Attribute field to extract, multiple fields allowd with comma")
+    sp1.add_argument("--attribute", default="note1,note2", help="Attribute field to extract, multiple fields separated by comma")
     sp1.add_argument("--AED", type=float, help="Only extract lines with AED score <=")
     sp1.add_argument("--exoncount", action="store_true", help="Get the exon count for each mRNA feat")
     sp1.set_defaults(func = note)

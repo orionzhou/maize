@@ -20,12 +20,12 @@ def filter(args):
     pqid = ''
     pscore = 0
     lines = []
-    for line in sys.stdin:
+    for line in fhi:
         line = line.strip("\n")
-        qName, qStart, qEnd, qSize, strand, \
-        tName, tStart, tEnd, tSize, \
-        alnLen, match, misMatch, baseN, \
-        qNumIns, tNumIns, qBaseIns, tBaseIns, \
+        qName, qStart, qEnd, qSrd, qSize,\
+        tName, tStart, tEnd, tSrd, tSize,\
+        alnLen, match, misMatch, baseN,\
+        qNumIns, tNumIns, qBaseIns, tBaseIns,\
         ident, score, qLoc, tLoc = line.split("\t")
         #print(line)
         #print(qSize)
@@ -51,7 +51,7 @@ def filter(args):
             else:
                 lines.append(line)
     print("\n".join(lines))
- 
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(

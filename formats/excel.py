@@ -4,17 +4,12 @@
 """
 Read and write EXCEL file.
 
-http://www.simplistix.co.uk/presentations/python-excel.pdf
-
-Library dependency: xlutils
+Library dependency: pandas
 """
 
 import os.path as op
 import sys
 import logging
-
-from jcvi.apps.base import OptionParser, ActionDispatcher
-
 
 class ColorMatcher(object):
 
@@ -58,7 +53,7 @@ class ColorMatcher(object):
         """Takes an "R,G,B" string or wx.Color and returns a matching xlwt
         color.
         """
-        from jcvi.utils.webcolors import color_diff
+        from maize.utils.webcolors import color_diff
         if isinstance(color, int):
             return color
         if color:
@@ -89,16 +84,43 @@ class ColorMatcher(object):
         self.unused_colors.discard(result_color)
         return result_index
 
-
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'read and write excel files'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    actions = (
-        ('csv', 'Convert EXCEL to csv file'),
-        ('fromcsv', 'Convert csv file to EXCEL'),
-            )
-    p = ActionDispatcher(actions)
-    p.dispatch(globals())
+    sp1 = sp.add_parser('csv', help='Convert EXCEL to csv file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('excel', help = 'input excel file')
+    sp1.add_argument('--sheet_name', default='Sheet1', help='worksheet name')
+    sp1.add_argument('--sep', default=',', help='separator')
+    sp1.set_defaults(func = csv)
+    
+    sp1 = sp.add_parser('tsv', help='Convert EXCEL to tsv file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('excel', help = 'input excel file')
+    sp1.add_argument('--sheet_name', default='Sheet1', help='worksheet name')
+    sp1.add_argument('--sep', default='\t', help='separator')
+    sp1.set_defaults(func = csv)
+    
+    sp1 = sp.add_parser('fromcsv', help='Convert csv file to EXCEL',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('csv', help = 'input csv file')
+    sp1.add_argument("--noheader", action="store_true",
+                 help="Do not treat the first row as header")
+    sp1.add_argument("--rgb", default=-1, type=int,
+                 help="Show RGB color box")
+    sp1.set_defaults(func = fromcsv)
 
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 def fromcsv(args):
     """
@@ -108,26 +130,15 @@ def fromcsv(args):
     """
     from csv import reader
     from xlwt import Workbook, easyxf
-    from jcvi.formats.base import flexible_cast
-
-    p = OptionParser(fromcsv.__doc__)
-    p.add_option("--noheader", default=False, action="store_true",
-                 help="Do not treat the first row as header")
-    p.add_option("--rgb", default=-1, type="int",
-                 help="Show RGB color box")
-    p.set_sep()
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    csvfile, = args
-    header = not opts.noheader
-    rgb = opts.rgb
+    from maize.formats.base import flexible_cast
+    
+    csvfile = args.csv
+    header = not args.noheader
+    rgb = args.rgb
     excelfile = csvfile.rsplit(".", 1)[0] + ".xls"
 
     data = []
-    for row in reader(open(csvfile), delimiter=opts.sep):
+    for row in reader(open(csvfile), delimiter=args.sep):
         data.append(row)
 
     w = Workbook()
@@ -156,35 +167,21 @@ def fromcsv(args):
     logging.debug("File written to `{0}`.".format(excelfile))
     return excelfile
 
-
 def csv(args):
     """
     %prog csv excelfile
 
     Convert EXCEL to csv file.
     """
-    from xlrd import open_workbook
+    import pandas as pd
 
-    p = OptionParser(csv.__doc__)
-    p.set_sep(sep=',')
-    opts, args = p.parse_args(args)
-
-    if len(args) != 1:
-        sys.exit(not p.print_help())
-
-    excelfile, = args
-    sep = opts.sep
-    csvfile = excelfile.rsplit(".", 1)[0] + ".csv"
-    wb = open_workbook(excelfile)
-    fw = open(csvfile, "w")
-    for s in wb.sheets():
-        print >> sys.stderr, 'Sheet:',s.name
-        for row in range(s.nrows):
-            values = []
-            for col in range(s.ncols):
-                values.append(s.cell(row, col).value)
-            print >> fw, sep.join(str(x) for x in values)
-
+    excelfile = args.excel
+    sep = args.sep
+    sheet_name = args.sheet_name
+    suf = '.tsv' if sep == '\t' else '.csv'
+    csvfile = excelfile.rsplit(".", 1)[0] + suf
+    df = pd.read_excel(excelfile, sheet_name=sheet_name, header=0)
+    df.to_csv(csvfile, sep=sep, header=True, index=False)
 
 if __name__ == '__main__':
     main()

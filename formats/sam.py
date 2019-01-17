@@ -47,7 +47,7 @@ psl_blockSizes = 18
 psl_qStarts = 19
 psl_tStarts = 20
 psl_seq = 21
-psl_empty_line = '0 0 0 0 0 0 + s 0 0 0 r 0 0 0 0 , ,'.split()
+psl_empty_line = '0 0 0 0 0 0 0 0 + s 0 0 0 r 0 0 0 0 , , ,'.split()
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
@@ -55,7 +55,7 @@ from maize.formats.base import must_open
 def sam2tsv(args):
     sMatch, sMisMatch, sGapOpen, sGapExtend = 2, -3, -5, -2
     sam = pysam.AlignmentFile(args.fi, "r")
-   
+
     print("qId\tqBeg\tqEnd\tqSrd\tqSize\ttId\ttBeg\ttEnd\ttSrd\ttSize\t" +
             "alnLen\tmatch\tmisMatch\tbaseN\tqNumIns\ttNumIns\tqBaseIns\ttBaseIns\tident\tscore\t" +
             "qLoc\ttLoc")
@@ -96,7 +96,7 @@ def sam2tsv(args):
         if qSize == 0:
             qSize = qLen
         #assert qSize == qEnd, "error qSize: %d > %d" % (qSize, qEnd)
-        
+
         score_match = match * sMatch
         score_misMatch = misMatch * sMisMatch
         numIns = qNumIns + tNumIns
@@ -106,13 +106,11 @@ def sam2tsv(args):
         score = score_match + score_misMatch + score_indel
         ident = match / (match + misMatch)
 
-        print("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.03f\t%d\t%s\t%s" % 
+        print("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.03f\t%d\t%s\t%s" %
                 (qId, qBeg, qEnd, qSrd, qSize,
                  tId, tBeg, tEnd, tSrd, tSize,
                  alnLen, match, misMatch, 0,
                  qNumIns, tNumIns, qBaseIns, tBaseIns, ident, score, '', ''))
-        if 1 < 2:
-            sys.exit(1)
 
 def count(args):
     from math import ceil
@@ -416,13 +414,13 @@ def sam2psl(args):
     i = 0
     size_lines = 10**6
     lengths = None
-    for line in must_open(file_in):
+    for line in getlines(file_in):
         if i == 0:
             lengths = line
             i = i + 1
             continue
         i = i + 1
-        temp = get_psl(line,lengths, use_cigar_13, replace_string, read_sequence)
+        temp = get_psl(line, lengths, use_cigar_13, replace_string, read_sequence)
         # saving
         if temp:
             psl.append('\t'.join(temp)+'\n')
@@ -448,7 +446,7 @@ if __name__ == "__main__":
     sp1.add_argument('fi', help = 'input *.sam or *.bam file')
     sp1.add_argument('--paired', action = "store_true", help = 'paired end input ')
     sp1.set_defaults(func = sam2tsv)
- 
+
     sp1 = sp.add_parser("2psl", help = "sam -> psl",
                         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument("sam", help="The input file in SAM format.")
