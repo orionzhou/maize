@@ -11,7 +11,7 @@ import numpy as np
 from collections import defaultdict
 from itertools import groupby
 
-from maize.formats.base import LineFile, must_open, is_number, get_number
+from maize.formats.base import LineFile, must_open, is_number, get_number, ndigit, prettysize
 from maize.utils.location import make_window
 from maize.formats.sizes import Sizes
 from maize.utils.iter import pairwise
@@ -1174,7 +1174,7 @@ def bins(args):
     Bin bed lengths into each consecutive window. Use --subtract to remove bases
     from window, e.g. --subtract gaps.bed ignores the gap sequences.
     """
-    from jcvi.formats.sizes import Sizes
+    from maize.formats.sizes import Sizes
 
     p = OptionParser(bins.__doc__)
     sp1.add_argument("--binsize", default=100000, type="int",
@@ -1269,6 +1269,44 @@ def bins(args):
         binfile = subtractbins(binfile, subtractbinfile)
 
     return binfile
+
+def binpacking(args):
+    import binpacking
+    fi, fo, diro = args.bed, args.chain, args.outdir
+    n = args.N
+    #digit = ndigit(n)
+    #fmt = "part.%%0%dd.fna" % digit
+    fmt = "part.%d.bed"
+    if not op.exists(diro):
+        mkdir(diro)
+    else:
+        sh("rm -rf %s/*" % diro)
+
+    sdic = dict()
+    i = 1
+    fho = must_open(fo, 'w')
+    for b in Bed(fi):
+        rid = "s%d" % i
+        sdic[rid] = [b.seqid, b.start-1, b.end, b.span]
+        nid = "%s-%d-%d" % (b.seqid, b.start, b.end)
+        fho.write("\t".join(str(x) for x in [nid, 0, b.span, '+',
+                                             b.seqid, b.start-1, b.end, rid]) + "\n")
+        i += 1
+    fho.close()
+
+    zdic = {k: v[3] for k, v in sdic.items()}
+    bins = binpacking.to_constant_bin_number(zdic, n)
+
+    sizes = []
+    for j in range(n):
+        sizes.append(np.sum(list(bins[j].values())))
+        fl = op.join(diro, fmt % (j+1))
+        fhl = must_open(fl, 'w')
+        for rid in bins[j].keys():
+            b = sdic[rid][:-1]
+            fhl.write("\t".join(str(x) for x in b) + "\n")
+        fhl.close()
+    print("size range: %s - %s" % (prettysize(sizes[0]), prettysize(sizes[n-1])))
 
 def pile(args):
     """
@@ -2214,7 +2252,7 @@ if __name__ == '__main__':
     sp1 = sp.add_parser("size", help = "report total size of features")
     sp1.add_argument('fi', help = 'input *.bed file')
     sp1.set_defaults(func = size)
- 
+
     sp1 = sp.add_parser('filter', help='filter bedfile to retain records between size range',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input *.bed file')
@@ -2223,7 +2261,7 @@ if __name__ == '__main__':
     sp1.add_argument('--minaccn', type=int, help='minimum value of accn, useful to filter based on coverage')
     sp1.add_argument('--minscore', type=int, help='minimum score')
     sp1.set_defaults(func = filter)
-    
+
     sp1 = sp.add_parser("makewindow", help = "make sliding windows with given size and step",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input *.bed file')
@@ -2235,47 +2273,55 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = depth)
-    
+
     sp1 = sp.add_parser('mergebydepth', help='returns union of features beyond certain depth',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = mergebydepth)
-    
+
     sp1 = sp.add_parser('sort', help='sort bed file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = sort)
-    
+
     sp1 = sp.add_parser('merge', help='merge bed files',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = merge)
-    
+
     sp1 = sp.add_parser('index', help='index bed file using tabix',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = index)
-    
+
     sp1 = sp.add_parser('bins', help='bin bed lengths into each window',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = bins)
-    
+
     sp1 = sp.add_parser('summary', help='summarize the lengths of the intervals',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = summary)
-    
+
     sp1 = sp.add_parser('evaluate', help='make truth table and calculate sensitivity and specificity',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+           formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = evaluate)
-    
+
+    sp1 = sp.add_parser("binpacking", help = 'use bin packing library to distribute records evenly',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('bed', help = 'input intervals to split (*.bed)')
+    sp1.add_argument('chain', help = 'output chain file (*.chain)')
+    sp1.add_argument('outdir', help = 'output directory')
+    sp1.add_argument('--N', type = int, default = 10, help = 'number pieces to split')
+    sp1.set_defaults(func = binpacking)
+
     sp1 = sp.add_parser('pile', help='find the ids that intersect',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = pile)
-    
+
     sp1 = sp.add_parser('pairs', help='estimate insert size between paired reads from bedfile',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')

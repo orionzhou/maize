@@ -103,6 +103,7 @@ def vcf2fas(args):
         print("%s\t%s\t%s\t%s\t%s" % (seqid, beg, end, note, seqstr))
 
 def vcf2bed(args):
+    # bcftools query -f '%CHROM\t%POS0\t%END\t%TYPE:%ALT\t0|1\n' Mo17.vcf -o x.bed
     fhi = must_open(args.fi)
     for line in fhi:
         if line.startswith("#"):

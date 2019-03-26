@@ -81,11 +81,11 @@ def bam2bed(args):
         #if sid == 'D00635:197:CAC47ANXX:2:2311:18289:97712':
         #    print(res)
         #    exit(1)
-        for rbeg, rend, vnts in res: 
+        for rbeg, rend, vnts in res:
             vntstr = '.'
             if len(vnts) > 0:
                 vntstr = " ".join([":".join(map(str,vnt)) for vnt in vnts])
-            fho.write("%s\t%d\t%d\t%s\t%s\n" % 
+            fho.write("%s\t%d\t%d\t%s\t%s\n" %
                     (rid, rbeg, rend, sid, vntstr))
         #exit(1)
     fho.close()
@@ -95,7 +95,7 @@ def infer_read(rows, fho, fhb):
     sid, beg, end, rid = rows[0][0:4]
     locs = set()
     for row in rows:
-        assert rid == row[3], "error: " + str(rows) 
+        assert rid == row[3], "error: " + str(rows)
         if row[4] != '.':
             for rvnt in row[4].split(" "):
                 pos, vtype, vnt = rvnt.split(":")
@@ -153,7 +153,7 @@ def bed_prep(args):
 
 def bed_summarise(args):
     fr, fb, fo = args.tsv, args.bed, args.out
-    
+
     fhr = open(fr, "r")
     rdic = dict()
     for line in fhr:

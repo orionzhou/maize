@@ -8,7 +8,7 @@ import logging
 import re
 
 from itertools import chain
-from astropy.table import Table, Column
+#from astropy.table import Table, Column
 from urllib.parse import quote, unquote, parse_qsl
 
 from maize.utils.cbook import AutoVivification

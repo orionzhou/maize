@@ -12,7 +12,6 @@ import logging
 from collections import defaultdict
 from itertools import groupby
 from pyfaidx import Fasta
-from pyliftover import LiftOver
 
 from maize.formats.base import must_open
 from maize.formats.sizes import Sizes

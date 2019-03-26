@@ -68,7 +68,7 @@ if __name__ == '__main__':
     sp1.add_argument('--cov', type=float, default=0.8, help='min query coverage')
     sp1.add_argument('--best', action = 'store_true', help='only keep best hit(s)')
     sp1.set_defaults(func = filter)
- 
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

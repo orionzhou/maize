@@ -16,6 +16,7 @@ from operator import itemgetter
 from itertools import combinations
 from numpy import *
 from numpy.random import permutation, uniform
+import pandas as pd
 from scipy.stats import pearsonr
 from multiprocessing import Pool
 from sklearn.tree.tree import BaseDecisionTree
@@ -215,22 +216,22 @@ def GENIE3(expr_data,gene_names=None,regulators='all',tree_method='RF',K='sqrt',
     An array in which the element (i,j) is the score of the edge directed from the i-th gene to the j-th gene. All diagonal elements are set to zero (auto-regulations are not considered). When a list of candidate regulators is provided, the scores of all the edges directed from a gene that is not a candidate regulator are set to zero.
         
     '''
-    
+
     time_start = time.time()
-    
+
     # Check input arguments
     if not isinstance(expr_data,ndarray):
         raise ValueError('expr_data must be an array in which each row corresponds to a condition/sample and each column corresponds to a gene')
-        
+
     ngenes = expr_data.shape[1]
-    
+
     if gene_names is not None:
         if not isinstance(gene_names,(list,tuple)):
             raise ValueError('input argument gene_names must be a list of gene names')
         elif len(gene_names) != ngenes:
             raise ValueError('input argument gene_names must be a list of length p, where p is the number of columns/genes in the expr_data')
-        
-    if regulators is not 'all':
+
+    if regulators != 'all':
         if not isinstance(regulators,(list,tuple)):
             raise ValueError('input argument regulators must be a list of gene names')
 
@@ -239,44 +240,42 @@ def GENIE3(expr_data,gene_names=None,regulators='all',tree_method='RF',K='sqrt',
         else:
             sIntersection = set(gene_names).intersection(set(regulators))
             if not sIntersection:
-                raise ValueError('the genes must contain at least one candidate regulator')        
-        
-    if tree_method is not 'RF' and tree_method is not 'ET':
+                raise ValueError('the genes must contain at least one candidate regulator')
+
+    if tree_method not in ['RF','ET']:
         raise ValueError('input argument tree_method must be "RF" (Random Forests) or "ET" (Extra-Trees)')
-        
-    if K is not 'sqrt' and K is not 'all' and not isinstance(K,int): 
+
+    if K not in ['sqrt', 'all'] and not isinstance(K,int):
         raise ValueError('input argument K must be "sqrt", "all" or a stricly positive integer')
-        
+
     if isinstance(K,int) and K <= 0:
         raise ValueError('input argument K must be "sqrt", "all" or a stricly positive integer')
-    
+
     if not isinstance(ntrees,int):
         raise ValueError('input argument ntrees must be a stricly positive integer')
     elif ntrees <= 0:
         raise ValueError('input argument ntrees must be a stricly positive integer')
-        
+
     if not isinstance(nthreads,int):
         raise ValueError('input argument nthreads must be a stricly positive integer')
     elif nthreads <= 0:
         raise ValueError('input argument nthreads must be a stricly positive integer')
-        
-        
+
     print('Tree method: ' + str(tree_method))
     print('K: ' + str(K))
     print('Number of trees: ' + str(ntrees))
     print('\n')
-        
-    
+
+
     # Get the indices of the candidate regulators
     if regulators == 'all':
         input_idx = list(range(ngenes))
     else:
         input_idx = [i for i, gene in enumerate(gene_names) if gene in regulators]
 
-    
     # Learn an ensemble of trees for each target gene, and compute scores for candidate regulators
     VIM = zeros((ngenes,ngenes))
-    
+
     if nthreads > 1:
         print('running jobs on %d threads' % nthreads)
 
@@ -286,7 +285,7 @@ def GENIE3(expr_data,gene_names=None,regulators='all',tree_method='RF',K='sqrt',
 
         pool = Pool(nthreads)
         alloutput = pool.map(wr_GENIE3_single, input_data)
-    
+
         for (i,vi) in alloutput:
             VIM[i,:] = vi
 
@@ -294,13 +293,13 @@ def GENIE3(expr_data,gene_names=None,regulators='all',tree_method='RF',K='sqrt',
         print('running single threaded jobs')
         for i in range(ngenes):
             print('Gene %d/%d...' % (i+1,ngenes))
-            
+
             vi = GENIE3_single(expr_data,i,input_idx,tree_method,K,ntrees)
             VIM[i,:] = vi
 
-   
+
     VIM = transpose(VIM)
- 
+
     time_end = time.time()
     print("Elapsed time: %.2f seconds" % (time_end - time_start))
 
@@ -310,28 +309,28 @@ def wr_GENIE3_single(args):
     return([args[1], GENIE3_single(args[0], args[1], args[2], args[3], args[4], args[5])])
 
 def GENIE3_single(expr_data,output_idx,input_idx,tree_method,K,ntrees):
-    
+
     ngenes = expr_data.shape[1]
-    
+
     # Expression of target gene
     output = expr_data[:,output_idx]
-    
+
     # Normalize output data
     output = output / std(output)
-    
+
     # Remove target gene from candidate regulators
     input_idx = input_idx[:]
     if output_idx in input_idx:
         input_idx.remove(output_idx)
 
     expr_data_input = expr_data[:,input_idx]
-    
+
     # Parameter K of the tree-based method
     if (K == 'all') or (isinstance(K,int) and K >= len(input_idx)):
         max_features = "auto"
     else:
         max_features = K
-    
+
     if tree_method == 'RF':
         treeEstimator = RandomForestRegressor(n_estimators=ntrees,max_features=max_features)
     elif tree_method == 'ET':
@@ -339,12 +338,12 @@ def GENIE3_single(expr_data,output_idx,input_idx,tree_method,K,ntrees):
 
     # Learn ensemble of trees
     treeEstimator.fit(expr_data_input,output)
-    
+
     # Compute importance scores
     feature_importances = compute_feature_importances(treeEstimator)
     vi = zeros(ngenes)
     vi[input_idx] = feature_importances
-       
+
     return vi
 
 def estimate_degradation_rates(TS_data,time_points):
@@ -969,13 +968,14 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'Build Gene Regulatory Network (GRN) w. expression data'
+            description = 'Build Gene Regulatory Network (GRN) using expression matrix'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
     sp1 = sp.add_parser('genie3', help='Build GRN using GENIE3 (tree ensemble)',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help='input file w. expression matrix and TF IDs')
+    sp1.add_argument('fi', help='input expression matrix (*.tsv)')
+    sp1.add_argument('ft', help='file with regulator/TF IDs (*.txt)')
     sp1.add_argument('fo', help = 'output file')
     sp1.add_argument('-p', '--thread', type=int, default=1, help='threads')
     sp1.add_argument('--tree_method', default='RF', choices=['RF','ET'],
@@ -983,10 +983,11 @@ def main():
     sp1.add_argument('--K', default='sqrt', help='K')
     sp1.add_argument('--ntrees', type=int, default=1000, help='number trees to grow')
     sp1.set_defaults(func = run_GENIE3)
-    
+
     sp1 = sp.add_parser('dyngenie3', help='Build GRN using dynGENIE3 (tree ensemble)',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help='input time-series expression matrix and TF IDs')
+    sp1.add_argument('fi', help='input time-series expression matrix (*.tsv)')
+    sp1.add_argument('ft', help='file with regulator/TF IDs (*.txt)')
     sp1.add_argument('fo', help = 'output file')
     sp1.add_argument('-ss', '--steady-state', default=None, help='steady-state expression matrix')
     sp1.add_argument('-p', '--thread', type=int, default=1, help='threads')
@@ -995,7 +996,16 @@ def main():
     sp1.add_argument('--K', default='sqrt', help='K')
     sp1.add_argument('--ntrees', type=int, default=1000, help='number trees to grow')
     sp1.set_defaults(func = run_dynGENIE3)
-    
+
+    sp1 = sp.add_parser('xgb', help='Build GRN using XGBoost',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help='input expression matrix (*.tsv)')
+    sp1.add_argument('ft', help='file with regulator/TF IDs (*.txt)')
+    sp1.add_argument('fo', help = 'output file')
+    sp1.add_argument('-p', '--thread', type=int, default=1, help='threads')
+    sp1.add_argument('--ntrees', type=int, default=1000, help='number trees to grow')
+    sp1.set_defaults(func = run_xgboost)
+
     args = parser.parse_args()
     if args.command:
         args.func(args)
@@ -1004,20 +1014,27 @@ def main():
         parser.print_help()
 
 def run_GENIE3(args):
-    fi, fo = args.fi, args.fo
+    fi, ft, fo = args.fi, args.ft, args.fo
     thread = args.thread
     tree_method, K, ntrees = args.tree_method, args.K, args.ntrees
 
-    fhi = open(fi, 'rb')
-    (exp_mat, tids, rids) = _pickle.load(fhi)
-    fhi.close()
-    VIM = GENIE3(exp_mat, gene_names = tids, regulators = rids,
+    x = pd.read_csv(fi, sep='\t')
+    sids = x.columns.values.tolist()[1:]
+    gids = x['gid'].tolist()
+    exp_mat = x.drop('gid',axis=1).T.values
+
+    rids = pd.read_csv(ft, sep='\t', names=['rid'])['rid'].tolist()
+    rids = list(set(rids) & set(gids))
+
+    VIM = GENIE3(exp_mat, gene_names = gids, regulators = rids,
                  tree_method = tree_method,
                  K = K,
                  ntrees = ntrees,
                  nthreads = thread)
+#    links = get_link_list(VIM, gene_names=gids, regulators=rids)
+    res = [rids, gids, VIM]
     with open(fo, "wb") as fho:
-        _pickle.dump(VIM, fho, protocol = 4)
+        _pickle.dump(res, fho, protocol = 4)
 
 def run_dynGENIE3(args):
     fi, fo = args.fi, args.fo
@@ -1045,6 +1062,21 @@ def run_dynGENIE3(args):
     print(VIM[1:5,1:5])
     with open(fo, "wb") as fho:
         _pickle.dump(VIM, fho)
+
+def run_xgboost(args):
+    fi, fo = args.fi, args.fo
+    thread = args.thread
+
+    x = pd.read_csv(fi, sep='\t')
+    sids = x.columns.values.tolist()[1:]
+    gids = x['gid'].tolist()
+    exp_mat = x.drop('gid',axis=1).T.values
+
+    rids = pd.read_csv(ft, sep='\t', names=['rid'])['rid'].tolist()
+    rids = list(set(rids) & set(gids))
+
+    import xgboost as xgb
+    dtrain = xgb.DMatrix(exp_mat, label=gids)
 
 if __name__ == "__main__":
     main()

@@ -142,14 +142,14 @@ def extract(args):
         rcds.append(rcd)
     SeqIO.write(rcds, sys.stdout, 'fasta')
 
-def split(args):
+def split_old(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
     n = args.N
     if not op.exists(dirw):
         mkdir(dirw)
     else:
         sh("rm -rf %s/*" % dirw)
-    
+
     cdir = os.path.dirname(os.path.realpath(__file__))
     cwd = os.getcwd()
     os.chdir(dirw)
@@ -375,35 +375,27 @@ if __name__ == "__main__":
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("size", help = "Report length for each sequence") 
+    sp1 = sp.add_parser("size", help = "Report length for each sequence")
     sp1.add_argument('fi', help = 'input file (fasta)')
     sp1.add_argument('--header', action = 'store_true', help = 'add header')
     sp1.add_argument('--bed', action = 'store_true', help = 'output in BED')
     sp1.set_defaults(func = size)
 
-    sp1 = sp.add_parser("desc", help = "Report description for each sequence") 
+    sp1 = sp.add_parser("desc", help = "Report description for each sequence")
     sp1.add_argument('fi', help = 'input file (fasta)')
     sp1.add_argument('--header', action = 'store_true', help = 'add header')
     sp1.set_defaults(func = desc)
 
-    sp1 = sp.add_parser("clean", help = "Remove irregular chararacters") 
+    sp1 = sp.add_parser("clean", help = "Remove irregular chararacters")
     sp1.add_argument('fi', help = 'input file (fasta)')
     sp1.set_defaults(func = clean)
-    
+
     sp1 = sp.add_parser("extract", help = 'retrieve fasta sequences',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('db', help = 'sequence database (fasta or genome ID)')
     sp1.add_argument('loc', help = 'location string(s) or BED file(s) (separated by ",")')
     sp1.add_argument('--padding', action = "store_true", help = 'padding to size')
     sp1.set_defaults(func = extract)
-
-    sp1 = sp.add_parser("split", help = 'run pyfasta to split a set of fasta records evenly',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help = 'input file (fasta)')
-    sp1.add_argument('outdir', help = 'output directory')
-    sp1.add_argument('--N', type = int, default = 24, help = 'number pieces')
-    #nproc = int(os.environ['nproc'])
-    sp1.set_defaults(func = split)
 
     sp1 = sp.add_parser("tile", help = 'create sliding windows that tile the entire sequence',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
@@ -430,11 +422,11 @@ if __name__ == "__main__":
     sp1.add_argument('--prefix_chr', default = 'chr', help = 'prefix for renamed sequence IDs')
     sp1.add_argument('--prefix_ctg', default = 'ctg', help = 'prefix for short scaffolds/contigs')
     sp1.set_defaults(func = rename)
-    
+
     sp1 = sp.add_parser("merge", help='merge multiple fasta files and update IDs')
     sp1.add_argument('cfg', help='config file (a text file with identifier followed by the absolute path of fasta in each line)')
     sp1.set_defaults(func = merge)
- 
+
     sp1 = sp.add_parser("merge_pe",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = 'merge two (paired) fasta files into one')
@@ -448,11 +440,11 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("rmdot", help='replace periods (.) in an alignment fasta by dashes (-)')
     sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = rmdot)
-    
+
     sp2 = sp.add_parser("cleanid", help='clean sequence IDs in a fasta file')
     sp2.add_argument('fi', help='input fasta file')
     sp2.set_defaults(func = cleanid)
-    
+
     sp1 = sp.add_parser("2aln", help='convert fasta alignment file to clustal format')
     sp1.add_argument('fi', help='input alignment (.fas)')
     sp1.set_defaults(func = fas2aln)
@@ -460,7 +452,7 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("translate", help='translate nucleotide seqs to amino acid seqs')
     sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = translate)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)
