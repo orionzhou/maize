@@ -2426,7 +2426,7 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = tiling)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

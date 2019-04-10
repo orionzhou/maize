@@ -101,7 +101,7 @@ def main():
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("blast", 
+    sp1 = sp.add_parser("blast",
             help = 'run blastn using query against reference',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('ref_fasta', help = 'reference fasta')
@@ -117,8 +117,8 @@ def main():
     sp1.add_argument("--evalue", type=float, default=.01, help='evalue')
     sp1.add_argument("--cpus", type=int, default=1, help='cpus')
     sp1.set_defaults(func = blast)
- 
-    sp1 = sp.add_parser("blat", 
+
+    sp1 = sp.add_parser("blat",
             help = 'run blat using query against reference',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('ref_fasta', help = 'reference fasta')
@@ -127,16 +127,16 @@ def main():
     sp1.add_argument("--hitlen", type = int, default = 30)
     sp1.add_argument("--cpus", type=int, default=1, help='cpus')
     sp1.set_defaults(func = blast)
-    
-    sp1 = sp.add_parser("blasr", 
+
+    sp1 = sp.add_parser("blasr",
             help = 'run blasr on a set of pacbio reads',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('ref_fasta', help = 'reference fasta')
     sp1.add_argument('fofn', help = 'fofn')
     sp1.add_argument("--cpus", type=int, default=8, help='cpus')
     sp1.set_defaults(func = blasr)
-    
-    sp1 = sp.add_parser("nucmer", 
+
+    sp1 = sp.add_parser("nucmer",
             help = 'run nucmer using query against reference',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('ref_fasta', help = 'reference fasta')
@@ -146,12 +146,12 @@ def main():
     sp1.add_argument("--cpus", type=int, default=1, help='cpus')
     sp1.add_argument("--params", default='-l 100 -c 500', help='run prarameters')
     sp1.set_defaults(func = nucmer)
-    
-    sp1 = sp.add_parser("last", 
+
+    sp1 = sp.add_parser("last",
             help = 'run last using query against reference',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('subject', help = 'subject (database) fasta')
     sp1.add_argument('query', help = 'query fasta')
+    sp1.add_argument('db', help = 'subject database')
     sp1.add_argument("--dbtype", default="nucl",
                  choices=("nucl", "prot"),
                  help="Molecule type of subject database")
@@ -163,7 +163,7 @@ def main():
     sp1.add_argument("--minlen", default=0, type=int,
                  help="Filter alignments by how many bases match")
     sp1.add_argument("--minid", default=0, type=int, help="Minimum sequence identity")
-    sp1.add_argument("--cpus", type=int, default=1, help='cpus')
+    sp1.add_argument('-p', "--thread", type=int, default=1, help='number of threads')
     sp1.add_argument("--params", default='', help='run prarameters')
     sp1.set_defaults(func = last)
 
@@ -305,28 +305,24 @@ def last(args, dbtype=None):
 
     Works with LAST-719.
     """
-    subject, query = args.subject, args.query
+    query, db = args.query, args.db
     path = args.path
-    cpus = args.cpus
+    nthread = args.thread
     if not dbtype:
         dbtype = args.dbtype
     getpath = lambda x: op.join(path, x) if path else x
     lastdb_bin = getpath("lastdb")
     lastal_bin = getpath("lastal")
 
-    subjectdb = subject.rsplit(".", 1)[0]
-    run_lastdb(infile=subject, outfile=subjectdb + ".prj", mask=args.mask, \
-              lastdb_bin=lastdb_bin, dbtype=dbtype)
-
     u = 2 if args.mask else 0
     cmd = "{0} -u {1}".format(lastal_bin, u)
-    cmd += " -P {0} -i3G".format(cpus)
+    cmd += " -P {0} -i3G".format(nthread)
     cmd += " -f {0}".format(args.format)
-    cmd += " {0} {1}".format(subjectdb, query)
+    cmd += " {0} {1}".format(db, query)
 
     minlen = args.minlen
     minid = args.minid
-    extra = args.extra
+    extra = args.params
     assert minid != 100, "Perfect match not yet supported"
     mm = minid / (100 - minid)
 
@@ -337,8 +333,7 @@ def last(args, dbtype=None):
     if extra:
         cmd += " " + extra.strip()
 
-    lastfile = get_outfile(subject, query, suffix="last")
-    sh(cmd, outfile=lastfile)
+    sh(cmd)
 
 if __name__ == '__main__':
     main()
