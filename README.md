@@ -1,39 +1,19 @@
 # maize utility libraries
 
-Collection of Python libraries to parse bioinformatics files, or perform 
-common tasks related to maize assembly, annotation, and comparative genomics.
+Collection of Python libraries to parse bioinformatics files, or perform
+common tasks related to annotation and comparative genomics.
 
 ## Contents
 
 Following modules are available as generic Bioinformatics handling methods.
 
 - `apps`
-  - GenBank entrez accession, phytozome, ensembl and SRA downloader.
-  - Basic phylogenetic tree construction using PHYLIP, PhyML, or RAxML, 
-    and viualization.
   - Wrapper for BLAST+, LASTZ, LAST, BWA, BOWTIE2, CLC, CDHIT, CAP3, etc.
 
 - `formats`
-    Currently supports `.agp` (goldenpath), `.bed` format, `.blast` output,
-    `.coords` format (`nucmer` output), `.fasta` format, `.fastq` format,
-    `.gff` format, `obo` format (ontology),
+    Currently supports `.bed` format, `.blast` output,
+    `.fasta` format, `.fastq` format, `.gff` format, `obo` format (ontology),
     `.psl` format (UCSC blat, GMAP, etc.), `.sam` format (read mapping), etc.
-
-- `utils`
-  - Grouper can be used as disjoint set data structure.
-  - range contains common range operations, like overlap
-    and chaining.
-  - Miscellaneous cookbook recipes, iterators decorators,
-    table utilities.
-
-Then there are modules that contain domain-specific methods.
-
-- `annotation`
-  - Calculate gene, exon and intron statistics.
-
-- `compara`
-  - Synteny scan (de-novo) and lift over (find nearby anchors).
-  - Ortholog and tandem gene duplicates finder.
 
 ## Dependencies
 
@@ -144,7 +124,7 @@ available commands:
     merge               merge several gff files into one
 ```
 
-Then you need to use one action, you can just do:
+Then you can just do to run any action:
 
 ```bash
 python -m maize.formats.fasta size
@@ -153,7 +133,4 @@ python -m maize.formats.gff fix
 ```
 
 This will tell you the options and arguments it expects.
-
-**Feel free to check out other scripts in the package, it is not just
-for FASTA.**
 
