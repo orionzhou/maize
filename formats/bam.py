@@ -5,7 +5,6 @@ import os
 import os.path as op
 import sys
 import logging
-from astropy.table import Table, Column
 import numpy as np
 from string import Template
 import pysam
@@ -14,7 +13,7 @@ from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open
 
 class BamStat(object):
-    
+
     def __init__(self):
         stats = '''
             pair unpair
@@ -32,13 +31,13 @@ class BamStat(object):
         self.rdic = dict()
 
     def __str__(self):
-        return "\n".join(["%s\t%d" % (s, getattr(self, s)) for s in self.stats])+"\n"
+        return "\n".join(["\t".join((s, str(getattr(self, s)))) for s in self.stats])
 
     __repr__ = __str__
 
     def write(self, outfile):
         fh = must_open(outfile, "w")
-        fh.write(str(self))
+        print(self, file=fh)
         fh.close()
 
 def check_bam(fbam):
@@ -67,90 +66,110 @@ def is_perfect_match(aln):
         return False
 
 def bam_stat(args):
-    bam = pysam.AlignmentFile(args.fi)
-    s = BamStat()
-    for aln in bam:
-        if aln.is_secondary or aln.is_supplementary:
-            continue
-        if aln.is_paired:
+    bam = pysam.AlignmentFile(args.fi, 'r')
+
+    if not args.bychr:
+        s = BamStat()
+        for aln in bam:
+            count_read(aln, s)
+
+        if len(s.rdic) > 0:
+            logging.debug("%d 'paired' reads don't have a mate" % len(s.rdic))
+
+        if args.isize:
+            fho = must_open(args.isize, "w")
+            print("\t".join(('insert_size','count')), file=fho)
+            for ins, cnt in s.idic.items():
+                print("%d\t%d\n" % (ins, cnt), file=fho)
+            fho.close()
+
+        print(s)
+    else:
+        ss = dict()
+        for ist in bam.get_index_statistics():
+            ss[ist.contig] = BamStat()
+        for aln in bam:
+            if aln.is_unmapped: continue
+            chrom = aln.reference_name
+            count_read(aln, ss[chrom])
+        for chrom, s in ss.items():
+            for k in s.stats:
+                print("\t".join((chrom, k, str(getattr(s, k)))))
+
+
+def count_read(aln, s):
+    if aln.is_secondary or aln.is_supplementary:
+        return
+    if aln.is_paired:
+        if aln.is_read1:
+            s.pair += 1
+        if aln.is_qcfail:
             if aln.is_read1:
-                s.pair += 1
-            if aln.is_qcfail:
-                if aln.is_read1:
-                    s.pair_bad += 1
-                continue
-            if aln.is_duplicate:
-                if aln.is_read1:
-                    s.pair_dup += 1
-                continue
-            if aln.is_unmapped and aln.mate_is_unmapped:
-                if aln.is_read1:
-                    s.pair_unmap += 1
-            elif not aln.is_unmapped and not aln.mate_is_unmapped:
-                if aln.is_read1:
-                    s.pair_map += 1
-                aid = aln.query_name
-                mq = aln.mapping_quality
-                pm = is_perfect_match(aln)
-                if aid not in s.rdic:
-                    s.rdic[aid] = [mq, pm]
-                    continue
-                else:
-                    m_mq, m_pm = s.rdic[aid]
+                s.pair_bad += 1
+            return
+        if aln.is_duplicate:
+            if aln.is_read1:
+                s.pair_dup += 1
+            return
+        if aln.is_unmapped and aln.mate_is_unmapped:
+            if aln.is_read1:
+                s.pair_unmap += 1
+        elif not aln.is_unmapped and not aln.mate_is_unmapped:
+            if aln.is_read1:
+                s.pair_map += 1
+            aid = aln.query_name
+            mq = aln.mapping_quality
+            pm = is_perfect_match(aln)
+            if aid not in s.rdic:
+                s.rdic[aid] = [mq, pm]
+                return
+            else:
+                m_mq, m_pm = s.rdic[aid]
+                if pm and m_pm:
+                    s.pair_map0 += 1
+                if mq >= 20 or m_mq >= 20:
+                    s.pair_map_hq += 1
                     if pm and m_pm:
-                        s.pair_map0 += 1
-                    if mq >= 20 or m_mq >= 20:
-                        s.pair_map_hq += 1
-                        if pm and m_pm:
-                            s.pair_map_hq0 += 1
-                        if aln.is_proper_pair:
-                            isize = abs(aln.template_length)
-                            if isize not in s.idic:
-                                s.idic[isize] = 0
-                            s.idic[isize] += 1
-                    del s.rdic[aid]
-            elif not aln.is_unmapped:
-                s.pair_orphan += 1
-                mq = aln.mapping_quality
-                pm = is_perfect_match(aln)
+                        s.pair_map_hq0 += 1
+                    if aln.is_proper_pair:
+                        isize = abs(aln.template_length)
+                        if isize not in s.idic:
+                            s.idic[isize] = 0
+                        s.idic[isize] += 1
+                del s.rdic[aid]
+        elif not aln.is_unmapped:
+            s.pair_orphan += 1
+            mq = aln.mapping_quality
+            pm = is_perfect_match(aln)
+            if pm:
+                s.pair_orphan0 += 1
+            if mq >= 20:
+                s.pair_orphan_hq += 1
                 if pm:
-                    s.pair_orphan0 += 1
-                if mq >= 20:
-                    s.pair_orphan_hq += 1
-                    if pm:
-                        s.pair_orphan_hq0 += 1
-            else:
-                assert aln.is_unmapped and not aln.mate_is_unmapped, "error99"
+                    s.pair_orphan_hq0 += 1
         else:
-            s.unpair += 1
-            if aln.is_qcfail:
-                s.unpair_bad += 1
-                continue
-            if aln.is_duplicate:
-                s.unpair_dup += 1
-                continue
-            if aln.is_unmapped:
-                s.unpair_unmap += 1
-            else:
-                s.unpair_map += 1
-                mq = aln.mapping_quality
-                pm = is_perfect_match(aln)
+            assert aln.is_unmapped and not aln.mate_is_unmapped, "error99"
+    else:
+        s.unpair += 1
+        if aln.is_qcfail:
+            s.unpair_bad += 1
+            return
+        if aln.is_duplicate:
+            s.unpair_dup += 1
+            return
+        if aln.is_unmapped:
+            s.unpair_unmap += 1
+        else:
+            s.unpair_map += 1
+            mq = aln.mapping_quality
+            pm = is_perfect_match(aln)
+            if pm:
+                s.unpair_map0 += 1
+            if mq >= 20:
+                s.unpair_map_hq += 1
                 if pm:
-                    s.unpair_map0 += 1
-                if mq >= 20:
-                    s.unpair_map_hq += 1
-                    if pm:
-                        s.unpair_map_hq0 += 1
-    if len(s.rdic) > 0:
-        logging.debug("%d 'paired' reads don't have a mate" % len(s.rdic))
-    if args.isize:
-        fho = must_open(args.isize, "w")
-        fho.write("insert_size\tcount\n")
-        for ins, cnt in s.idic.items():
-            fho.write("%d\t%d\n" % (ins, cnt))
-        fho.close()
-    for stat in s.stats:
-        print("%s\t%d" % (stat, getattr(s, stat)))
+                    s.unpair_map_hq0 += 1
+    return
 
 def bam_filter(args):
     ibam = pysam.AlignmentFile(args.fi, "rb")
@@ -222,6 +241,7 @@ if __name__ == "__main__":
     )
     sp1.add_argument('fi', help = 'input SAM/BAM file')
     sp1.add_argument('--isize', help = 'output insert size distribution to file')
+    sp1.add_argument('--bychr', action='store_true', help='report stats for each chrom')
     sp1.set_defaults(func = bam_stat)
 
     sp1 = sp.add_parser("filter",

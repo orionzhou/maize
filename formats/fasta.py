@@ -11,6 +11,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils.CheckSum import seguid
 from pyfaidx import Fasta
+import pandas as pd
 
 from maize.apps.base import eprint, sh, mkdir
 from maize.formats.base import must_open, ndigit, prettysize
@@ -204,7 +205,7 @@ def merge(args):
         if not os.access(fseq, os.R_OK):
             eprint("no access to input file: %s" % fseq)
             sys.exit(1)
-        
+
         fh = must_open(fseq)
         seq_it = SeqIO.parse(fh, "fasta")
         seqs = [SeqRecord(rcd.seq, id = pre + "|" + rcd.id,
@@ -261,28 +262,36 @@ def fas2aln(args):
 def rename(args):
     import re
     from pyfaidx import Fasta
-    fi, fs, fo, fmf, fmb = args.fi, args.fs, args.fo, args.fmf, args.fmb
+
+    fi, fo, fmf, fmb = args.fi, args.fo, args.fmf, args.fmb
     merge_short, gap = args.merge_short, args.gap
     prefix_chr, prefix_ctg = args.prefix_chr, args.prefix_ctg
-    reg_chr = re.compile("^(chr)?([0-9]{1,2})$")
-    reg_gb = re.compile("^CM[0-9]+\.[0-9]{1,3}$")
-    
+
+    db = Fasta(fi)
+
+    ptn1 = "^(chr)?([0-9]{1,2})"
+    ptn2 = "chromosome *([0-9]{1,2})"
+
     sdic, cdic = dict(), dict()
-    scnt, ccnt = 1, 1
-    fhs = open(fs, "r")
-    for line in fhs:
-        sid, size = line.strip().split("\t")
-        size = int(size)
-        res = reg_chr.match(sid)
-        res2 = reg_gb.match(sid)
-        if res:
-            sdic[sid] = [int(res.group(2)), size]
-        elif res2:
-            sdic[sid] = [scnt, size]
-            scnt += 1
+    ccnt = 1
+    for sid in db.keys():
+        size = len(db[sid])
+        res1 = re.search(ptn1, sid, re.IGNORECASE)
+        if res1:
+            sdic[sid] = [int(res1.group(2)), size]
         else:
-            cdic[sid] = [ccnt, size]
-            ccnt += 1
+            sid_long = db[sid].long_name
+            res2 = re.search(ptn2, sid_long, re.IGNORECASE)
+            if res2:
+                sdic[sid] = [int(res2.group(1)), size]
+            else:
+                cdic[sid] = [ccnt, size]
+                ccnt += 1
+
+    if len(sdic.keys()) == 0:
+        print("Error: no chromosomes detected")
+        sys.exit(1)
+
     slst = sorted(sdic.items(), key = lambda t: t[1][0])
     clst = sorted(cdic.items(), key = lambda t: t[1][0])
 
@@ -297,8 +306,7 @@ def rename(args):
     if fext not in [".%s" % x for x in FastaExt]:
         logging.error("%s is not a supported format" % fext)
         sys.exit(1)
-    fas = Fasta(fi)
- 
+
     fho = open(fo, "w")
     fhf = open(fmf, "w")
     fhb = open(fmb, "w")
@@ -307,7 +315,7 @@ def rename(args):
         nsid = sfmt % scnt
         fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (sid, 0, size, nsid, 0, size, scnt))
         fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (nsid, 0, size, sid, 0, size, scnt))
-        nrcd = SeqRecord(Seq(str(fas[sid])), id = nsid, description = '')
+        nrcd = SeqRecord(Seq(str(db[sid])), id = nsid, description = '')
         SeqIO.write(nrcd, fho, "fasta")
     i = nchrom + 1
     if len(clst) > 0 and merge_short:
@@ -323,9 +331,9 @@ def rename(args):
             start, end = pos, pos + size
             if pos > 0:
                 start += gap
-                end += gap 
+                end += gap
                 seq += "N" * gap
-            seq += str(fas[cid])
+            seq += str(db[cid])
             fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (cid, 0, size, zid, start, end, i))
             fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (zid, start, end, cid, 0, size, i))
             pos = end
@@ -338,7 +346,7 @@ def rename(args):
             ncid = cfmt % ccnt
             fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (cid, 0, size, ncid, 0, size, i))
             fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (ncid, 0, size, cid, 0, size, i))
-            nrcd = SeqRecord(Seq(str(fas[cid])), id = ncid, description = '')
+            nrcd = SeqRecord(Seq(str(db[cid])), id = ncid, description = '')
             SeqIO.write(nrcd, fho, "fasta")
             i += 1
     fhf.close()
@@ -366,6 +374,40 @@ def cleanid(args):
         else:
             print(line)
     fh.close()
+
+def cds2gene(args):
+    fi, fg, fo = args.fi, args.fg, args.fo
+    pre = args.prefix
+    db = Fasta(fi)
+    tg = pd.read_csv(fg, sep='\t', header=0)
+
+    sdic = dict()
+    fho = open(fo, "w")
+    for i in range(len(tg)):
+        if tg['etype'][i] != 'CDS': continue
+        gid, chrom, start, end, srd = [tg[col][i] for col in 'gid chrom start end srd'.split()]
+        loc = "%s:%d-%d" % (chrom, start, end)
+        if gid not in sdic: sdic[gid] = {}
+        if 'srd' not in sdic[gid]: sdic[gid]['srd'] = srd
+        if 'loc' not in sdic[gid]: sdic[gid]['loc'] = {}
+        sdic[gid]['loc'][start] = loc
+
+    print("writing CDS sequences for %d genes" % len(list(sdic.keys())))
+    for gid, gdic in sdic.items():
+        srd, ldic = gdic['srd'], gdic['loc']
+        seqs = []
+        if srd == '-':
+            locs = sorted(ldic.items(), key=lambda kv: kv[1], reverse=True)
+            seqs = [db[loc[1]][:].reverse.complement.seq for loc in locs]
+        else:
+            locs = sorted(ldic.items(), key=lambda kv: kv[1])
+            seqs = [db[loc[1]][:].seq for loc in locs]
+        seq = ''.join(seqs)
+        rcd_id = gid
+        if pre != None and pre != '':
+            rcd_id = '%s%s' % (pre, gid)
+        nrcd = SeqRecord(Seq(seq), id = rcd_id, description = "")
+        SeqIO.write(nrcd, fho, "fasta")
 
 if __name__ == "__main__":
     import argparse
@@ -413,7 +455,6 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("rename", help = 'rename/normalize sequence IDs, merge short scaffolds/contigs',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input fasta file')
-    sp1.add_argument('fs', help = 'fasta size file (must be generated by "fasta size")')
     sp1.add_argument('fo', help = 'output (renamed) fasta file')
     sp1.add_argument('fmf', help = 'forward (old -> new) mapping table of sequence IDs')
     sp1.add_argument('fmb', help = 'backward (new -> old) mapping table of sequence IDs')
@@ -452,6 +493,13 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("translate", help='translate nucleotide seqs to amino acid seqs')
     sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = translate)
+
+    sp1 = sp.add_parser("cds2gene", help='concatenate CDS segmetns for each gene')
+    sp1.add_argument('fi', help='input fasta file')
+    sp1.add_argument('fg', help='gene interval file (*.tsv)')
+    sp1.add_argument('fo', help='output fasta file')
+    sp1.add_argument('--prefix', default=None, help='prefix added to each record')
+    sp1.set_defaults(func = cds2gene)
 
     args = parser.parse_args()
     if args.command:

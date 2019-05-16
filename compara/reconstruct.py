@@ -24,6 +24,7 @@ def main():
     actions = (
         ('mergechrom', 'merge synteny blocks on the same chrom'),
         ('pairs', 'convert anchorsfile to pairsfile'),
+        ('fillrbh', 'fill syntelog block with RBH orthologs'),
     )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -152,6 +153,38 @@ def mergechrom(args):
 
     fw.close()
     print("%d blocks merged to %d" % (len(blocks), len(block_dic.keys())))
+
+def fillrbh(args):
+    from jcvi.formats.base import DictFile
+
+    p = OptionParser(fillrbh.__doc__)
+    opts, args = p.parse_args(args)
+
+    if len(args) != 3:
+        sys.exit(not p.print_help())
+
+    blocksfile, rbhfile, orthofile = args
+
+    # Generate mapping both ways
+    adict = DictFile(rbhfile)
+    bdict = DictFile(rbhfile, keypos=1, valuepos=0)
+    adict.update(bdict)
+
+    fp = open(blocksfile)
+    fw = open(orthofile, "w")
+    nrecruited = 0
+    for row in fp:
+        a, b = row.split()
+        if b == '.':
+            if a in adict:
+                b = adict[a]
+                nrecruited += 1
+                b += "'"
+        print("\t".join((a, b)), file=fw)
+
+    logging.debug("Recruited {0} pairs from RBH.".format(nrecruited))
+    fp.close()
+    fw.close()
 
 if __name__ == '__main__':
     main()

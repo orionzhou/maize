@@ -80,6 +80,7 @@ class GffLine (object):
         assert self.strand in Valid_strands, \
                 "strand must be one of {0}".format(Valid_strands)
         self.phase = args[7]
+        if args[7] == '': self.phase = '.'
         assert self.phase in Valid_phases, \
                 "phase must be one of {0}".format(Valid_phases)
         self.attributes_text = "" if len(args) <= 8 else args[8].strip()
@@ -995,6 +996,11 @@ def fix(args):
                 g.set_attr('Parent', gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
+    elif opt == 'hzs':
+        for g in gff:
+            if g.type == 'region':
+                continue
+            print(g)
     elif opt == 'w22':
         chrids = ["%d" % x for x in range(1, 11)]
         for g in gff:
@@ -1824,6 +1830,9 @@ def pick_longest(args):
                     rnalen += exon.end - exon.start + 1
             if rnalen > rnalenP:
                 rnaP, rnalenP = rna, rnalen
+        if rnalenP == 0:
+            logging.debug("%s skipped" % gene.attributes["ID"])
+            continue
         print(gene)
         print(rnaP)
         for child in g.children(rnaP, order_by=('start')):
@@ -2348,17 +2357,17 @@ if __name__ == '__main__':
     sp1 = sp.add_parser('fix', help = 'fix gff fields using various options',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
-    opts = 'genbank tair phytozome maize ensembl mo17 w22 ph207 phb47'.split()
+    opts = 'genbank tair phytozome maize ensembl mo17 w22 ph207 phb47 hzs'.split()
     sp1.add_argument('--opt', default='ensembl', choices=opts, help = 'fix option')
     sp1.set_defaults(func = fix)
-    
+
     sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries of parent features by range chaining child features',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument("--type", default="gene", help="Feature type for which to adjust boundaries")
     sp1.add_argument("--child_ftype", default="mRNA", help="Child featuretype(s) to use for identifying boundaries")
     sp1.set_defaults(func = fixboundaries)
-    
+
     sp1 = sp.add_parser('fixpartials', help = 'fix 5/3 prime partial transcripts, locate nearest in-frame start/stop',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('gff', help = 'input GFF3 file')
@@ -2366,7 +2375,7 @@ if __name__ == '__main__':
     sp1.add_argument('partials', help = 'partials ids')
     sp1.add_argument('outfile', help = 'output file')
     sp1.set_defaults(func = fixpartials)
-    
+
     sp1 = sp.add_parser('index', help = 'index gff db')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument('fo', help = 'output GFF3 db')
@@ -2392,7 +2401,7 @@ if __name__ == '__main__':
     sp1.add_argument("--inferUTR", action="store_true",
             help="infer presence of UTRs from exon coordinates")
     sp1.set_defaults(func = cluster)
-    
+
     sp1 = sp.add_parser('chain', help = 'fill in parent features by chaining children',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('gff', help = 'input GFF3 file')
