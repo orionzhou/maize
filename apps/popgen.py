@@ -15,13 +15,13 @@ from multiprocessing import Pool
 import egglib
 egglib.wrappers.paths['codeml'] = 'codeml'
 
-def egglib_stat(fi, skeys='S thetaW Pi D lseff nseff'.split()):
+def egglib_stat(fi, max_missing=0.5, skeys='S thetaW Pi D lseff nseff'.split()):
     aln = egglib.io.from_fasta(fi, cls=egglib.Align, groups=True)
 
     cs = egglib.stats.ComputeStats()
     for skey in skeys:
         cs.add_stats(skey)
-    stats = cs.process_align(aln)
+    stats = cs.process_align(aln, max_missing=max_missing)
 
     try:
         res = egglib.wrappers.codeml(aln, None, 'M0')
@@ -31,7 +31,7 @@ def egglib_stat(fi, skeys='S thetaW Pi D lseff nseff'.split()):
 
     return stats
 
-def stat1(gid, sids, db):
+def stat1(gid, sids, db, max_missing):
     ftmp = "%s.fas" % gid
     fht = open(ftmp, 'w')
     for sid in sids:
@@ -40,13 +40,14 @@ def stat1(gid, sids, db):
         fht.write(">%s\n" % sid)
         fht.write(seq + "\n")
     fht.close()
-    stats = egglib_stat(ftmp)
+    stats = egglib_stat(ftmp, max_missing)
     os.remove(ftmp)
     return stats
 
 def stats(args):
     fi, fg, fs, fo = args.fi, args.fg, args.fs, args.fo
     batch, batch_size = args.batch, args.batch_size
+    max_missing = args.max_missing
     db = Fasta(fi)
 
     gids = [line.rstrip('\n') for line in open(fg,'r')]
@@ -62,8 +63,9 @@ def stats(args):
     i = (batch-1) * batch_size + 1
     j = batch * batch_size
     for idx in range(i-1,j):
+        if idx+1 > len(gids): break
         gid = gids[idx]
-        stats = stat1(gid, sids, db)
+        stats = stat1(gid, sids, db, max_missing)
         svals = [str(stats[skey]) for skey in skeys]
         fho.write("\t".join([gid] + svals) + "\n")
 
@@ -86,6 +88,7 @@ if __name__ == "__main__":
     sp1.add_argument('fo', help = 'output file (*.tsv)')
     sp1.add_argument('--batch', type=int, default=1, help = 'batch to process')
     sp1.add_argument('--batch_size', type=int, default=1000, help = 'number genes per batch')
+    sp1.add_argument('--max_missing', type=float, default=0.3, help = 'number genes per batch')
     sp1.set_defaults(func = stats)
 
     args = parser.parse_args()

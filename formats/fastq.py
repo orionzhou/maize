@@ -10,6 +10,7 @@ import sys
 import re
 import logging
 import json
+import gzip
 
 from itertools import islice
 
@@ -199,117 +200,6 @@ def iter_fastq(filename, offset=0, key=None):
             break
         yield rec
     yield None  # sentinel
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'fastq utilities'
-    )
-    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
-
-    sp1 = sp.add_parser("break", help = "break each fastq seq into two seqs of equal lengths")
-    sp1.add_argument('fi', help = 'input file (*fastq)')
-    sp1.add_argument('fo', help = 'output prefix (*_1.fq.gz and *_2.fq.gz)')
-    sp1.add_argument('readlen', type = int, help = 'read length')
-    sp1.set_defaults(func = breakread)
- 
-    sp1 = sp.add_parser('size', help='total base pairs in the fastq files',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = size)
-    
-    sp1 = sp.add_parser('shuffle', help='shuffle paired reads into the same file interleaved',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = shuffle)
-    
-    sp1 = sp.add_parser('split', help='split paired reads into two files',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = split)
-    
-    sp1 = sp.add_parser('splitread', help='split appended reads (from JGI)',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = splitread)
-    
-    sp1 = sp.add_parser('catread', help='cat pairs together (reverse of splitread)',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = catread)
-    
-    sp1 = sp.add_parser('pairinplace', help='collect pairs by checking adjacent ids',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = pairinplace)
-    
-    sp1 = sp.add_parser('convert', help='convert between illumina and sanger offset',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = convert)
-    
-    sp1 = sp.add_parser('first', help='get first N reads from file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = first)
-    
-    sp1 = sp.add_parser('filter', help='filter to get high qv reads',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = filter)
-    
-    sp1 = sp.add_parser('suffix', help='filter reads based on suffix',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = suffix)
-    
-    sp1 = sp.add_parser('trim', help='trim reads using fastx_trimmer',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = trim)
-    
-    sp1 = sp.add_parser('some', help='select a subset of fastq reads',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = some)
-    
-    sp1 = sp.add_parser('guessoffset', help='guess the quality offset of the fastq records',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = guessoffset)
-    
-    sp1 = sp.add_parser('readlen', help='calculate read length',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = readlen)
-    
-    sp1 = sp.add_parser('format', help='format fastq file, convert header from casava 1.8+ to older format',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = format)
-    
-    sp1 = sp.add_parser('fasta', help='convert fastq to fasta and qual file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = fasta)
-    
-    sp1 = sp.add_parser('fromsra', help='convert sra to fastq using `fastq-dump`',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = fromsra)
-    
-    sp1 = sp.add_parser('uniq', help='retain only first instance of duplicate (by name) reads',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = uniq)
-
-    args = parser.parse_args()
-    if args.command:
-        args.func(args)
-    else:
-        print('Error: need to specify a sub command\n')
-        parser.print_help()
 
 def uniq(args):
     """
@@ -1104,6 +994,50 @@ def read_fastq(filename, iterator):
     quality_re = re.compile(r'[!-~]*$')
 
     lines = Lines(filename, iterator)
+    for line in lines:
+        # First line of block is @<seqname>.
+        m = at_seqname_re.match(line)
+        if not m:
+            raise line.error("Expected @<seqname> but found:")
+        seqname = m.group(1)
+        try:
+            # One or more lines of sequence data.
+            sequence = []
+            for line in lines:
+                m = sequence_re.match(line)
+                if not m:
+                    break
+                sequence.append(m.group(0))
+            if not sequence:
+                raise line.error("Expected <sequence> but found:")
+
+            # The line following the sequence data consists of a plus
+            # sign and an optional sequence name (if supplied, it must
+            # match the sequence name from the start of the block).
+            m = plus_seqname_re.match(line)
+            if not m:
+                raise line.error("Expected +[<seqname>] but found:")
+            if m.group(1) not in ['', seqname]:
+                raise line.error("Expected +{} but found:".format(seqname))
+
+            # One or more lines of quality data, containing the same
+            # number of characters as the sequence data.
+            quality = []
+            n = sum(map(len, sequence))
+            while n > 0:
+                line = next(lines)
+                m = quality_re.match(line)
+                if not m:
+                    raise line.error("Expected <quality> but found:")
+                n -= len(m.group(0))
+                if n < 0:
+                    raise line.error("<quality> is longer than <sequence>:")
+                quality.append(m.group(0))
+
+            yield seqname, ''.join(sequence), ''.join(quality)
+
+        except StopIteration:
+            raise line.error("End of input before sequence was complete:")
 
 def breakread(args):
     fhi = must_open(args.fi)
@@ -1111,7 +1045,7 @@ def breakread(args):
     fo2 = "%s_2.fq.gz" % fo
     fho1 = gzip.open(fo1, "wb")
     fho2 = gzip.open(fo2, "wb")
-    
+
     for (seqid, seq, qual) in read_fastq(args.fi, fhi):
         assert len(seq) == readlen * 2 and len(qual) == readlen * 2, \
                 "%s: seq[%d] qual[%d] not %d" % \
@@ -1122,6 +1056,147 @@ def breakread(args):
         qual1, qual2 = qual[0:readlen], qual[readlen:readlen*2]
         fho1.write(("@%s\n%s\n+\n%s\n" % (seqid, seq1, qual1)).encode('utf8'))
         fho2.write(("@%s\n%s\n+\n%s\n" % (seqid, seq2, qual2)).encode('utf8'))
+
+def UMIcount(args):
+    """
+    %prog UMIcount fastqfile
+
+    Report number of occurances of each unique UMI
+    """
+    fhi = must_open(args.fi)
+    if args.fi.endswith(".gz"):
+        fhi = gzip.open(args.fi, "r")
+
+    ud = dict()
+    for (seqid, seq, qual) in read_fastq(args.fi, fhi):
+        umi = seqid.split(" ")[1].split("+")[1]
+        if umi in ud:
+            ud[umi] += 1
+        else:
+            ud[umi] = 1
+
+    fho = must_open(args.fo, 'w')
+    for umi, cnt in ud.items():
+        fho.write("%s\t%s\n" % (umi, cnt))
+
+    logging.debug("{} UMIs detected".format(len(ud)))
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'fastq utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser("break", help = "break each fastq seq into two seqs of equal lengths")
+    sp1.add_argument('fi', help = 'input file (*.fastq or *.fastq.gz)')
+    sp1.add_argument('fo', help = 'output prefix (*_1.fq.gz and *_2.fq.gz)')
+    sp1.add_argument('readlen', type = int, help = 'read length')
+    sp1.set_defaults(func = breakread)
+
+    sp1 = sp.add_parser('UMIcount', help='count occurance of UMIs in file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input file (*.fastq or *.fastq.gz)')
+    sp1.add_argument('fo', help = 'output table of UMI occurances (*.tsv)')
+    sp1.set_defaults(func = UMIcount)
+
+    sp1 = sp.add_parser('size', help='total base pairs in the fastq files',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = size)
+
+    sp1 = sp.add_parser('shuffle', help='shuffle paired reads into the same file interleaved',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = shuffle)
+
+    sp1 = sp.add_parser('split', help='split paired reads into two files',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = split)
+
+    sp1 = sp.add_parser('splitread', help='split appended reads (from JGI)',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = splitread)
+    
+    sp1 = sp.add_parser('catread', help='cat pairs together (reverse of splitread)',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = catread)
+    
+    sp1 = sp.add_parser('pairinplace', help='collect pairs by checking adjacent ids',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = pairinplace)
+    
+    sp1 = sp.add_parser('convert', help='convert between illumina and sanger offset',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = convert)
+    
+    sp1 = sp.add_parser('first', help='get first N reads from file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = first)
+    
+    sp1 = sp.add_parser('filter', help='filter to get high qv reads',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = filter)
+    
+    sp1 = sp.add_parser('suffix', help='filter reads based on suffix',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = suffix)
+    
+    sp1 = sp.add_parser('trim', help='trim reads using fastx_trimmer',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = trim)
+    
+    sp1 = sp.add_parser('some', help='select a subset of fastq reads',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = some)
+    
+    sp1 = sp.add_parser('guessoffset', help='guess the quality offset of the fastq records',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = guessoffset)
+    
+    sp1 = sp.add_parser('readlen', help='calculate read length',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = readlen)
+    
+    sp1 = sp.add_parser('format', help='format fastq file, convert header from casava 1.8+ to older format',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = format)
+    
+    sp1 = sp.add_parser('fasta', help='convert fastq to fasta and qual file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = fasta)
+    
+    sp1 = sp.add_parser('fromsra', help='convert sra to fastq using `fastq-dump`',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = fromsra)
+
+    sp1 = sp.add_parser('uniq', help='retain only first instance of duplicate (by name) reads',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = uniq)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
 
 if __name__ == '__main__':
     main()

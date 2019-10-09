@@ -223,7 +223,7 @@ def coordT(args):
         tnames = p.tName.split("-")
         if len(tnames) == 3:
             x = p.tName
-            t.qName, tosStart, tosEnd = tnames[0], int(tnames[1]), int(tnames[2])
+            p.tName, tosStart, tosEnd = tnames[0], int(tnames[1]), int(tnames[2])
             assert tosEnd-tosStart+1 == p.tSize
             cSize = sizes.get_size(p.tName)
             p.tStart += tosStart - 1
@@ -247,7 +247,7 @@ def psl2tsv(args):
         match, misMatch, baseN, qNumIns, tNumIns, qBaseIns, tBaseIns = \
                 p.matches, p.misMatches, p.nCount, p.qNumInsert, p.tNumInsert, \
                 p.qBaseInsert, p.tBaseInsert
-       
+
         assert p.blockCount==len(p.tStarts), "unequal pieces"
         assert p.blockCount==len(p.qStarts), "unequal pieces"
         assert p.blockCount==len(p.blockSizes), "unequal pieces"
@@ -296,7 +296,7 @@ def psl2bed(args):
                 print("%s\t%d\t%d\t%s\t%s" % 
                     (p.qName, qbeg, qend, p.qstrand, tstr))
             else:
-                print("%s\t%d\t%d\t%s\t%s_%d_%d_%s" % 
+                print("%s\t%d\t%d\t%s\t%s_%d_%d_%s" %
                     (p.tName, tbeg, tend, p.qstrand, qstr))
 
 if __name__ == "__main__":

@@ -1008,7 +1008,7 @@ def fix(args):
                 continue
             if g.seqid in chrids:
                 g.seqid = "chr%s" % g.seqid
-            elif g.seqid == 'chr10000001':
+            elif g.seqid == 'chr10000001' or g.seqid == '10000001':
                 g.seqid = 'unmapped'
             print(g)
     elif opt == 'ph207':

@@ -5,6 +5,7 @@ import os
 import os.path as op
 import sys
 import logging
+import re
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -81,7 +82,7 @@ def extract(args):
     if op.isfile(args.db):
         db = Fasta(args.db)
     else:
-        f_db = "%s/%s/10_genome.fna" % (os.environ["genome"], args.db)
+        f_db = "%s/data/%s/10_genome.fna" % (os.environ["genome"], args.db)
         assert op.isfile(f_db), "cannot find %s" % args.db
         db = Fasta(f_db)
 
@@ -139,9 +140,12 @@ def extract(args):
                 else:
                     seq += "N" * bp_pad
             assert len(seq) == size, "error in seq size: %s:%d-%d %d" % (sid, beg, end, bp_pad)
-        rcd = SeqRecord(Seq(seq), id = oid, description = '')
-        rcds.append(rcd)
-    SeqIO.write(rcds, sys.stdout, 'fasta')
+
+        if args.tsv:
+            print("\t".join([sid, str(beg), str(end), seq]))
+        else:
+            rcd = SeqRecord(Seq(seq), id = oid, description = '')
+            SeqIO.write([rcd], sys.stdout, 'fasta')
 
 def split_old(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
@@ -259,47 +263,55 @@ def fas2aln(args):
     AlignIO.write(alns, sys.stdout, "clustal")
     fh.close()
 
+def extract_chrom_num(sid, opt):
+    chrom = False
+    if opt in 'Brapa Ppersica'.split():
+        ptn = "^[AG]([0-9]{1,2})"
+        res = re.search(ptn, sid, re.IGNORECASE)
+        chrom = int(res.group(1)) if res else False
+    elif opt == 'Sitalica':
+        ptn = "^([IVX]{1,4})"
+        dic_chrom = dict(I=1,II=2,III=3,IV=4,V=5,VI=6,VII=7,VIII=8,IX=9)
+        res = re.search(ptn, sid, re.IGNORECASE)
+        chrom = int(dic_chrom[res.group(1)]) if res else False
+    elif opt == 'Vvinifera':
+        ptn = "^([1-9][0-9]{0,1})$"
+        res = re.search(ptn, sid, re.IGNORECASE)
+        chrom = int(res.group(1)) if res else False
+    else:
+        ptn = "^(chr|chromsome *)?([1-9][0-9]{0,1})" #(MtrunA17)?
+        res = re.search(ptn, sid, re.IGNORECASE)
+        chrom = int(res.group(2)) if res else False
+    return chrom
+
 def rename(args):
     import re
     from pyfaidx import Fasta
 
     fi, fo, fmf, fmb = args.fi, args.fo, args.fmf, args.fmb
-    merge_short, gap = args.merge_short, args.gap
+    opt, merge_short, gap = args.opt, args.merge_short, args.gap
     prefix_chr, prefix_ctg = args.prefix_chr, args.prefix_ctg
 
     db = Fasta(fi)
-
-    ptn1 = "^(chr)?([0-9]{1,2})"
-    ptn2 = "chromosome *([0-9]{1,2})"
 
     sdic, cdic = dict(), dict()
     ccnt = 1
     for sid in db.keys():
         size = len(db[sid])
-        res1 = re.search(ptn1, sid, re.IGNORECASE)
-        if res1:
-            sdic[sid] = [int(res1.group(2)), size]
+        chrom = extract_chrom_num(sid, opt)
+        if chrom:
+            sdic[sid] = [chrom, size]
         else:
-            sid_long = db[sid].long_name
-            res2 = re.search(ptn2, sid_long, re.IGNORECASE)
-            if res2:
-                sdic[sid] = [int(res2.group(1)), size]
-            else:
-                cdic[sid] = [ccnt, size]
-                ccnt += 1
-
-    if len(sdic.keys()) == 0:
-        print("Error: no chromosomes detected")
-        sys.exit(1)
+            cdic[sid] = [ccnt, size]
+            ccnt += 1
 
     slst = sorted(sdic.items(), key = lambda t: t[1][0])
     clst = sorted(cdic.items(), key = lambda t: t[1][0])
-
-    nchrom = slst[-1][1][0]
-    sdigits = ndigit(slst[-1][1][0])
+    sdigits = ndigit(slst[-1][1][0]) if len(slst) > 0 else 1
     cdigits = ndigit(clst[-1][1][0]) if len(clst) > 0 else 1
     sfmt = "%s%%0%dd" % (prefix_chr, sdigits)
     cfmt = "%s%%0%dd" % (prefix_ctg, cdigits)
+    nchrom = slst[-1][1][0] if len(slst) > 0 else 0
     logging.debug("%d chromosomes, %d scaffolds/contigs" % (len(sdic), len(cdic)))
 
     fname, fext = op.splitext(fi)
@@ -310,13 +322,16 @@ def rename(args):
     fho = open(fo, "w")
     fhf = open(fmf, "w")
     fhb = open(fmb, "w")
-    for sid, sval in slst:
-        scnt, size = sval
-        nsid = sfmt % scnt
-        fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (sid, 0, size, nsid, 0, size, scnt))
-        fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (nsid, 0, size, sid, 0, size, scnt))
-        nrcd = SeqRecord(Seq(str(db[sid])), id = nsid, description = '')
-        SeqIO.write(nrcd, fho, "fasta")
+
+    if len(sdic.keys()) > 0:
+        for sid, sval in slst:
+            scnt, size = sval
+            nsid = sfmt % scnt
+            fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (sid, 0, size, nsid, 0, size, scnt))
+            fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (nsid, 0, size, sid, 0, size, scnt))
+            nrcd = SeqRecord(Seq(str(db[sid])), id = nsid, description = '')
+            SeqIO.write(nrcd, fho, "fasta")
+
     i = nchrom + 1
     if len(clst) > 0 and merge_short:
         zid = "%sx" % prefix_chr
@@ -349,6 +364,7 @@ def rename(args):
             nrcd = SeqRecord(Seq(str(db[cid])), id = ncid, description = '')
             SeqIO.write(nrcd, fho, "fasta")
             i += 1
+
     fhf.close()
     fhb.close()
     fho.close()
@@ -437,6 +453,7 @@ if __name__ == "__main__":
     sp1.add_argument('db', help = 'sequence database (fasta or genome ID)')
     sp1.add_argument('loc', help = 'location string(s) or BED file(s) (separated by ",")')
     sp1.add_argument('--padding', action = "store_true", help = 'padding to size')
+    sp1.add_argument('--tsv', action = "store_true", help = 'output in tabular format')
     sp1.set_defaults(func = extract)
 
     sp1 = sp.add_parser("tile", help = 'create sliding windows that tile the entire sequence',
@@ -458,10 +475,11 @@ if __name__ == "__main__":
     sp1.add_argument('fo', help = 'output (renamed) fasta file')
     sp1.add_argument('fmf', help = 'forward (old -> new) mapping table of sequence IDs')
     sp1.add_argument('fmb', help = 'backward (new -> old) mapping table of sequence IDs')
+    sp1.add_argument('--opt', default = 'default', help = 'chrom renaming optiton')
     sp1.add_argument('--merge_short', action = 'store_true', help = 'merge short scaffolds/contigs')
     sp1.add_argument('--gap', type = int, default = 10000, help = 'number of \'N\'s between short scaffolds/contigs')
     sp1.add_argument('--prefix_chr', default = 'chr', help = 'prefix for renamed sequence IDs')
-    sp1.add_argument('--prefix_ctg', default = 'ctg', help = 'prefix for short scaffolds/contigs')
+    sp1.add_argument('--prefix_ctg', default = 'scf', help = 'prefix for short scaffolds/contigs')
     sp1.set_defaults(func = rename)
 
     sp1 = sp.add_parser("merge", help='merge multiple fasta files and update IDs')
