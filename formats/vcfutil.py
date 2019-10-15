@@ -228,7 +228,7 @@ if __name__ == '__main__':
         description = 'vcf utilities'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
-    
+
     sp1 = sp.add_parser("stat", help = "report stats for each variant")
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = stat)
@@ -237,13 +237,13 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.add_argument('--exclude', default = None, help = 'sites to exclude (.tsv)')
     sp1.set_defaults(func = vcf_filter)
-    
+
     sp1 = sp.add_parser("2fas", help = "make an alternate fasta using vcf")
     sp1.add_argument('fi', help = 'interval file (.tsv)')
     sp1.add_argument('fv', help = 'vcf file (.vcf)')
     sp1.add_argument('fs', help = 'reference sequence file (.fas)')
     sp1.set_defaults(func = vcf2fas)
- 
+
     sp1 = sp.add_parser("2tsv", help = "vcf -> tsv")
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.set_defaults(func = vcf2tsv)
@@ -260,7 +260,7 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.add_argument('--noindel', action = 'store_true', help = 'remove InDel')
     sp1.set_defaults(func = vcf2bed)
- 
+
     args = parser.parse_args()
     if args.command:
         args.func(args)
