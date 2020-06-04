@@ -224,13 +224,13 @@ def frompsl(args):
         sh(cmd)
 
 def chainstat(args):
-    sh("chain 2bed %s > tmp.bed" % args.fi)
+    sh("chain.py 2bed %s > tmp.bed" % args.fi)
     logging.debug("total size")
-    sh("bed size tmp.bed")
+    sh("bed.py size tmp.bed")
     logging.debug("tgt noredundant size")
-    sh("cut -f1-3 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed size -")
+    sh("cut -f1-3 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed.py size -")
     logging.debug("qry noredundant size")
-    sh("cut -f5-7 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed size -")
+    sh("cut -f5-7 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed.py size -")
 
 def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
     chain = "chain"

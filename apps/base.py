@@ -105,35 +105,35 @@ def sh(cmd, grid=False, infile=None, outfile=None, errfile=None,
         return 1
     if silent:
         outfile = errfile = "/dev/null"
-    if grid:
-        from maize.apps.grid import GridProcess
-        pr = GridProcess(cmd, infile=infile, outfile=outfile, errfile=errfile,
-                         threaded=threaded, grid_opts=grid_opts)
-        pr.start()
-        return pr.jobid
-    else:
-        if infile:
-            cat = "cat"
-            if infile.endswith(".gz"):
-                cat = "zcat"
-            cmd = "{0} {1} |".format(cat, infile) + cmd
-        if outfile and outfile != "stdout":
-            if outfile.endswith(".gz"):
-                cmd += " | gzip"
-            tag = ">"
-            if append:
-                tag = ">>"
-            cmd += " {0}{1}".format(tag, outfile)
-        if errfile:
-            if errfile == outfile:
-                errfile = "&1"
-            cmd += " 2>{0}".format(errfile)
-        if background:
-            cmd += " &"
+    # if grid:
+        # from maize.apps.grid import GridProcess
+        # pr = GridProcess(cmd, infile=infile, outfile=outfile, errfile=errfile,
+                         # threaded=threaded, grid_opts=grid_opts)
+        # pr.start()
+        # return pr.jobid
+    #else:
+    if infile:
+        cat = "cat"
+        if infile.endswith(".gz"):
+            cat = "zcat"
+        cmd = "{0} {1} |".format(cat, infile) + cmd
+    if outfile and outfile != "stdout":
+        if outfile.endswith(".gz"):
+            cmd += " | gzip"
+        tag = ">"
+        if append:
+            tag = ">>"
+        cmd += " {0}{1}".format(tag, outfile)
+    if errfile:
+        if errfile == outfile:
+            errfile = "&1"
+        cmd += " 2>{0}".format(errfile)
+    if background:
+        cmd += " &"
 
-        if log:
-            logging.debug(cmd)
-        return run(cmd, shell=True)
+    if log:
+        logging.debug(cmd)
+    return run(cmd, shell=True)
 
 def is_exe(fpath):
     return op.isfile(fpath) and os.access(fpath, os.X_OK)
@@ -745,7 +745,7 @@ if __name__ == '__main__':
     sp1.add_argument('subdir', nargs = "+", help = 'sub-directory path')
     sp1.add_argument("--symlink", action="store_true", help="create symlink")
     sp1.set_defaults(func = expand)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

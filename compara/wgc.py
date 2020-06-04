@@ -335,13 +335,13 @@ if __name__ == "__main__":
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
 
-    sp1 = sp.add_parser("callvnt", help = "variant calling using paired aln itvs in BED") 
+    sp1 = sp.add_parser("callvnt", help = "variant calling using paired aln itvs in BED")
     sp1.add_argument('fi', help = 'input (9-col) BED containing paired intervals')
     sp1.add_argument('tgt', help = 'tgt reference fasta')
     sp1.add_argument('qry', help = 'qry reference fasta')
     sp1.add_argument('--vnt', default = 'vnt.bed', help = 'output variant BED file')
     sp1.set_defaults(func = callvnt)
-    
+
     sp1 = sp.add_parser("bed2vcf",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = "generate Vcf from wgc output Bed")
@@ -351,7 +351,7 @@ if __name__ == "__main__":
     sp1.add_argument('--tgt', default = 'tgt', help = 'sample name for tgt')
     sp1.add_argument('--qry', default = 'qry', help = 'sample name for qry')
     sp1.set_defaults(func = wgc2vcf)
-    
+
     sp1 = sp.add_parser("parseEff", help = "parse snpEff output")
     sp1.add_argument('fi', help = 'input vcf file (snpEff output)')
     sp1.set_defaults(func = parseEff)

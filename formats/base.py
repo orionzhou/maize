@@ -7,9 +7,9 @@ import math
 import sys
 import logging
 
+#from Bio import SeqIO
 from itertools import groupby, islice, cycle
 
-from Bio import SeqIO
 from maize.apps.base import eprint, sh, debug, mkdir
 debug()
 
@@ -601,7 +601,7 @@ if __name__ == '__main__':
     sp2.add_argument('--sep', default = ',', help = 'input file separator')
     sp2.add_argument('--zipflatten', default = None, dest = 'zipsep',
             help = 'specify if columns should be zipped before flattening - if yes, specify output separator')
-                
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

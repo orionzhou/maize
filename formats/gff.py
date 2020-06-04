@@ -8,7 +8,6 @@ import logging
 import re
 
 from itertools import chain
-#from astropy.table import Table, Column
 from urllib.parse import quote, unquote, parse_qsl
 
 from maize.utils.cbook import AutoVivification
@@ -27,7 +26,7 @@ valid_gene_type = 'gene'
 valid_rna_type = """
     mRNA rRNA tRNA
     miRNA ncRNA lnc_RNA snRNA snoRNA pre_miRNA SRP_RNA RNase_MRP_RNA
-    pseudogenic_transcript
+    pseudogenic_transcript miRNA_primary_transcript
 """.split()
 valid_mrna_child_type = "exon CDS five_prime_UTR three_prime_UTR".split()
 d1 = {x: ["match_part"] for x in 'match cDNA_match EST_match nucleotide_to_protein_match expressed_sequence_match protein_match'.split()}
@@ -928,6 +927,21 @@ def fix(args):
             if conf:
                 g.set_attr("Note", "[%s]%s" % (g.get_attr("Note"), conf))
             print(g)
+    elif opt == 'nam':
+        for g in gff:
+            if g.type in ['chromosome','scaffold']:
+                continue
+            if g.type == 'gene':
+                g.set_attr("ID", g.get_attr("ID").replace("gene:", ""))
+            elif g.type =='mRNA':
+                g.set_attr("ID", g.get_attr("ID").replace("transcript:", ""))
+                g.set_attr("Parent", g.get_attr("Parent").replace("gene:", ""))
+            else:
+                g.set_attr("Parent", g.get_attr("Parent").replace("transcript:", ""))
+                if g.type == 'CDS':
+                    g.set_attr("ID", '')
+            g.update_attributes()
+            print(g)
     elif opt == 'ensembl':
         seqtypes = ["chromosome","contig",'supercontig','biological_region']
         id_map = dict()
@@ -979,21 +993,25 @@ def fix(args):
         for g in gff:
             if g.type == 'region':
                 continue
-            elif g.type == 'gene':
-                nid = g.get_attr('locus_tag').replace('Zm00014a_','Zm00014a')
-                oid = g.get_attr('ID')
-                g.set_attr('ID', nid)
-                gdic[oid] = nid
-                g.rename_attr("Note", "note1")
-                g.rename_attr("gene", "note2")
-            elif g.type.endswith('RNA'):
-                nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
-                oid = g.get_attr('ID')
-                g.set_attr('ID', nid)
-                gdic[oid] = nid
-                g.set_attr('Parent', gdic[g.get_attr('Parent')])
-            else:
-                g.set_attr('Parent', gdic[g.get_attr('Parent')])
+            elif g.type == 'five_P00rime_UTR':
+                g.type = 'five_prime_UTR'
+            elif g.type == 'three_P00rime_UTR':
+                g.type = 'three_prime_UTR'
+            # elif g.type == 'gene':
+                # nid = g.get_attr('locus_tag').replace('Zm00014a_','Zm00014a')
+                # oid = g.get_attr('ID')
+                # g.set_attr('ID', nid)
+                # gdic[oid] = nid
+                # g.rename_attr("Note", "note1")
+                # g.rename_attr("gene", "note2")
+            # elif g.type.endswith('RNA'):
+                # nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
+                # oid = g.get_attr('ID')
+                # g.set_attr('ID', nid)
+                # gdic[oid] = nid
+                # g.set_attr('Parent', gdic[g.get_attr('Parent')])
+            # else:
+                # g.set_attr('Parent', gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
     elif opt == 'hzs':
@@ -1878,7 +1896,8 @@ def gff2gtf(args):
             if not gene_type.endswith("RNA") and not gene_type.endswith("transcript"):
                 continue
             gene_id = transcript_info[tid]["gene_id"]
-            g.attributes = dict(gene_id=[gene_id], transcript_id=[tid])
+            biotype = transcript_info[tid]["gene_type"]
+            g.attributes = dict(gene_id=[gene_id], transcript_id=[tid], gene_biotype=[biotype])
             g.update_attributes(gtf=True, urlquote=False)
 
             print(g)
@@ -2358,7 +2377,7 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
     opts = 'genbank tair phytozome maize ensembl mo17 w22 ph207 phb47 hzs'.split()
-    sp1.add_argument('--opt', default='ensembl', choices=opts, help = 'fix option')
+    sp1.add_argument('--opt', default='ensembl', help = 'fix option')
     sp1.set_defaults(func = fix)
 
     sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries of parent features by range chaining child features',
@@ -2487,7 +2506,7 @@ if __name__ == '__main__':
     sp1.add_argument("--AED", type=float, help="Only extract lines with AED score <=")
     sp1.add_argument("--exoncount", action="store_true", help="Get the exon count for each mRNA feat")
     sp1.set_defaults(func = note)
-    
+
     sp1 = sp.add_parser('splicecov', help = 'extract certain attribute field for each feature',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('gff', help = 'input GFF3 file')
@@ -2498,16 +2517,16 @@ if __name__ == '__main__':
     sp1 = sp.add_parser('picklong', help = 'pick longest transcript')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.set_defaults(func = pick_longest)
-    
+
     sp1 = sp.add_parser('2gtf', help = 'convert gff3 to gtf format')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.set_defaults(func = gff2gtf)
-   
+
     sp1 = sp.add_parser('2tsv', help = 'convert gff3 to tsv format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.set_defaults(func = gff2tsv)
-    
+
     sp1 = sp.add_parser('2bed12', help = 'convert gff3 to bed12 format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
@@ -2548,7 +2567,7 @@ if __name__ == '__main__':
     sp1.add_argument("--gene_id", default="gene_id", help="Field name for gene")
     sp1.add_argument("--augustus", default=False, action="store_true", help="Input is AUGUSTUS gtf")
     sp1.set_defaults(func = fromgtf)
- 
+
     sp1 = sp.add_parser("merge", help = "merge several gff files into one",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('config', help = 'config file containing a list of gff files') 

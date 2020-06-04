@@ -90,7 +90,18 @@ def extract(args):
     reg2 = re.compile("^([\w\-]+)$")
     bed = Bed()
     if op.isfile(args.loc):
-        bed = Bed(args.loc, sorted=False)
+        if args.list:
+            fho = must_open(args.loc, 'r')
+            for line in fho:
+                sid = line.strip()
+                beg = 0
+                if sid in db:
+                    end = len(db[sid])
+                    bed.add("%s\t%d\t%d\n" % (sid, beg, end))
+                else:
+                    logging.error("%s not in db => skipped" % sid)
+        else:
+            bed = Bed(args.loc, sorted=False)
     else:
         for loc in args.loc.split(","):
             res = reg1.match(loc)
@@ -103,7 +114,7 @@ def extract(args):
                 res = reg2.match(loc)
                 if res:
                     sid = res.group(1)
-                    beg = 1
+                    beg = 0
                     if sid in db:
                         end = len(db[sid])
                         bed.add("%s\t%d\t%d\n" % (sid, beg, end))
@@ -187,7 +198,7 @@ def tile(args):
         elif len(ary) == 2:
             sid, beg = ary[0], int(ary[1])
             end = beg + size - 1
-       
+
         wins = maketile(1, size, winsize, winstep)
         rcds = []
         seq = str(rcd.seq)
@@ -279,7 +290,7 @@ def extract_chrom_num(sid, opt):
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = int(res.group(1)) if res else False
     else:
-        ptn = "^(chr|chromsome *)?([1-9][0-9]{0,1})" #(MtrunA17)?
+        ptn = "^(chr|chromsome *)?(0*[1-9][0-9]{0,1})" #(MtrunA17)?
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = int(res.group(2)) if res else False
     return chrom
@@ -386,10 +397,71 @@ def cleanid(args):
     for line in fh:
         line = line.strip()
         if line.startswith(">"):
-            print(line.rstrip(":."))
+            print(re.sub('[(:.].*$', '', line))
         else:
             print(line)
     fh.close()
+
+def suffix(args):
+    fh = must_open(args.fi)
+    for line in fh:
+        line = line.strip()
+        if line.startswith(">"):
+            print(line + args.suf)
+        else:
+            print(line)
+    fh.close()
+
+def dedup(args):
+    fh = must_open(args.fi)
+    seqd = dict()
+    seq_it = SeqIO.parse(fh, "fasta")
+    cnt, cntu = 0, 0
+    for rcd in seq_it:
+        rid, seq = rcd.id, rcd.seq
+        cnt += 1
+        if seq in seqd:
+            seqd[seq] += args.sep + rid
+        else:
+            seqd[seq] = rid
+            cntu += 1
+    fh.close()
+
+    seqs = [SeqRecord(seq, id=rids, description='') for seq, rids in seqd.items()]
+    SeqIO.write(seqs, sys.stdout, "fasta")
+    logging.info("%6d total sequences" % cnt)
+    logging.info("%6d non-redundant sequences" % cntu)
+
+def add_nr(args):
+    fh = must_open(args.fi)
+    seqd = dict()
+    seq_it = SeqIO.parse(fh, "fasta")
+    cnt, cntu = 0, 0
+    for rcd in seq_it:
+        rid, seq = rcd.id, rcd.seq
+        cnt += 1
+        if seq in seqd:
+            seqd[seq] += args.sep + rid
+        else:
+            seqd[seq] = rid
+            cntu += 1
+    fh.close()
+
+    cntn = 0
+    fh = must_open(args.fi2)
+    seq_it = SeqIO.parse(fh, "fasta")
+    for rcd in seq_it:
+        rid, seq = rcd.id, rcd.seq
+        if seq not in seqd:
+            seqd[seq] = rid
+            cntn += 1
+    fh.close()
+
+    seqs = [SeqRecord(seq, id=rids, description='') for seq, rids in seqd.items()]
+    SeqIO.write(seqs, sys.stdout, "fasta")
+    logging.info("%6d total sequences" % cnt)
+    logging.info("%6d non-redundant sequences" % cntu)
+    logging.info("%6d new sequences added" % cntn)
 
 def cds2gene(args):
     fi, fg, fo = args.fi, args.fg, args.fo
@@ -454,6 +526,7 @@ if __name__ == "__main__":
     sp1.add_argument('loc', help = 'location string(s) or BED file(s) (separated by ",")')
     sp1.add_argument('--padding', action = "store_true", help = 'padding to size')
     sp1.add_argument('--tsv', action = "store_true", help = 'output in tabular format')
+    sp1.add_argument('--list', action = "store_true", help = 'input is text file with sequence IDs')
     sp1.set_defaults(func = extract)
 
     sp1 = sp.add_parser("tile", help = 'create sliding windows that tile the entire sequence',
@@ -500,6 +573,12 @@ if __name__ == "__main__":
     sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = rmdot)
 
+    sp1 = sp.add_parser("suffix", help='add a suffix to all sequence identifiers',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help='input fasta file')
+    sp1.add_argument('--suf', default='m', help='suffix')
+    sp1.set_defaults(func = suffix)
+
     sp2 = sp.add_parser("cleanid", help='clean sequence IDs in a fasta file')
     sp2.add_argument('fi', help='input fasta file')
     sp2.set_defaults(func = cleanid)
@@ -511,6 +590,19 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("translate", help='translate nucleotide seqs to amino acid seqs')
     sp1.add_argument('fi', help='input fasta file')
     sp1.set_defaults(func = translate)
+
+    sp1 = sp.add_parser("dedup", help='collapse duplicate/identical sequences to a single entry',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help='input fasta file')
+    sp1.add_argument('--sep', default=',', help='separator')
+    sp1.set_defaults(func = dedup)
+
+    sp1 = sp.add_parser("add_nr", help='add non-redundant sequences from file2 to file1',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help='input fasta file')
+    sp1.add_argument('fi2', help='input fasta file 2')
+    sp1.add_argument('--sep', default=',', help='separator')
+    sp1.set_defaults(func = add_nr)
 
     sp1 = sp.add_parser("cds2gene", help='concatenate CDS segmetns for each gene')
     sp1.add_argument('fi', help='input fasta file')

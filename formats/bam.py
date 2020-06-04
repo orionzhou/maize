@@ -5,12 +5,9 @@ import os
 import os.path as op
 import sys
 import logging
-import numpy as np
-from string import Template
 import pysam
 
 from maize.apps.base import eprint, sh, mkdir
-from maize.formats.base import must_open
 
 class BamStat(object):
 
@@ -36,7 +33,7 @@ class BamStat(object):
     __repr__ = __str__
 
     def write(self, outfile):
-        fh = must_open(outfile, "w")
+        fh = open(outfile, "w")
         print(self, file=fh)
         fh.close()
 
@@ -77,7 +74,7 @@ def bam_stat(args):
             logging.debug("%d 'paired' reads don't have a mate" % len(s.rdic))
 
         if args.isize:
-            fho = must_open(args.isize, "w")
+            fho = open(args.isize, "w")
             print("\t".join(('insert_size','count')), file=fho)
             for ins, cnt in s.idic.items():
                 print("%d\t%d\n" % (ins, cnt), file=fho)
@@ -96,6 +93,26 @@ def bam_stat(args):
             for k in s.stats:
                 print("\t".join((chrom, k, str(getattr(s, k)))))
 
+def bam_sort(args):
+    sort_tag = '-n' if args.order=='name' else ''
+
+    fos = []
+    for fi in args.fi:
+        fname = op.basename(fi)
+        fo = "%s.s.bam" % op.basename(fi)
+        sh("sambamba sort %s --tmpdir=%s -t %d -o %s %s" % (sort_tag, args.tmpdir, args.threads, fo, fi))
+        fos.append(fo)
+
+    if len(fos) == 1:
+        sh("mv %s %s"% (fos[0], args.fo))
+    else:
+        bam_str = ' '.join(fos)
+        sh("sambamba merge -t %d %s %s" % (args.threads, args.fo, bam_str))
+        bam_str = ' '.join([x + '*' for x in fos])
+        sh("rm %s" % bam_str)
+
+    if args.order != 'name':
+        sh("samtools index %s" % args.fo)
 
 def count_read(aln, s):
     if aln.is_secondary or aln.is_supplementary:
@@ -243,6 +260,17 @@ if __name__ == "__main__":
     sp1.add_argument('--isize', help = 'output insert size distribution to file')
     sp1.add_argument('--bychr', action='store_true', help='report stats for each chrom')
     sp1.set_defaults(func = bam_stat)
+
+    sp1 = sp.add_parser("sort",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            help = 'sort one or more BAMs in given order'
+    )
+    sp1.add_argument('fo', help = 'output SAM/BAM file')
+    sp1.add_argument('fi', nargs='+', help = 'input SAM/BAM file(s)')
+    sp1.add_argument('--order', default='pos', choices=['pos','name'], help = 'sort order')
+    sp1.add_argument('--threads', default=1, type=int, help = 'num. threads to use')
+    sp1.add_argument('--tmpdir', default='/scratch.global/zhoux379/temp', help = 'temporary dir')
+    sp1.set_defaults(func = bam_sort)
 
     sp1 = sp.add_parser("filter",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,

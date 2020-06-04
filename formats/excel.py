@@ -97,14 +97,16 @@ def main():
 
     sp1 = sp.add_parser('csv', help='Convert EXCEL to csv file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('excel', help = 'input excel file')
+    sp1.add_argument('fi', help = 'input excel file')
+    sp1.add_argument('fo', help = 'output csv file')
     sp1.add_argument('--sheet_name', default='Sheet1', help='worksheet name')
     sp1.add_argument('--sep', default=',', help='separator')
     sp1.set_defaults(func = csv)
 
     sp1 = sp.add_parser('tsv', help='Convert EXCEL to tsv file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('excel', help = 'input excel file')
+    sp1.add_argument('fi', help = 'input excel file')
+    sp1.add_argument('fo', help = 'output csv file')
     sp1.add_argument('--sheet_name', default='Sheet1', help='worksheet name')
     sp1.add_argument('--sep', default='\t', help='separator')
     sp1.set_defaults(func = csv)
@@ -141,7 +143,7 @@ def fromcsv(args):
     from csv import reader
     from xlwt import Workbook, easyxf
     from maize.formats.base import flexible_cast
-    
+
     csvfile = args.csv
     header = not args.noheader
     rgb = args.rgb
@@ -185,13 +187,14 @@ def csv(args):
     """
     import pandas as pd
 
-    excelfile = args.excel
+    fi = args.fi
+    fo = args.fo
     sep = args.sep
     sheet_name = args.sheet_name
-    suf = '.tsv' if sep == '\t' else '.csv'
-    csvfile = excelfile.rsplit(".", 1)[0] + suf
-    df = pd.read_excel(excelfile, sheet_name=sheet_name, header=0)
-    df.to_csv(csvfile, sep=sep, header=True, index=False)
+    #suf = '.tsv' if sep == '\t' else '.csv'
+    #fo = fi.rsplit(".", 1)[0] + suf
+    df = pd.read_excel(fi, sheet_name=sheet_name, header=0)
+    df.to_csv(fo, sep=sep, header=True, index=False)
 
 def tsvs(args):
     """

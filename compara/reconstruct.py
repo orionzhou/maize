@@ -175,12 +175,15 @@ def fillrbh(args):
     nrecruited = 0
     for row in fp:
         a, b = row.split()
+        c = '.'
         if b == '.':
             if a in adict:
                 b = adict[a]
                 nrecruited += 1
-                b += "'"
-        print("\t".join((a, b)), file=fw)
+                c = 'rbh'
+        else:
+            c = 'syntelog'
+        print("\t".join((a, b, c)), file=fw)
 
     logging.debug("Recruited {0} pairs from RBH.".format(nrecruited))
     fp.close()

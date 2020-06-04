@@ -7,8 +7,8 @@ import sys
 import logging
 import vcf
 
-from maize.apps.base import sh, mkdir
-from maize.formats.base import must_open
+from jcvi.apps.base import sh, mkdir
+from jcvi.formats.base import must_open
 
 dna_comp_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
 def revcomp(dna):
@@ -33,7 +33,7 @@ def vcf_filter(args):
             seqid, pos = line.strip().split("\t")
             locus = "%s_%s" % (seqid, pos)
             sites.add(locus)
-    
+
     vcfr = vcf.Reader(must_open(args.fi))
     #vcfw = vcf.Writer(fho, vcfr)
     for rcd in vcfr:
@@ -56,9 +56,9 @@ def vcf_filter(args):
                     (fs is None or fs <= 60) &
                     (mq is None or mq >= 40) &
                     (mqrs is None or mqrs >= -12.5) &
-                    (rprs is None or rprs >= -8) & 
+                    (rprs is None or rprs >= -8) &
                     (sor is None or sor <= 4)
-                ) or 
+                ) or
                 (rcd.is_indel & 
                     (qd is None or qd >= 2) &
                     (fs is None or fs <= 200) &
@@ -83,7 +83,7 @@ def vcf2fas(args):
     fhi = must_open(args.fi)
     seqdic = SeqIO.index(args.fs, "fasta")
     vcfr = vcf.Reader(filename = args.fv, compressed = True)
-     
+
     for line in fhi:
         line = line.strip("\n")
         ps = line.split("\t")

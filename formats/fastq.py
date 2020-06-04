@@ -1120,67 +1120,67 @@ def main():
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = splitread)
-    
+
     sp1 = sp.add_parser('catread', help='cat pairs together (reverse of splitread)',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = catread)
-    
+
     sp1 = sp.add_parser('pairinplace', help='collect pairs by checking adjacent ids',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = pairinplace)
-    
+
     sp1 = sp.add_parser('convert', help='convert between illumina and sanger offset',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = convert)
-    
+
     sp1 = sp.add_parser('first', help='get first N reads from file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = first)
-    
+
     sp1 = sp.add_parser('filter', help='filter to get high qv reads',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = filter)
-    
+
     sp1 = sp.add_parser('suffix', help='filter reads based on suffix',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = suffix)
-    
+
     sp1 = sp.add_parser('trim', help='trim reads using fastx_trimmer',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = trim)
-    
+
     sp1 = sp.add_parser('some', help='select a subset of fastq reads',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = some)
-    
+
     sp1 = sp.add_parser('guessoffset', help='guess the quality offset of the fastq records',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = guessoffset)
-    
+
     sp1 = sp.add_parser('readlen', help='calculate read length',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = readlen)
-    
+
     sp1 = sp.add_parser('format', help='format fastq file, convert header from casava 1.8+ to older format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = format)
-    
+
     sp1 = sp.add_parser('fasta', help='convert fastq to fasta and qual file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = fasta)
-    
+
     sp1 = sp.add_parser('fromsra', help='convert sra to fastq using `fastq-dump`',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
