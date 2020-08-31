@@ -193,7 +193,7 @@ def csv(args):
     sheet_name = args.sheet_name
     #suf = '.tsv' if sep == '\t' else '.csv'
     #fo = fi.rsplit(".", 1)[0] + suf
-    df = pd.read_excel(fi, sheet_name=sheet_name, header=0)
+    df = pd.read_excel(fi, sheet_name=sheet_name, header=0, convert_float=True)
     df.to_csv(fo, sep=sep, header=True, index=False)
 
 def tsvs(args):
