@@ -30,7 +30,7 @@ valid_rna_type = """
 """.split()
 valid_mrna_child_type = "exon CDS five_prime_UTR three_prime_UTR".split()
 d1 = {x: ["match_part"] for x in 'match cDNA_match EST_match nucleotide_to_protein_match expressed_sequence_match protein_match'.split()}
-d2 = {"transposable_element": ["transposon_fragment"]}
+d2 = {"transposable_element": ["transposon_fragment"], "transposable_element_gene": ["transposable_element"]}
 d3 = {"gene": valid_rna_type, 'mRNA': valid_mrna_child_type}
 d4 = {x: ['exon'] for x in valid_rna_type if x != 'mRNA'}
 valid_gff_parent_child = {**d1, **d2, **d3, **d4}
@@ -943,7 +943,7 @@ def fix(args):
             g.update_attributes()
             print(g)
     elif opt == 'ensembl':
-        seqtypes = ["chromosome","contig",'supercontig','biological_region']
+        seqtypes = ["chromosome","contig",'supercontig','biological_region','region','scaffold']
         id_map = dict()
         for g in gff:
             if g.type in seqtypes:
