@@ -17,12 +17,10 @@ def s3_sync(args):
         sys.exit(1)
     dry = "--dry-run" if args.dry else ''
     cmd = "s3cmd -c %s/appconfig/s3cfg2" % os.environ['git'] if args.personal else "s3cmd"
-    cmd += ' --guess-mime-type --follow-symlinks'
-    if args.dry:
-        sh("%s sync %s --delete-removed %s/ s3://%s/" % (cmd, dry, bucket, bucket))
-    else:
-        sh("%s sync %s --delete-removed %s/ s3://%s/" % (cmd, dry, bucket, bucket))
-        sh("%s setacl -P -r s3://%s" % (cmd, bucket))
+    cmd += " sync --delete-removed --acl-public --follow-symlinks --exclude '.git/* .github/*'"
+    # sh("%s %s --exclude '*.css' %s/ s3://%s/" % (cmd, dry, bucket, bucket))
+    # sh("%s %s --content-type 'text/css' --exclude '*' --include '*.css' %s/ s3://%s/" % (cmd, dry, bucket, bucket))
+    sh("%s %s --no-mime-magic --guess-mime-type %s/ s3://%s/" % (cmd, dry, bucket, bucket))
 
 
 if __name__ == "__main__":
