@@ -5,7 +5,7 @@ import os
 import os.path as op
 import sys
 import logging
-import boto3
+#import boto3
 
 from maize.apps.base import sh, mkdir
 
