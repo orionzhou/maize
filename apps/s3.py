@@ -12,8 +12,12 @@ from maize.apps.base import sh, mkdir
 def s3_sync(args):
     os.chdir(args.dirh)
     bucket = "%s%s" % (args.pre, args.bucket)
+    if not op.exists(bucket):
+        print("%s does not exist" % bucket)
+        sys.exit(1)
     dry = "--dry-run" if args.dry else ''
     cmd = "s3cmd -c %s/appconfig/s3cfg2" % os.environ['git'] if args.personal else "s3cmd"
+    cmd += ' --guess-mime-type --follow-symlinks'
     if args.dry:
         sh("%s sync %s --delete-removed %s/ s3://%s/" % (cmd, dry, bucket, bucket))
     else:
@@ -32,7 +36,8 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("sync",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
             help = "sync an s3 bucket")
-    sp1.add_argument('bucket', choices=['igv','igv-data','multiqc'], help = 'bucket suffix')
+    allowed_buckets = ['igv','igv-data','multiqc','share']
+    sp1.add_argument('bucket', help = 'bucket suffix')
     sp1.add_argument('--dirh', default="%s/s3" % os.environ["proj"], help = 'local directory for S3')
     sp1.add_argument('--pre', default="zhoup-", help="bucket prefix")
     sp1.add_argument('--personal', action="store_true", help="use personal aws account instead of msi account?")
