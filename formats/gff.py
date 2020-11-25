@@ -10,13 +10,13 @@ import re
 from itertools import chain
 from urllib.parse import quote, unquote, parse_qsl
 
-from maize.utils.cbook import AutoVivification
-from maize.formats.base import DictFile, LineFile, must_open, is_number
-from maize.utils.iter import flatten
-from maize.apps.base import mkdir, parse_multi_values, need_update, sh
-from maize.formats.bed import Bed, BedLine
-from maize.utils.natsort import natsorted
-from maize.utils.range import range_minmax
+from jcvi.utils.cbook import AutoVivification
+from jcvi.formats.base import DictFile, LineFile, must_open, is_number
+from jcvi.utils.iter import flatten
+from jcvi.apps.base import mkdir, parse_multi_values, need_update, sh
+from jcvi.formats.bed import Bed, BedLine
+from jcvi.utils.natsort import natsorted
+from jcvi.utils.range import range_minmax
 
 Valid_strands = ('+', '-', '?', '.')
 Valid_phases = ('0', '1', '2', '.')
@@ -405,6 +405,7 @@ def make_attributes(s, gff3=True, keep_attr_order=True):
                 continue
             key, val = a.split(' ', 1)
             val = unquote(val.replace('"', '').replace('=', ' ').strip())
+            if key not in d: d[key] = []
             d[key].append(val)
 
     for key, val in d.items():
@@ -1030,8 +1031,11 @@ def fix(args):
                 g.seqid = 'unmapped'
             print(g)
     elif opt == 'ph207':
+        dicc = {f"chr{x}": f"chr0{x}" for x in range(1, 10)}
         for g in gff:
             gid, par = g.get_attr("ID"), g.get_attr("Parent")
+            if g.seqid in dicc:
+                g.seqid = dicc[g.seqid]
             if gid:
                 g.set_attr("ID", gid.replace(".v1.1", ""))
             if par:
@@ -1971,8 +1975,8 @@ def gff2bed12(args):
         name = f.id
         score = 0
         strand = f.strand
-        thickStart = 1e15
-        thickEnd = 0
+        thickStart = chromStart
+        thickEnd = chromEnd
         blocks = []
 
         for c in g.children(name, 1):
@@ -2187,6 +2191,8 @@ def fromgtf(args):
         elif g.type == "gene":
             g.update_tag(gene_id, "ID")
             g.update_tag("Gene", "ID")
+        elif g.type in ['start_codon', 'stop_codon']:
+            continue
         else:
             assert 0, "Don't know how to deal with {0}".format(g.type)
 

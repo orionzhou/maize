@@ -14,10 +14,27 @@ from Bio.SeqUtils.CheckSum import seguid
 from pyfaidx import Fasta
 import pandas as pd
 
-from maize.apps.base import eprint, sh, mkdir
-from maize.formats.base import must_open, ndigit, prettysize
+from jcvi.apps.base import sh, mkdir
+from jcvi.formats.base import must_open
 
 FastaExt = ("fasta", "fa", "fas", "fna", "cds", "pep", "faa", "fsa", "seq", "nt", "aa")
+
+def ndigit(num):
+    if num < 1:
+        print("no digits: %g" % num)
+        sys.exit(1)
+    digit = 0
+    while num >= 1:
+        num /= 10.0
+        digit += 1
+    return digit
+
+def prettysize(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
 
 def size(args):
     if args.header:
@@ -76,7 +93,7 @@ def translate(args):
 
 def extract(args):
     import re
-    from maize.formats.bed import Bed
+    from jcvi.formats.bed import Bed
 
     db = ""
     if op.isfile(args.db):
@@ -130,7 +147,7 @@ def extract(args):
         if b.accn:
             oid = b.accn
         if sid not in db:
-            eprint("%s not in db => skipped" % sid)
+            print("%s not in db => skipped" % sid)
             continue
         size = end - beg + 1
         bp_pad = 0
@@ -184,7 +201,7 @@ def split_old(args):
     print("size range: %s - %s" % (prettysize(sizes[0]), prettysize(sizes[n-1])))
 
 def tile(args):
-    from maize.utils.location import maketile
+    from jcvi.utils.location import maketile
 
     fhi = must_open(args.fi)
     winstep, winsize = args.step, args.size
@@ -218,7 +235,7 @@ def merge(args):
             continue
         (pre, fseq) = line.split(",")
         if not os.access(fseq, os.R_OK):
-            eprint("no access to input file: %s" % fseq)
+            print("no access to input file: %s" % fseq)
             sys.exit(1)
 
         fh = must_open(fseq)

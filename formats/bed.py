@@ -10,17 +10,40 @@ import numpy as np
 
 from collections import defaultdict
 from itertools import groupby
-
-from maize.formats.base import LineFile, must_open, is_number, get_number, ndigit, prettysize
-from maize.utils.location import make_window
-from maize.formats.sizes import Sizes
-from maize.utils.iter import pairwise
-from maize.utils.cbook import SummaryStats, thousands, percentage
-from maize.utils.grouper import Grouper
-from maize.utils.range import Range, range_union, range_chain, \
+from jcvi.formats.base import LineFile, must_open, is_number, get_number
+from jcvi.formats.sizes import Sizes
+from jcvi.utils.iter import pairwise
+from jcvi.utils.cbook import SummaryStats, thousands, percentage
+from jcvi.utils.grouper import Grouper
+from jcvi.utils.range import Range, range_union, range_chain, \
             range_distance, range_intersect
-from maize.apps.base import sh, need_update
-from maize.utils.natsort import natsort_key, natsorted
+from jcvi.apps.base import sh, need_update, mkdir
+from jcvi.utils.natsort import natsort_key, natsorted
+
+def make_window(beg, end, winsize, winstep):
+    import math
+    size = end - beg + 1
+    nwin = math.ceil((size - winsize) / winstep) + 1
+    nwin = max(1, nwin)
+
+    mergelast = False
+    if nwin > 1:
+        size_lastwin = size - (nwin-1) * winstep
+        if float(size_lastwin) / winstep < 0.3:
+            mergelast = True
+            #eprint(size_lastwin)
+
+    wins = []
+    for i in range(0, nwin):
+        wbeg = beg + winstep * i
+        wend = beg + winstep * i + winsize - 1
+        wend = min(end, wend)
+        if i == nwin - 2 and mergelast:
+            wend = end
+        elif i == nwin - 1 and mergelast:
+            continue
+        wins.append([wbeg, wend])
+    return wins
 
 class BedLine(object):
     # the Bed format supports more columns. we only need
@@ -1276,7 +1299,7 @@ def binpacking(args):
     n = args.N
     #digit = ndigit(n)
     #fmt = "part.%%0%dd.fna" % digit
-    fmt = "part.%d.bed"
+    fmt = f"{args.pre}%d.bed"
     if not op.exists(diro):
         mkdir(diro)
     else:
@@ -1306,7 +1329,7 @@ def binpacking(args):
             b = sdic[rid][:-1]
             fhl.write("\t".join(str(x) for x in b) + "\n")
         fhl.close()
-    print("size range: %s - %s" % (prettysize(sizes[0]), prettysize(sizes[n-1])))
+    print("size range: %s - %s" % (sizes[0], sizes[n-1]))
 
 def pile(args):
     """
@@ -2315,6 +2338,7 @@ if __name__ == '__main__':
     sp1.add_argument('chain', help = 'output chain file (*.chain)')
     sp1.add_argument('outdir', help = 'output directory')
     sp1.add_argument('--N', type = int, default = 10, help = 'number pieces to split')
+    sp1.add_argument('--pre', default='p', help = 'prefix of output fasta')
     sp1.set_defaults(func = binpacking)
 
     sp1 = sp.add_parser('pile', help='find the ids that intersect',

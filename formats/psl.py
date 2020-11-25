@@ -7,10 +7,9 @@ import sys
 import re
 import logging
 
-from maize.apps.base import eprint, sh, mkdir
-from maize.formats.base import LineFile, must_open
-from maize.formats.sizes import Sizes
-from maize.utils.location import locAry2Str
+from jcvi.apps.base import sh, mkdir
+from jcvi.formats.base import LineFile, must_open
+from jcvi.formats.sizes import Sizes
 
 class PslLine(object):
 

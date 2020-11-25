@@ -7,7 +7,7 @@ import sys
 import logging
 #import boto3
 
-from maize.apps.base import sh, mkdir
+from jcvi.apps.base import sh, mkdir
 
 def s3_sync(args):
     os.chdir(args.dirh)

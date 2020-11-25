@@ -52,30 +52,6 @@ def join_ranges(data, offset=0):
         if c == 0: 
             yield x, value - offset
 
-def make_window(beg, end, winsize, winstep):
-    import math
-    size = end - beg + 1
-    nwin = math.ceil((size - winsize) / winstep) + 1
-    nwin = max(1, nwin) 
-    
-    mergelast = False
-    if nwin > 1:
-        size_lastwin = size - (nwin-1) * winstep
-        if float(size_lastwin) / winstep < 0.3:
-            mergelast = True
-            #eprint(size_lastwin)
-    
-    wins = []
-    for i in range(0, nwin):
-        wbeg = beg + winstep * i
-        wend = beg + winstep * i + winsize - 1
-        wend = min(end, wend)
-        if i == nwin - 2 and mergelast:
-            wend = end
-        elif i == nwin - 1 and mergelast:
-            continue
-        wins.append([wbeg, wend])
-    return wins
 
 if __name__ == '__main__':
     print(locStr2Ary("7-10,8-19"))

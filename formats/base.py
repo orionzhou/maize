@@ -10,7 +10,7 @@ import logging
 #from Bio import SeqIO
 from itertools import groupby, islice, cycle
 
-from maize.apps.base import eprint, sh, debug, mkdir
+from jcvi.apps.base import sh, debug, mkdir
 debug()
 
 FastaExt = ("fasta", "fas", "fa", "fna", "cds", "pep", "faa", "fsa", "seq", "nt", "aa")
@@ -491,9 +491,9 @@ def flexible_cast(s):
 
 def ndigit(num):
     if num < 1:
-        eprint("no digits: %g" % num)
+        print("no digits: %g" % num)
         sys.exit(1)
-    digit = 0 
+    digit = 0
     while num >= 1:
         num /= 10.0
         digit += 1

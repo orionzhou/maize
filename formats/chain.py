@@ -26,8 +26,8 @@ import os.path as op
 import sys
 import logging
 
-from maize.formats.base import BaseFile, read_block, must_open
-from maize.apps.base import need_update, which, sh
+from jcvi.formats.base import BaseFile, read_block, must_open
+from jcvi.apps.base import need_update, which, sh
 
 class ChainLine (object):
 
@@ -177,7 +177,7 @@ def frompsl(args):
     Generate chain file from psl file. The pipeline is describe in:
     <http://genomewiki.ucsc.edu/index.php/Minimal_Steps_For_LiftOver>
     """
-    from maize.formats.sizes import Sizes
+    from jcvi.formats.sizes import Sizes
 
     p = OptionParser(frompsl.__doc__)
     opts, args = p.parse_args(args)
@@ -240,6 +240,8 @@ def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
     tEnd = max(x[1] for x in locs)
     qStart = min(x[2] for x in locs)
     qEnd = max(x[3] for x in locs)
+    if qStrand == "-":
+        qStart, qEnd = qSize - qEnd, qSize - qStart
     headerline = " ".join(str(x) for x in (
          chain, score, tName, tSize, tStrand, tStart,
          tEnd, qName, qSize, qStrand, qStart, qEnd, cid
@@ -261,10 +263,10 @@ def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
     print()
 
 def bed2chain(args):
-    from maize.formats.sizes import Sizes
+    from jcvi.formats.sizes import Sizes
     tdic = Sizes(args.tsize)
     qdic = Sizes(args.qsize)
-    
+
     firstline = True
     cid0, tName0, qName0, srd0, locs = '', '', '', '', []
     for line in must_open(args.fi):
@@ -327,17 +329,17 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input chain file')
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = chain2bed)
-    
+
     sp1 = sp.add_parser("fromBed", help = "convert from bed to chain file")
     sp1.add_argument('fi', help = 'input bed file')
     sp1.add_argument('tsize', help = 'target size file')
     sp1.add_argument('qsize', help = 'query size file')
     sp1.set_defaults(func = bed2chain)
-    
+
     sp1 = sp.add_parser("stat", help = "get chain stats")
     sp1.add_argument('fi', help = 'input chain file')
     sp1.set_defaults(func = chainstat)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

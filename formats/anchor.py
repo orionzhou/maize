@@ -5,8 +5,18 @@ import os
 import os.path as op
 import sys
 import argparse
-from maize.formats.base import LineFile, must_open, is_number, get_number, ndigit, prettysize
+from jcvi.formats.base import LineFile, must_open
 from jcvi.compara.synteny import AnchorFile
+
+def ndigit(num):
+    if num < 1:
+        print("no digits: %g" % num)
+        sys.exit(1)
+    digit = 0
+    while num >= 1:
+        num /= 10.0
+        digit += 1
+    return digit
 
 def anchor2tsv(args):
     anchors = AnchorFile(args.fi)

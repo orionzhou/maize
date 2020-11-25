@@ -49,8 +49,8 @@ psl_tStarts = 20
 psl_seq = 21
 psl_empty_line = '0 0 0 0 0 0 0 0 + s 0 0 0 r 0 0 0 0 , , ,'.split()
 
-from maize.apps.base import eprint, sh, mkdir
-from maize.formats.base import must_open
+from jcvi.apps.base import sh, mkdir
+from jcvi.formats.base import must_open
 
 def sam2tsv(args):
     sMatch, sMisMatch, sGapOpen, sGapExtend = 2, -3, -5, -2
