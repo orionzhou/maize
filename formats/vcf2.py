@@ -98,71 +98,6 @@ class UniqueLiftover(object):
 
 CM = {**{str(x): "chr%d" % x for x in range(1,23)}, **{"X":"chrX", "Y":"chrY", "MT":"chrM"}}
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            description = 'vcf utilities'
-    )
-    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
-
-    sp1 = sp.add_parser('from23andme', help='convert 23andme file to vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = from23andme)
-
-    sp1 = sp.add_parser('fromimpute2', help='convert impute2 output to vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = fromimpute2)
-
-    sp1 = sp.add_parser('liftover', help='lift over coordinates in vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-
-    sp1.set_defaults(func = liftover)
-    sp1 = sp.add_parser('location', help='given SNP locations characterize the locations',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = location)
-
-    sp1 = sp.add_parser('mstmap', help='convert vcf format to mstmap input',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = mstmap)
-
-    sp1 = sp.add_parser('refallele', help='make refAllele file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = refallele)
-
-    sp1 = sp.add_parser('sample', help='sample subset of vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = sample)
-
-    sp1 = sp.add_parser('summary', help='summarize the genotype calls in table',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = summary)
-
-    sp1 = sp.add_parser('uniq', help='retain only the first entry in vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = uniq)
-
-    sp1 = sp.add_parser('validate', help='fast validation of vcf file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('i', help = '')
-    sp1.set_defaults(func = validate)
-
-    args = parser.parse_args()
-    if args.command:
-        args.func(args)
-    else:
-        print('Error: need to specify a sub command\n')
-        parser.print_help()
-
 def validate(args):
     """
     %prog validate input.vcf genome.fasta
@@ -735,7 +670,6 @@ def mstmap(args):
     mm = MSTMatrix(genotypes, mh, ptype, opts.missing_threshold)
     mm.write(opts.outfile, header=(not opts.noheader))
 
-
 def liftover(args):
     """
     %prog liftover old.vcf hg19ToHg38.over.chain.gz new.vcf
@@ -790,6 +724,68 @@ def liftover(args):
 
     logging.debug("Excluded {0}".format(num_excluded))
 
-
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+            description = 'vcf utilities'
+    )
+    sp = parser.add_subparsers(title = 'available commands', dest = 'command')
+
+    sp1 = sp.add_parser('from23andme', help='convert 23andme file to vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = from23andme)
+
+    sp1 = sp.add_parser('fromimpute2', help='convert impute2 output to vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = fromimpute2)
+
+    sp1 = sp.add_parser('liftover', help='lift over coordinates in vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+
+    sp1.set_defaults(func = liftover)
+    sp1 = sp.add_parser('location', help='given SNP locations characterize the locations',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = location)
+
+    sp1 = sp.add_parser('mstmap', help='convert vcf format to mstmap input',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = mstmap)
+
+    sp1 = sp.add_parser('refallele', help='make refAllele file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = refallele)
+
+    sp1 = sp.add_parser('sample', help='sample subset of vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = sample)
+
+    sp1 = sp.add_parser('summary', help='summarize the genotype calls in table',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = summary)
+
+    sp1 = sp.add_parser('uniq', help='retain only the first entry in vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = uniq)
+
+    sp1 = sp.add_parser('validate', help='fast validation of vcf file',
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('i', help = '')
+    sp1.set_defaults(func = validate)
+
+    args = parser.parse_args()
+    if args.command:
+        args.func(args)
+    else:
+        print('Error: need to specify a sub command\n')
+        parser.print_help()
+

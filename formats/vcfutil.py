@@ -221,6 +221,24 @@ def hybrid(args):
         print("\t".join(row))
     fhi.close()
 
+def fillna(args):
+    from cyvcf2 import VCF, Writer
+    vcf = VCF(args.fi)
+    fhb = open(args.fb, 'r')
+    w = Writer(args.fo, vcf)
+
+    samples = vcf.samples
+    for v in vcf:
+        ps = fhb.readline().strip().split("\t")
+        assert len(samples) == len(ps) - 3
+        for i in range(len(samples)):
+            if v.genotypes[i] == [-1,-1,False] and ps[3+i] == '1':
+                v.genotypes[i] = [0,0,False]
+        v.genotypes = v.genotypes
+        w.write_record(v)
+
+    w.close(); vcf.close()
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
@@ -260,6 +278,12 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input vcf file')
     sp1.add_argument('--noindel', action = 'store_true', help = 'remove InDel')
     sp1.set_defaults(func = vcf2bed)
+
+    sp1 = sp.add_parser("fillna", help = "fill missing genotype calls using external BED file")
+    sp1.add_argument('fi', help = 'input vcf file')
+    sp1.add_argument('fb', help = 'BED file containing coverage info')
+    sp1.add_argument('fo', help = 'output vcf file')
+    sp1.set_defaults(func = fillna)
 
     args = parser.parse_args()
     if args.command:

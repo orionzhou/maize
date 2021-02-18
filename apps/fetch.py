@@ -15,13 +15,13 @@ from os.path import join as urljoin
 
 from Bio import Entrez, SeqIO
 
-from maize.formats.base import must_open
+from jcvi.formats.base import must_open
 #from maize.formats.fasta import print_first_difference
-from maize.formats.fastq import fromsra
-from maize.utils.cbook import tile
-from maize.utils.iter import grouper
-from maize.apps.console import green
-from maize.apps.base import mkdir, ls_ftp, download, sh, last_updated
+from jcvi.formats.fastq import fromsra
+from jcvi.utils.cbook import tile
+from jcvi.utils.iter import grouper
+from jcvi.apps.console import green
+from jcvi.apps.base import mkdir, ls_ftp, download, sh, last_updated
 
 myEmail = 'zhoupenggeni@gmail.com'
 Entrez.email = myEmail

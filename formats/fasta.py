@@ -115,8 +115,8 @@ def extract(args):
                 if sid in db:
                     end = len(db[sid])
                     bed.add("%s\t%d\t%d\n" % (sid, beg, end))
-                else:
-                    logging.error("%s not in db => skipped" % sid)
+                # else:
+                    # logging.error("%s not in db => skipped" % sid)
         else:
             bed = Bed(args.loc, sorted=False)
     else:
@@ -135,15 +135,15 @@ def extract(args):
                     if sid in db:
                         end = len(db[sid])
                         bed.add("%s\t%d\t%d\n" % (sid, beg, end))
-                    else:
-                        logging.error("%s not in db => skipped" % sid)
+                    # else:
+                        # logging.error("%s not in db => skipped" % sid)
                 else:
                     logging.error("%s: unknown locstr => skipped" % loc)
 
     rcds = []
     for b in bed:
         sid, beg, end = b.seqid, b.start, b.end
-        oid = "%s-%d-%d" % (sid, beg, end)
+        oid = sid if args.list else f"{sid}-{beg}-{end}"
         if b.accn:
             oid = b.accn
         if sid not in db:
@@ -307,7 +307,7 @@ def extract_chrom_num(sid, opt):
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = int(res.group(1)) if res else False
     else:
-        ptn = "^(chr|chromsome *)?(0*[1-9][0-9]{0,1})" #(MtrunA17)?
+        ptn = "^(chr|chromsome)?[ _]*(0*[1-9][0-9]{0,1})" #(MtrunA17)?
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = int(res.group(2)) if res else False
     return chrom

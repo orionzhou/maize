@@ -912,11 +912,12 @@ def fix(args):
     elif opt == 'phytozome':
         gdic = dict()
         for g in gff:
-            if g.type.endswith('RNA'):
-                g.id, g.name = g.get_attr('ID'), g.get_attr('Name')
-                gdic[g.id] = g.name
-                g.set_attr('ID', g.name)
-            elif g.type != 'gene':
+            if g.type.endswith('RNA') or g.type=='gene':
+                id, name = g.get_attr("ID"), g.get_attr("Name")
+                #name = name.replace(".", '')
+                g.set_attr("ID", name)
+                gdic[id] = name
+            if g.type != 'gene':
                 g.set_attr("Parent", gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
