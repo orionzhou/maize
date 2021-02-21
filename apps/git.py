@@ -16,17 +16,17 @@ def pull(args):
         dir2 = op.join(os.getenv("HOME"), 'projects', repo)
         if op.isdir(dir1):
             os.chdir(dir1)
-            logging.debug(f"{repo}: {dir1}")
+            logging.debug(f"repo {repo}: {dir1}")
         elif op.isdir(dir2):
             os.chdir(dir2)
-            logging.debug(f"{repo}: {dir2}")
+            logging.debug(f"repo {repo}: {dir2}")
         else:
-            logging.error(f"{repo}: not found - skipped")
-        sh("git stash")
-        sh("git pull")
-        sh("git stash pop")
-        sh("git commit -am 'normal commit'")
-        sh("git push origin master")
+            logging.error(f"repo {repo}: not found - skipped")
+        sh("git stash", log=False)
+        sh("git pull", log=False)
+        sh("git stash pop", log=False)
+        sh("git commit -am 'normal commit'", log=False)
+        sh("git push origin master", log=False)
 
 if __name__ == "__main__":
     import argparse
