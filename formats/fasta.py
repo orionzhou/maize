@@ -40,47 +40,50 @@ def size(args):
     if args.header:
         print("seqid\tsize")
     fname, fext = op.splitext(args.fi)
+    fho = must_open(args.fo, 'w')
     if args.fi in ['stdin', '-'] or fext in ['.gz','.bz2']:
         fh = must_open(args.fi)
         for rcd in SeqIO.parse(fh, "fasta"):
             sid, size = rcd.id, len(rcd)
             if args.bed:
-                print("%s\t%d\t%d" % (sid, 0, size))
+                fho.write("%s\t%d\t%d\n" % (sid, 0, size))
             else:
-                print("%s\t%d" % (sid, size))
+                fho.write("%s\t%d\n" % (sid, size))
     elif fext in [".%s" % x for x in FastaExt]:
         from pyfaidx import Fasta
         fas = Fasta(args.fi)
         for sid in fas.keys():
             size = len(fas[sid])
             if args.bed:
-                print("%s\t%d\t%d" % (sid, 0, size))
+                fho.write(f"{sid}\t0\t{size}\n")
             else:
-                print("%s\t%d" % (sid, size))
+                fho.write(f"{sid}\t{size}\n")
     else:
         logging.error("%s is not a supported format" % fext)
 
 def desc(args):
     fh = must_open(args.fi)
+    fho = must_open(args.fo)
     if args.header:
-        print("seqid\tdesc")
+        fho.write("seqid\tdesc\n")
     for rcd in SeqIO.parse(fh, "fasta"):
         sid, desc = rcd.id, rcd.description
         if sid == desc:
             desc = ''
-        print("%s\t%s" % (sid, desc))
+        fho.write("%s\t%s\n" % (sid, desc))
 
 def clean(args):
     import re
     reg = re.compile("[^ATCGN]")
-    fh = must_open(args.fi)
+    fhi = must_open(args.fi)
+    fho = must_open(args.fo, 'w')
     cnt = 0
-    for rcd in SeqIO.parse(fh, "fasta"):
+    for rcd in SeqIO.parse(fhi, "fasta"):
         sid, seq = rcd.id, str(rcd.seq).upper()
         newseq, ncnt = reg.subn("N", seq)
         cnt += ncnt
         nrcd = SeqRecord(Seq(newseq), id = sid, description = "")
-        SeqIO.write(nrcd, sys.stdout, "fasta")
+        SeqIO.write(nrcd, fho, "fasta")
     logging.debug("Total bad char: %d" % cnt)
 
 def translate(args):
@@ -277,12 +280,13 @@ def gaps(args):
     import re
     reg = re.compile("N+")
     fh = must_open(args.fi)
+    fho = must_open(args.fo, 'w')
     for rcd in SeqIO.parse(fh, "fasta"):
         sid, seq = rcd.id, str(rcd.seq).upper()
         for res in reg.finditer(seq):
             beg, end = res.start(0), res.end(0)
             if end - beg >= args.gap:
-                print("%s\t%d\t%d" % (sid, beg, end))
+                fho.write("%s\t%d\t%d\n" % (sid, beg, end))
 
 def fas2aln(args):
     from Bio import AlignIO
@@ -524,17 +528,20 @@ if __name__ == "__main__":
 
     sp1 = sp.add_parser("size", help = "Report length for each sequence")
     sp1.add_argument('fi', help = 'input file (fasta)')
+    sp1.add_argument('fo', help = 'output file (tab)')
     sp1.add_argument('--header', action = 'store_true', help = 'add header')
     sp1.add_argument('--bed', action = 'store_true', help = 'output in BED')
     sp1.set_defaults(func = size)
 
     sp1 = sp.add_parser("desc", help = "Report description for each sequence")
     sp1.add_argument('fi', help = 'input file (fasta)')
+    sp1.add_argument('fo', help = 'output file (tsv)')
     sp1.add_argument('--header', action = 'store_true', help = 'add header')
     sp1.set_defaults(func = desc)
 
     sp1 = sp.add_parser("clean", help = "Remove irregular chararacters")
     sp1.add_argument('fi', help = 'input file (fasta)')
+    sp1.add_argument('fo', help = 'output file (fasta)')
     sp1.set_defaults(func = clean)
 
     sp1 = sp.add_parser("extract", help = 'retrieve fasta sequences',
@@ -556,6 +563,7 @@ if __name__ == "__main__":
     sp1 = sp.add_parser("gaps", help = "report gap ('N's) locations in fasta sequences",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input file (fasta)')
+    sp1.add_argument('fo', help = 'output file (bed)')
     sp1.add_argument('--gap', type = int, default = 10, help = 'min gap size')
     sp1.set_defaults(func = gaps)
 

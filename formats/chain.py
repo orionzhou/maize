@@ -232,7 +232,7 @@ def chainstat(args):
     logging.debug("qry noredundant size")
     sh("cut -f5-7 tmp.bed | sortBed -i stdin | mergeBed -i stdin | bed.py size -")
 
-def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
+def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs, fho):
     chain = "chain"
     score = 1000
     tStrand = "+"
@@ -246,21 +246,21 @@ def print_chain(cid, tName, qName, qStrand, tSize, qSize, locs):
          chain, score, tName, tSize, tStrand, tStart,
          tEnd, qName, qSize, qStrand, qStart, qEnd, cid
     ))
-    print(headerline)
+    fho.write(headerline + "\n")
     for i in range(len(locs)):
         tb, te, qb, qe = locs[i]
         size, size2 = te - tb, qe - qb
         assert size == size2, "size not equal"
         if i == len(locs) - 1:
-            print(size)
+            fho.write(f"{size}\n")
         else:
             dt = locs[i+1][0] - te
             if qStrand == "-":
                 dq = qb - locs[i+1][3]
             else:
                 dq = locs[i+1][2] - qe
-            print("%d\t%d\t%d" % (size, dt, dq))
-    print()
+            fho.write("%d\t%d\t%d\n" % (size, dt, dq))
+    fho.write("\n")
 
 def bed2chain(args):
     from jcvi.formats.sizes import Sizes
@@ -269,6 +269,7 @@ def bed2chain(args):
 
     firstline = True
     cid0, tName0, qName0, srd0, locs = '', '', '', '', []
+    fho = must_open(args.fo, 'w')
     for line in must_open(args.fi):
         line = line.rstrip("\n")
         if not line:
@@ -283,13 +284,14 @@ def bed2chain(args):
             assert tName == tName0 and qName == qName0 and srd == srd0, "inconsistent info in chain"
             locs.append([tStart, tEnd, qStart, qEnd])
         else:
-            print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs)
+            print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs, fho)
             cid0, tName0, qName0, srd0 = cid, tName, qName, srd
             locs = [[tStart, tEnd, qStart, qEnd]]
-    print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs)
+    print_chain(cid0, tName0, qName0, srd0, tdic.get_size(tName0), qdic.get_size(qName0), locs, fho)
 
 def chain2bed(args):
     chainFile = Chain(args.fi)
+    fho = must_open(args.fo, 'w')
     for c in chainFile.chains:
         cid, score, tName, tSize, tSrd, tStart, tEnd, \
                 qName, qSize, qSrd, qStart, qEnd, cid = c.chain.split()
@@ -311,9 +313,9 @@ def chain2bed(args):
             tstr = "%s:%d-%d" % (tName, tb, te)
             qstr = "%s:%d-%d" % (qName, qb, qe)
             if args.qry:
-                print("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s" % (qName, qb, qe, qSrd, tName, tb, te, cid))
+                fho.write("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\n" % (qName, qb, qe, qSrd, tName, tb, te, cid))
             else:
-                print("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s" % (tName, tb, te, qSrd, qName, qb, qe, cid))
+                fho.write("%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\n" % (tName, tb, te, qSrd, qName, qb, qe, cid))
             offset_t += ungapped + dt
             offset_q += ungapped + dq
 
@@ -327,6 +329,7 @@ if __name__ == '__main__':
 
     sp1 = sp.add_parser("2bed", help = "convert to 8-col BED file")
     sp1.add_argument('fi', help = 'input chain file')
+    sp1.add_argument('fo', help = 'output bed file')
     sp1.add_argument('--qry', action = 'store_true', help = 'use query coordinate system')
     sp1.set_defaults(func = chain2bed)
 
@@ -334,6 +337,7 @@ if __name__ == '__main__':
     sp1.add_argument('fi', help = 'input bed file')
     sp1.add_argument('tsize', help = 'target size file')
     sp1.add_argument('qsize', help = 'query size file')
+    sp1.add_argument('fo', help = 'output chain file')
     sp1.set_defaults(func = bed2chain)
 
     sp1 = sp.add_parser("stat", help = "get chain stats")
