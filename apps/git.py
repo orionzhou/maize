@@ -7,24 +7,7 @@ import sys
 import logging
 
 from subprocess import Popen, PIPE, run
-from maize.apps.base import sh, mkdir
-
-def merge_dirs(args):
-    diris, diro = args.diri, args.diro
-    mkdir(diro, overwrite=True)
-    for diri in args.diri:
-        for fn in os.listdir(diri):
-            fi = op.join(diri, fn)
-            fo = op.join(diro, fn)
-            if not op.isfile(fi): continue
-            if op.isfile(fo):
-                if not cmp(fi, fo):
-                    if args.replace:
-                        copy(fi, fo)
-                    else:
-                        print("%s/%s diff from %s/%s - skipped" % (diri, fn, diro, fn))
-            else:
-                copy(fi, fo)
+from jcvi.apps.base import sh, mkdir
 
 def pull(args):
     repos = args.repos.split(" ")
@@ -33,8 +16,31 @@ def pull(args):
         dir2 = op.join(os.getenv("HOME"), 'projects', repo)
         if op.isdir(dir1):
             os.chdir(dir1)
+            logging.debug(f"{repo}: {dir1}")
         elif op.isdir(dir2):
             os.chdir(dir2)
+            logging.debug(f"{repo}: {dir2}")
+        else:
+            logging.error(f"{repo}: not found - skipped")
+        sh("git stash")
+        sh("git pull")
+        sh("git stash pop")
+
+def push(args):
+    repos = args.repos.split(" ")
+    for repo in repos:
+        dir1 = op.join(os.getenv("HOME"), 'git', repo)
+        dir2 = op.join(os.getenv("HOME"), 'projects', repo)
+        if op.isdir(dir1):
+            os.chdir(dir1)
+            logging.debug(f"{repo}: {dir1}")
+        elif op.isdir(dir2):
+            os.chdir(dir2)
+            logging.debug(f"{repo}: {dir2}")
+        else:
+            logging.error(f"{repo}: not found - skipped")
+        sh("git commit -am 'normal commit'")
+        sh("git push origin master")
 
 if __name__ == "__main__":
     import argparse

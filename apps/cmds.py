@@ -7,7 +7,7 @@ import sys
 import logging
 
 from subprocess import Popen, PIPE, run
-from maize.apps.base import sh, mkdir
+from jcvi.apps.base import sh, mkdir
 from filecmp import cmp
 from shutil import copy
 
