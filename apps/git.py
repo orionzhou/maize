@@ -25,20 +25,6 @@ def pull(args):
         sh("git stash")
         sh("git pull")
         sh("git stash pop")
-
-def push(args):
-    repos = args.repos.split(" ")
-    for repo in repos:
-        dir1 = op.join(os.getenv("HOME"), 'git', repo)
-        dir2 = op.join(os.getenv("HOME"), 'projects', repo)
-        if op.isdir(dir1):
-            os.chdir(dir1)
-            logging.debug(f"{repo}: {dir1}")
-        elif op.isdir(dir2):
-            os.chdir(dir2)
-            logging.debug(f"{repo}: {dir2}")
-        else:
-            logging.error(f"{repo}: not found - skipped")
         sh("git commit -am 'normal commit'")
         sh("git push origin master")
 
@@ -54,15 +40,9 @@ if __name__ == "__main__":
     repos2 = "maizeumn.github.io orionzhou.github.io nf-core-methylseq nf-core-rnaseq nf-core-sarek nf-core-chipseq"
     sp1 = sp.add_parser("pull",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            help = "pull updates from multiple git repos")
+            help = "pull/push updates from/to multiple git repos")
     sp1.add_argument('--repos', default=repos, help = 'git repos')
     sp1.set_defaults(func = pull)
-
-    sp1 = sp.add_parser("push",
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter,
-            help = "push updates to multiple git repos")
-    sp1.add_argument('--repos', default=repos, help = 'git repos')
-    sp1.set_defaults(func = push)
 
     args = parser.parse_args()
     if args.command:
