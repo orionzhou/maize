@@ -65,7 +65,7 @@ if __name__ == "__main__":
     )
     repos = "appconfig maize nf rmaize demo assets atlas barn biomap bsseq cage chipseq cre epi genome grn misc ml reseq rnaseq s3 stress wgc"
     repos2 = "maizeumn.github.io orionzhou.github.io nf-core-methylseq nf-core-rnaseq nf-core-sarek nf-core-chipseq"
-    repos = 'maize cre'
+    #repos = 'maize cre'
     ps.add_argument('--repos', default=repos, help = 'git repos')
     args = ps.parse_args()
     main(args)
