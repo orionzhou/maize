@@ -52,6 +52,7 @@ def main(args):
         repo.remotes.origin.pull()
         if push:
             repo.git.stash("pop")
+            repo.git.add(update=True)
             repo.index.commit(commit_msg)
             origin = repo.remote(name='origin')
             origin.push()
@@ -62,9 +63,9 @@ if __name__ == "__main__":
          formatter_class = argparse.ArgumentDefaultsHelpFormatter,
          description = 'sync multiple git repos'
     )
-    repos = "appconfig maize nf rmaize demo assets atlas barn biomap bsseq cage chipseq cold cre epi genome grn misc ml reseq rnaseq s3 stress wgc"
+    repos = "appconfig maize nf rmaize demo assets atlas barn biomap bsseq cage chipseq cre epi genome grn misc ml reseq rnaseq s3 stress wgc"
     repos2 = "maizeumn.github.io orionzhou.github.io nf-core-methylseq nf-core-rnaseq nf-core-sarek nf-core-chipseq"
-    repos = "nf maize"
+    repos = 'maize cre'
     ps.add_argument('--repos', default=repos, help = 'git repos')
     args = ps.parse_args()
     main(args)
