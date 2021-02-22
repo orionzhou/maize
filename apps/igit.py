@@ -63,7 +63,7 @@ if __name__ == "__main__":
          formatter_class = argparse.ArgumentDefaultsHelpFormatter,
          description = 'sync multiple git repos'
     )
-    repos = "appconfig maize nf rmaize demo assets atlas barn biomap bsseq cage chipseq cre epi genome grn misc ml reseq rnaseq s3 stress wgc"
+    repos = "appconfig maize nf rmaize demo assets atlas barn biomap bsseq cage chipseq cre epi genome grn misc reseq rnaseq s3 stress wgc"
     repos2 = "maizeumn.github.io orionzhou.github.io nf-core-methylseq nf-core-rnaseq nf-core-sarek nf-core-chipseq"
     #repos = 'maize cre'
     ps.add_argument('--repos', default=repos, help = 'git repos')
