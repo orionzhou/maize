@@ -9,12 +9,13 @@ import re
 
 from itertools import chain
 from urllib.parse import quote, unquote, parse_qsl
+from more_itertools import flatten
 
 from jcvi.utils.cbook import AutoVivification
-from jcvi.formats.base import DictFile, LineFile, must_open, is_number, flatten
+from jcvi.formats.base import DictFile, LineFile, must_open, is_number
 from jcvi.apps.base import mkdir, parse_multi_values, need_update, sh
 from jcvi.formats.bed import Bed, BedLine
-from jcvi.utils.natsort import natsorted
+from natsort import natsorted
 from jcvi.utils.range import range_minmax
 
 Valid_strands = ('+', '-', '?', '.')

@@ -625,7 +625,7 @@ def waitpid(args):
     Specify `--grid` option to send the new process to the grid after waiting for PID
     """
     import shlex
-    from jcvi.formats.base import flatten
+    from more_itertools import flatten
 
     valid_notif_methods.extend(list(flatten(available_push_api.values())))
 
