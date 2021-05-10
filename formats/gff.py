@@ -11,8 +11,7 @@ from itertools import chain
 from urllib.parse import quote, unquote, parse_qsl
 
 from jcvi.utils.cbook import AutoVivification
-from jcvi.formats.base import DictFile, LineFile, must_open, is_number
-from jcvi.utils.iter import flatten
+from jcvi.formats.base import DictFile, LineFile, must_open, is_number, flatten
 from jcvi.apps.base import mkdir, parse_multi_values, need_update, sh
 from jcvi.formats.bed import Bed, BedLine
 from jcvi.utils.natsort import natsorted
@@ -2227,7 +2226,7 @@ def merge(args):
             gl = GffLine(ln)
             gl.seqid = "%s|%s" % (pre, gl.seqid)
             for attr in attrs:
-                v = gl.get_attr(attr) 
+                v = gl.get_attr(attr)
                 if v != None:
                     gl.set_attr(attr, "%s|%s" % (pre, v), update=True)
             print(gl)
@@ -2562,7 +2561,7 @@ if __name__ == '__main__':
     sp1.add_argument("--sep", dest="sep", default=" ", \
             help="Specify separator used to delimiter header elements")
     sp1.add_argument("--datestamp", dest="datestamp", \
-            help="Specify a datestamp in the format YYYYMMDD or automatically pick `today`") 
+            help="Specify a datestamp in the format YYYYMMDD or automatically pick `today`")
     sp1.add_argument("--conf_class", dest="conf_class", default=False, action="store_true",
             help="Specify if `conf_class` attribute should be parsed and placed in the header")
     sp1.set_defaults(func = gff2fas)
@@ -2577,7 +2576,7 @@ if __name__ == '__main__':
 
     sp1 = sp.add_parser("merge", help = "merge several gff files into one",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('config', help = 'config file containing a list of gff files') 
+    sp1.add_argument('config', help = 'config file containing a list of gff files')
     sp1.set_defaults(func = merge)
 
     args = parser.parse_args()

@@ -346,7 +346,7 @@ def expand(args):
     """
     %prog expand */*
 
-    Move files in subfolders into the current folder. Use --symlink to 
+    Move files in subfolders into the current folder. Use --symlink to
     create a link instead.
     """
     seen = set()
@@ -625,7 +625,7 @@ def waitpid(args):
     Specify `--grid` option to send the new process to the grid after waiting for PID
     """
     import shlex
-    from jcvi.utils.iter import flatten
+    from jcvi.formats.base import flatten
 
     valid_notif_methods.extend(list(flatten(available_push_api.values())))
 
