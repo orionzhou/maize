@@ -18,7 +18,7 @@ from jcvi.utils.grouper import Grouper
 from jcvi.utils.range import Range, range_union, range_chain, \
             range_distance, range_intersect
 from jcvi.apps.base import sh, need_update, mkdir
-from jcvi.utils.natsort import natsort_key, natsorted
+from natsort import natsorted
 
 def make_window(beg, end, winsize, winstep):
     import math
@@ -2350,102 +2350,102 @@ if __name__ == '__main__':
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = pairs)
-    
+
     sp1 = sp.add_parser('mates', help='print paired reads from bedfile',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = mates)
-    
+
     sp1 = sp.add_parser('sizes', help='infer the sizes for each seqid',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = sizes)
-    
+
     sp1 = sp.add_parser('uniq', help='remove overlapping features with higher scores',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = uniq)
-    
+
     sp1 = sp.add_parser('longest', help='select longest feature within overlapping piles',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = longest)
-    
+
     sp1 = sp.add_parser('bedpe', help='convert to bedpe format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = bedpe)
-    
+
     sp1 = sp.add_parser('distance', help='calculate distance between bed features',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = distance)
-    
+
     sp1 = sp.add_parser('sample', help='sample bed file and remove high-coverage regions',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = sample)
-    
+
     sp1 = sp.add_parser('refine', help='refine bed file using a second bed file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = refine)
-    
+
     sp1 = sp.add_parser('flanking', help='get n flanking features for a given position',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = flanking)
-    
+
     sp1 = sp.add_parser('some', help='get a subset of bed features given a list',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = some)
-    
+
     sp1 = sp.add_parser('fix', help='fix non-standard bed files',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = fix)
-    
+
     sp1 = sp.add_parser('filterbedgraph', help='filter bedgraph to extract unique regions',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = filterbedgraph)
-    
+
     sp1 = sp.add_parser('random', help='extract a random subset of features',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = random)
-    
+
     sp1 = sp.add_parser('juncs', help='trim junctions.bed overhang to get intron, merge multiple beds',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = juncs)
-    
+
     sp1 = sp.add_parser('seqids', help='print out all seqids on one line',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = seqids)
-    
+
     sp1 = sp.add_parser('alignextend', help='alignextend based on BEDPE and FASTA ref',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = alignextend)
-    
+
     sp1 = sp.add_parser('clr', help='extract clear range based on BEDPE',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = clr)
-    
+
     sp1 = sp.add_parser('chain', help='chain bed segments together',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = chain)
-    
+
     sp1 = sp.add_parser('density', help='calculates density of features per seqid',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = density)
-    
+
     sp1 = sp.add_parser('tiling', help='compute the minimum tiling path',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')

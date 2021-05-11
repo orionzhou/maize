@@ -8,20 +8,16 @@ import logging
 import re
 
 from itertools import chain
-from urllib.parse import quote, unquote, parse_qsl
 from more_itertools import flatten
 
 from jcvi.utils.cbook import AutoVivification
 from jcvi.formats.base import DictFile, LineFile, must_open, is_number
 from jcvi.apps.base import mkdir, parse_multi_values, need_update, sh
+from jcvi.formats.gff import Gff, GffLine
 from jcvi.formats.bed import Bed, BedLine
 from natsort import natsorted
 from jcvi.utils.range import range_minmax
 
-Valid_strands = ('+', '-', '?', '.')
-Valid_phases = ('0', '1', '2', '.')
-FastaTag = "##FASTA"
-RegionTag = "##sequence-region"
 valid_gene_type = 'gene'
 valid_rna_type = """
     mRNA rRNA tRNA
@@ -46,306 +42,6 @@ reserved_gff_attributes = ("ID", "Name", "Alias", "Parent", "Target",
                            "Ontology_term", "Is_circular")
 multiple_gff_attributes = ("Parent", "Alias", "Dbxref", "Ontology_term")
 safechars = " /:?~#+!$'@()*[]|"
-
-def parse_qs(qs, keep_blank_values=0, strict_parsing=0):
-    od = dict()
-    for name, value in parse_qsl(qs, keep_blank_values, strict_parsing):
-        if name not in od:
-            od[name] = []
-        od[name].append(value)
-    return od
-
-class GffLine (object):
-    """
-    Specification here (http://www.sequenceontology.org/gff3.shtml)
-    """
-    def __init__(self, sline, key="ID", gff3=True, line_index=None, strict=True,
-                 append_source=False, append_ftype=False, score_attrib=False,
-                 keep_attr_order=True, compute_signature=False):
-        sline = sline.strip()
-        args = sline.split("\t")
-        if len(args) != 9:
-            args = sline.split()
-        if strict:
-            assert len(args) == 9, "Malformed line ({0} columns != 9): {1}"\
-                            .format(len(args), args)
-        self.seqid = args[0]
-        self.source = args[1]
-        self.type = args[2]
-        self.start = int(args[3])
-        self.end = int(args[4])
-        self.score = args[5]
-        self.strand = args[6]
-        assert self.strand in Valid_strands, \
-                "strand must be one of {0}".format(Valid_strands)
-        self.phase = args[7]
-        if args[7] == '': self.phase = '.'
-        assert self.phase in Valid_phases, \
-                "phase must be one of {0}".format(Valid_phases)
-        self.attributes_text = "" if len(args) <= 8 else args[8].strip()
-        self.attributes = make_attributes(self.attributes_text, gff3=gff3, keep_attr_order=keep_attr_order)
-        # key is not in the gff3 field, this indicates the conversion to accn
-        self.key = key  # usually it's `ID=xxxxx;`
-        self.gff3 = gff3
-
-        if append_ftype and self.key in self.attributes:
-            # if `append_ftype` is True, append the gff `self.type`
-            # to `self.key`. use this argument to enhance the `self.accn`
-            # column in bed file
-            self.attributes[self.key][0] = ":".join((self.type, \
-                    self.attributes[self.key][0]))
-
-        if append_source and self.key in self.attributes:
-            # if `append_source` is True, append the gff `self.source`
-            # to `self.key`. use this argument to enhance the `self.accn`
-            # column in bed file
-            self.attributes[self.key][0] = ":".join((self.source, \
-                    self.attributes[self.key][0]))
-
-        if score_attrib and score_attrib in self.attributes and is_number(self.attributes[score_attrib][0]):
-            # if `score_attrib` is specified, check if it is indeed an
-            # attribute or not. If yes, check if the value of attribute
-            # is numeric or not. If not, keep original GFF score value
-            self.score = self.attributes[score_attrib][0]
-
-        if line_index is not None and is_number(line_index):
-            # if `line_index` in provided, initialize an idx variable
-            # used to autcompute the ID for a feature
-            self.idx = line_index
-
-        if compute_signature:
-            # if `compute_signature` is specified, compute a signature for
-            # the gff line and store in variable `sign`
-            self.sign = self.signature
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-
-    def __str__(self):
-        return "\t".join(str(x) for x in (self.seqid, self.source, self.type,
-                self.start, self.end, self.score, self.strand, self.phase,
-                self.attributes_text))
-
-    def get_attr(self, key, first=True):
-        if key in self.attributes:
-            if first:
-                return self.attributes[key][0]
-            return self.attributes[key]
-        return None
-
-    def set_attr(self, key, value, update=False, append=False, dbtag=None, urlquote=False):
-        if value is None:
-            self.attributes.pop(key, None)
-        else:
-            if key == "Dbxref" and dbtag:
-                value = value.split(",")
-                value = ["{0}:{1}".format(dbtag, x) for x in value]
-            if type(value) is not list:
-                value = [value]
-            if key not in self.attributes or not append:
-                self.attributes[key] = []
-            self.attributes[key].extend(value)
-        if update:
-            self.update_attributes(gff3=self.gff3, urlquote=urlquote)
-
-    def rename_attr(self, okey, nkey, update=False, urlquote=False):
-        if okey in self.attributes:
-            vals = self.attributes[okey]
-            self.attributes[nkey] = vals
-            self.attributes.pop(okey, None)
-        else:
-            self.attributes[nkey] = []
-        if update:
-            self.update_attributes(gff3=self.gff3, urlquote=urlquote)
-
-    def update_attributes(self, skipEmpty=True, gff3=True, gtf=None, urlquote=True):
-        attributes = []
-        if gtf:
-            gff3 = None
-        elif gff3 is None:
-            gff3 = self.gff3
-
-        sep = ";" if gff3 else "; "
-        for tag, val in self.attributes.items():
-            if not val and skipEmpty:
-                continue
-            val = ",".join(val)
-            val = "\"{0}\"".format(val) if (" " in val and (not gff3)) or gtf else val
-            equal = "=" if gff3 else " "
-            if urlquote:
-                sc = safechars
-                if tag in multiple_gff_attributes:
-                    sc += ","
-                val = quote(val, safe=sc)
-            attributes.append(equal.join((tag, val)))
-
-        self.attributes_text = sep.join(attributes)
-        if gtf:
-            self.attributes_text += ";"
-
-    def update_tag(self, old_tag, new_tag):
-        if old_tag not in self.attributes:
-            return
-        self.attributes[new_tag] = self.attributes[old_tag]
-        del self.attributes[old_tag]
-
-    @property
-    def accn(self):
-        if self.key:   # GFF3 format
-            if self.key not in self.attributes:
-                a = ["{0}_{1}".format(str(self.type).lower(), self.idx)]
-            else:
-                a = self.attributes[self.key]
-        else:          # GFF2 format
-            a = self.attributes_text.split()
-        return quote(",".join(a), safe=safechars)
-
-    id = accn
-
-    @property
-    def name(self):
-        return self.attributes["Name"][0] if "Name" in self.attributes else None
-
-    @property
-    def parent(self):
-        return self.attributes["Parent"][0] if "Parent" in self.attributes else None
-
-    @property
-    def span(self):
-        return self.end - self.start + 1
-
-    @property
-    def bedline(self):
-        score = "0" if self.score == '.' else self.score
-        row = "\t".join((self.seqid, str(self.start - 1),
-            str(self.end), self.accn, score, self.strand))
-        return BedLine(row)
-
-    @property
-    def signature(self):
-        """
-        create a unique signature for any GFF line based on joining
-        columns 1,2,3,4,5,7,8 (into a comma separated string)
-        """
-        sig_elems = [self.seqid, self.source, self.type, \
-                    self.start, self.end, self.strand, \
-                    self.phase]
-        if re.search("exon|CDS|UTR", self.type):
-            parent = self.get_attr("Parent")
-            if parent:
-                (locus, iso) = atg_name(parent, retval="locus,iso", \
-                        trimpad0=False)
-                if locus:
-                    sig_elems.append(locus)
-        else:
-            sig_elems.extend([self.accn])
-
-        return ",".join(str(elem) for elem in sig_elems)
-
-class Gff (LineFile):
-
-    def __init__(self, filename, key="ID", strict=True, append_source=False, \
-            append_ftype=False, score_attrib=False, \
-            keep_attr_order=True, make_gff_store=False, \
-            compute_signature=False):
-        super(Gff, self).__init__(filename)
-        self.make_gff_store = make_gff_store
-        self.gff3 = True
-        if self.make_gff_store:
-            self.gffstore = []
-            gff = Gff(self.filename, key=key, strict=True, append_source=append_source, \
-                    append_ftype=append_ftype, score_attrib=score_attrib, \
-                    keep_attr_order=keep_attr_order, \
-                    compute_signature=compute_signature)
-            for g in gff:
-                self.gffstore.append(g)
-        else:
-            self.key = key
-            self.strict = strict
-            self.append_source = append_source
-            self.append_ftype = append_ftype
-            self.score_attrib = score_attrib
-            self.keep_attr_order = keep_attr_order
-            self.compute_signature = compute_signature
-            if filename in ("-", "stdin") or filename.endswith(".gz"):
-                if ".gtf" in filename:
-                    self.gff3 = False
-                    logging.debug("File is not gff3 standard.")
-                return
-
-            self.set_gff_type()
-
-    def set_gff_type(self):
-        # Determine file type
-        row = None
-        for row in self:
-            break
-        gff3 = False if not row else "=" in row.attributes_text
-        if not gff3:
-            logging.debug("File is not gff3 standard.")
-
-        self.gff3 = gff3
-        self.fp.seek(0)
-
-    def __iter__(self):
-        if self.make_gff_store:
-            for row in self.gffstore:
-                yield row
-        else:
-            self.fp = must_open(self.filename)
-            for idx, row in enumerate(self.fp):
-                row = row.strip()
-                if row.strip() == "":
-                    continue
-                if row[0] == '#':
-                    if row == FastaTag:
-                        break
-                    continue
-                yield GffLine(row, key=self.key, line_index=idx, \
-                        strict=self.strict, \
-                        append_source=self.append_source, \
-                        append_ftype=self.append_ftype,\
-                        score_attrib=self.score_attrib, \
-                        keep_attr_order=self.keep_attr_order, \
-                        compute_signature=self.compute_signature, \
-                        gff3=self.gff3)
-
-    @property
-    def seqids(self):
-        return set(x.seqid for x in self)
-
-class GffFeatureTracker (object):
-
-    def __init__(self):
-        self.ftype = "exon|CDS|UTR|fragment"
-        self.tracker = {}
-        self.symbolstore = {}
-
-    def track(self, parent, g):
-        if re.search(self.ftype, g.type):
-            if parent not in self.tracker:
-                self.tracker[parent] = {}
-            if g.type not in self.tracker[parent]:
-                self.tracker[parent][g.type] = set()
-            self.tracker[parent][g.type].add((g.start, g.end, g.sign))
-
-    def _sort(self, parent, ftype, reverse=False):
-        if not isinstance(self.tracker[parent][ftype], list):
-            self.tracker[parent][ftype] = sorted(list(self.tracker[parent][ftype]), key=lambda x: (x[0], x[1]), reverse=reverse)
-
-    def feat_index(self, parent, ftype, strand, feat_tuple):
-        reverse = True if strand == "-" else False
-        self._sort(parent, ftype, reverse=reverse)
-        return self.tracker[parent][ftype].index(feat_tuple)
-
-    def store_symbol(self, g):
-        for symbol_attr in ("symbol", "ID"):
-            if symbol_attr in g.attributes:
-                break
-        self.symbolstore[g.accn] = g.get_attr(symbol_attr)
-
-    def get_symbol(self, parent):
-        return self.symbolstore[parent]
 
 def make_index(gff_file):
     """
@@ -520,117 +216,6 @@ def scan_for_valid_codon(codon_span, strand, seqid, genome, type='start'):
         break
 
     return (s, e)
-
-def fixpartials(args):
-    """
-    %prog fixpartials genes.gff genome.fasta partials.ids
-
-    Given a gff file of features, fix partial (5'/3' incomplete) transcripts
-    by trying to locate nearest in-frame start/stop codon
-    """
-    gffile, gfasta, partials = args.gff, args.fasta, args.partials
-
-    gff = make_index(gffile)
-    genome = Fasta(gfasta, index=True)
-    partials = LineFile(partials, load=True).lines
-
-    # all_transcripts = [f.id for f in gff.features_of_type("mRNA", \
-    #     order_by=("seqid", "start"))]
-    seen = set()
-    fw = must_open(args.outfile, "w")
-    for gene in gff.features_of_type('gene',  order_by=('seqid', 'start')):
-        children = AutoVivification()
-        cflag = False
-        transcripts = list(gff.children(gene, level=1, order_by=('start')))
-        for transcript in transcripts:
-            trid, seqid, strand = transcript.id, transcript.seqid, transcript.strand
-
-            for child in gff.children(transcript, order_by=('start')):
-                ftype = child.featuretype
-                if ftype not in children[trid]: children[trid][ftype] = []
-                children[trid][ftype].append(child)
-
-            five_prime, three_prime = True, True
-            nstart, nstop = (None, None), (None, None)
-            cds_span = [children[trid]['CDS'][0].start, \
-                children[trid]['CDS'][-1].stop]
-            new_cds_span = [x for x in cds_span]
-
-            start_codon = (cds_span[0], cds_span[0] + 2)
-            stop_codon = (cds_span[1] - 2, cds_span[1])
-            if strand == '-': start_codon, stop_codon = stop_codon, start_codon
-
-            if trid in partials:
-                seen.add(trid)
-                start_codon_fasta = _fasta_slice(genome, seqid, \
-                    start_codon[0], start_codon[1], strand)
-                stop_codon_fasta = _fasta_slice(genome, seqid, \
-                    stop_codon[0], stop_codon[1], strand)
-
-                if not is_valid_codon(start_codon_fasta, type='start'):
-                    five_prime = False
-                    nstart = scan_for_valid_codon(start_codon, strand, \
-                        seqid, genome, type='start')
-
-                if not is_valid_codon(stop_codon_fasta, type='stop'):
-                    three_prime = False
-                    nstop = scan_for_valid_codon(stop_codon, strand, \
-                        seqid, genome, type='stop')
-
-                logging.debug("feature={0} ({1})".format(trid, strand) + \
-                ", 5'={0}, 3'={1}".format(five_prime, three_prime) + \
-                ", {0} <== {1} ==> {2}".format(nstart if strand == '+' else nstop, \
-                    cds_span, nstop if strand == '+' else nstart))
-
-            if not five_prime or not three_prime:
-                if nstart != (None, None) and (start_codon != nstart):
-                    i = 0 if strand == '+' else 1
-                    new_cds_span[i] = nstart[i]
-                if nstop != (None, None) and (stop_codon != nstop):
-                    i = 1 if strand == '+' else 0
-                    new_cds_span[i] = nstop[i]
-                new_cds_span.sort()
-
-            if set(cds_span) != set(new_cds_span):
-                cflag = True
-                # if CDS has been extended, appropriately adjust all relevent
-                # child feature (CDS, exon, UTR) coordinates
-                for ftype in children[trid]:
-                    for idx in range(len(children[trid][ftype])):
-                        child_span = (children[trid][ftype][idx].start, \
-                            children[trid][ftype][idx].stop)
-                        if ftype in ('exon', 'CDS'):
-                            # if exons/CDSs, adjust start and stop according to
-                            # new CDS start and stop, respectively
-                            if child_span[0] == cds_span[0]:
-                                children[trid][ftype][idx].start = new_cds_span[0]
-                            if child_span[1] == cds_span[1]:
-                                children[trid][ftype][idx].stop = new_cds_span[1]
-                        elif ftype.endswith('UTR'):
-                            # if *_prime_UTR, adjust stop according to new CDS start and
-                            #                 adjust start according to new CDS stop
-                            if child_span[1] == cds_span[0]:
-                                children[trid][ftype][idx].stop = new_cds_span[0]
-                            if child_span[0] == cds_span[1]:
-                                children[trid][ftype][idx].start = new_cds_span[1]
-
-                transcript.start, transcript.stop = \
-                    children[trid]['exon'][0].start, children[trid]['exon'][-1].stop
-
-        if cflag:
-            _gene_span = range_minmax([(tr.start, tr.stop) for tr in transcripts])
-            gene.start, gene.stop = _gene_span[0], _gene_span[1]
-
-        # print gff file
-        print >> fw, gene
-        for transcript in transcripts:
-            trid = transcript.id
-            print >> fw, transcript
-            for cftype in children[trid]:
-                for child in children[trid][cftype]:
-                    print >> fw, child
-
-    fw.close()
 
 def cluster(args):
     """
@@ -968,8 +553,8 @@ def fix(args):
                 if g.get_attr("ID"):
                     g.set_attr("ID", None)
             if g.type == 'gene':
-                g.rename_attr("Name", "note1")
-                g.rename_attr("description", "note2")
+                g.update_tag("Name", "note1")
+                g.update_tag("description", "note2")
             if g.get_attr("ID"):
                 ary = g.get_attr("ID").split(":")
                 if len(ary) == 2:
@@ -1004,8 +589,8 @@ def fix(args):
                 # oid = g.get_attr('ID')
                 # g.set_attr('ID', nid)
                 # gdic[oid] = nid
-                # g.rename_attr("Note", "note1")
-                # g.rename_attr("gene", "note2")
+                # g.update_tag("Note", "note1")
+                # g.update_tag("gene", "note2")
             # elif g.type.endswith('RNA'):
                 # nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
                 # oid = g.get_attr('ID')
