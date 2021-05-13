@@ -12,46 +12,10 @@ from bx import interval_index_file
 from bx.align import maf
 
 from maize.formats.base import BaseFile
+from jcvi.formats.maf import Maf
 from maize.apps.base import need_update
 from maize.apps.lastz import blastz_score_to_ncbi_expectation, \
             blastz_score_to_ncbi_bits
-
-class Maf (BaseFile, dict):
-
-    def __init__(self, filename, index=False):
-        super(Maf, self).__init__(filename)
-
-        indexfile = filename + ".idx"
-        if index:
-            if need_update(filename, indexfile):
-                self.build_index(filename, indexfile)
-
-            self.index = maf.Index(filename, indexfile)
-
-        fp = open(filename)
-        self.reader = maf.Reader(fp)
-
-    def build_index(self, filename, indexfile):
-        """
-        Recipe from Brad Chapman's blog
-        <http://bcbio.wordpress.com/2009/07/26/sorting-genomic-alignments-using-python/>
-        """
-        indexes = interval_index_file.Indexes()
-        in_handle = open(filename)
-
-        reader = maf.Reader(in_handle)
-        while True:
-            pos = reader.file.tell()
-            rec = reader.next()
-            if rec is None:
-                break
-            for c in rec.components:
-                indexes.add(c.src, c.forward_strand_start,
-                        c.forward_strand_end, pos, max=c.src_size )
-
-        index_handle = open(indexfile, "w")
-        indexes.write(index_handle)
-        index_handle.close()
 
 def main():
     import argparse
@@ -65,12 +29,12 @@ def main():
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = bed)
-    
+
     sp1 = sp.add_parser('blast', help='convert MAF to BLAST tabular format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('i', help = '')
     sp1.set_defaults(func = blast)
-    
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

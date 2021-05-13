@@ -1979,14 +1979,6 @@ if __name__ == '__main__':
     sp1.add_argument("--child_ftype", default="mRNA", help="Child featuretype(s) to use for identifying boundaries")
     sp1.set_defaults(func = fixboundaries)
 
-    sp1 = sp.add_parser('fixpartials', help = 'fix 5/3 prime partial transcripts, locate nearest in-frame start/stop',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('gff', help = 'input GFF3 file')
-    sp1.add_argument('fasta', help = 'genome fasta')
-    sp1.add_argument('partials', help = 'partials ids')
-    sp1.add_argument('outfile', help = 'output file')
-    sp1.set_defaults(func = fixpartials)
-
     sp1 = sp.add_parser('index', help = 'index gff db')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument('fo', help = 'output GFF3 db')
