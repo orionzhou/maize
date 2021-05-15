@@ -6,6 +6,7 @@ import os.path as op
 import sys
 import logging
 import re
+import string
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -252,11 +253,11 @@ def merge_pe(args):
     (fi1, fi2, fo) = (args.fi1, args.fi2, args.fo)
     assert op.isfile(fi1), "cannot read %s" % fi1
     assert op.isfile(fi2), "cannot read %s" % fi2
-    
+
     fhi2 = open(fi1, "rb")
     fhi1 = open(fi2, "rb")
     fho = open(fo, "wb")
-    
+
     for lst1, lst2 in zip(read_fasta(fi1, fhi1), read_fasta(fi2, fhi2)):
         seqid1, seq1 = lst1
         seqid2, seq2 = lst2
@@ -300,20 +301,20 @@ def extract_chrom_num(sid, opt):
     if opt in 'Brapa Ppersica'.split():
         ptn = "^[AG]([0-9]{1,2})"
         res = re.search(ptn, sid, re.IGNORECASE)
-        chrom = int(res.group(1)) if res else False
+        chrom = res.group(1).lstrip('0') if res else False
     elif opt == 'Sitalica':
         ptn = "^([IVX]{1,4})"
         dic_chrom = dict(I=1,II=2,III=3,IV=4,V=5,VI=6,VII=7,VIII=8,IX=9)
         res = re.search(ptn, sid, re.IGNORECASE)
-        chrom = int(dic_chrom[res.group(1)]) if res else False
+        chrom = str(dic_chrom[res.group(1)]) if res else False
     elif opt == 'Vvinifera':
         ptn = "^([1-9][0-9]{0,1})$"
         res = re.search(ptn, sid, re.IGNORECASE)
-        chrom = int(res.group(1)) if res else False
+        chrom = res.group(1) if res else False
     else:
-        ptn = "^(chr|chromsome)?[ _]*(0*[1-9][0-9]{0,1})" #(MtrunA17)?
+        ptn = "^(chr|chromsome)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)" #(MtrunA17)?
         res = re.search(ptn, sid, re.IGNORECASE)
-        chrom = int(res.group(2)) if res else False
+        chrom = res.group(2).lstrip('0') if res else False
     return chrom
 
 def rename(args):
@@ -332,18 +333,25 @@ def rename(args):
         size = len(db[sid])
         chrom = extract_chrom_num(sid, opt)
         if chrom:
-            sdic[sid] = [chrom, size]
+            num = chrom.strip(string.ascii_letters)
+            num = int(num) if len(num) > 0 else 0
+            sdic[sid] = [chrom, size, num]
         else:
             cdic[sid] = [ccnt, size]
             ccnt += 1
 
+    maxnum = 0
+    if len(sdic) > 0:
+        maxnum = max(v[2] for k,v in sdic.items())
+        assert maxnum <= 99, ">99 [%d] chroms: not supported" % maxnum
+        for sid, sval in sdic.items():
+            chrom, size, num = sval
+            sdic[sid][0] = f"{prefix_chr}0{chrom}" if num <= 9 and maxnum >= 10 else f"{prefix_chr}{chrom}"
+
     slst = sorted(sdic.items(), key = lambda t: t[1][0])
     clst = sorted(cdic.items(), key = lambda t: t[1][0])
-    sdigits = ndigit(slst[-1][1][0]) if len(slst) > 0 else 1
     cdigits = ndigit(clst[-1][1][0]) if len(clst) > 0 else 1
-    sfmt = "%s%%0%dd" % (prefix_chr, sdigits)
     cfmt = "%s%%0%dd" % (prefix_ctg, cdigits)
-    nchrom = slst[-1][1][0] if len(slst) > 0 else 0
     logging.debug("%d chromosomes, %d scaffolds/contigs" % (len(sdic), len(cdic)))
 
     fname, fext = op.splitext(fi)
@@ -355,22 +363,18 @@ def rename(args):
     fhf = open(fmf, "w")
     fhb = open(fmb, "w")
 
-    if len(sdic.keys()) > 0:
+    i = 1
+    if len(slst) > 0:
         for sid, sval in slst:
-            scnt, size = sval
-            nsid = sfmt % scnt
-            fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (sid, 0, size, nsid, 0, size, scnt))
-            fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (nsid, 0, size, sid, 0, size, scnt))
+            nsid, size, num = sval
+            fhf.write(f"{sid}\t0\t{size}\t+\t{nsid}\t0\t{size}\t{i}\n")
+            fhb.write(f"{nsid}\t0\t{size}\t+\t{sid}\t0\t{size}\t{i}\n")
             nrcd = SeqRecord(Seq(str(db[sid])), id = nsid, description = '')
             SeqIO.write(nrcd, fho, "fasta")
+            i += 1
 
-    i = nchrom + 1
     if len(clst) > 0 and merge_short:
-        zid = "%sx" % prefix_chr
-        if sdigits == 2:
-            zid = "%s99" % prefix_chr
-        else:
-            assert sdigits == 1, "wrong number of chroms: %d" % sdigits
+        zid = f"{prefix_chr}x" if maxnum <= 9 else f"{prefix_chr}99"
         pos = 0
         seq = ''
         for cid, sval in clst:

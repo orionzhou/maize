@@ -14,7 +14,7 @@ def lookup(args):
         genome = "Zmays_" + genome
     elif args.genome.upper() == 'MO17':
         genome = 'Zmays_Mo17'
-    fi = f"{args.dirg}/data2/loci/{genome}.tsv"
+    fi = f"{args.dirg}/loci/{genome}.tsv"
     sh(f"grep {args.word} {fi}", log=False)
 
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     ps.add_argument('word', help = 'work to look up')
     ps.add_argument('--genome', '-g', default='Zmays_B73', help = 'genome')
     ps.add_argument('--fmt', default='long', help = 'output format')
-    ps.add_argument('--dirg', default='/home/springer/zhoux379/projects/genome', help = 'genome directory')
+    ps.add_argument('--dirg', default='%s/zhoup-genome2' % os.environ['s3'], help = 'genome directory')
 
     args = ps.parse_args()
     lookup(args)
