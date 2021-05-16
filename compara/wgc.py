@@ -1,1 +1,0 @@
-/home/springer/zhoux379/git/nf/bin/wgc/wgc.py

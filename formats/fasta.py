@@ -119,8 +119,8 @@ def extract(args):
                 if sid in db:
                     end = len(db[sid])
                     bed.add("%s\t%d\t%d\n" % (sid, beg, end))
-                # else:
-                    # logging.error("%s not in db => skipped" % sid)
+                else:
+                    logging.warning(f"{sid} not in db => skipped")
         else:
             bed = Bed(args.loc, sorted=False)
     else:
@@ -139,10 +139,10 @@ def extract(args):
                     if sid in db:
                         end = len(db[sid])
                         bed.add("%s\t%d\t%d\n" % (sid, beg, end))
-                    # else:
-                        # logging.error("%s not in db => skipped" % sid)
+                    else:
+                        logging.warning(f"{sid} not in db => skipped")
                 else:
-                    logging.error("%s: unknown locstr => skipped" % loc)
+                    logging.warning(f"{loc}: unknown locstr => skipped")
 
     rcds = []
     for b in bed:
@@ -151,7 +151,7 @@ def extract(args):
         if b.accn:
             oid = b.accn
         if sid not in db:
-            print("%s not in db => skipped" % sid)
+            logging.warning(f"{sid} not in db => skipped")
             continue
         size = end - beg + 1
         bp_pad = 0
