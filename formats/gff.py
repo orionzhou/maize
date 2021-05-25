@@ -1987,7 +1987,7 @@ if __name__ == '__main__':
     sp1 = sp.add_parser('extract', help = 'extract contig or features from gff file',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
-    sp1.add_argument("--contigs", help="Extract features from certain contigs")
+    sp1.add_argument("--contigs", help="Extract features from select contigs")
     sp1.add_argument("--names", help="Extract features with certain names")
     sp1.add_argument("--types", help="Extract features of certain feature types")
     sp1.add_argument("--children", default=0, choices=["1", "2"], help="Specify number of iterations: `1` grabs children, `2` grabs grand-children")

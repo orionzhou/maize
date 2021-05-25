@@ -59,7 +59,7 @@ def vcf_filter(args):
                     (rprs is None or rprs >= -8) &
                     (sor is None or sor <= 4)
                 ) or
-                (rcd.is_indel & 
+                (rcd.is_indel &
                     (qd is None or qd >= 2) &
                     (fs is None or fs <= 200) &
                     (rprs is None or rprs >= -20) &
@@ -162,7 +162,7 @@ def vcf2tsv(args):
             if k in rcd.INFO:
                 v = rcd.INFO[k]
             val1.append(v)
-        valh = [rcd.CHROM, rcd.POS, rcd.REF, alts, int(rcd.is_snp), 
+        valh = [rcd.CHROM, rcd.POS, rcd.REF, alts, int(rcd.is_snp),
                 flagpass, rcd.QUAL] + val1
         sms = rcd.samples
         valb = []
@@ -171,8 +171,27 @@ def vcf2tsv(args):
             if val2[0] is not None and val2[0] != '':
                 val2[0] = val2[0][1]
             valb1 = [sm.gt_type] + val2
-            valb += ['' if x is None else str(x) for x in valb1] 
+            valb += ['' if x is None else str(x) for x in valb1]
         print("\t".join(map(str, valh + valb)))
+
+def addRef(args):
+    fhi = must_open(args.fi, 'r')
+    fho = must_open(args.fo, 'w')
+    for line in fhi:
+        if line.startswith("#CHROM"):
+            row = line.strip("\n").split("\t")
+            rowO = row[0:9] + [args.ref] + row[9:len(row)]
+            fho.write("\t".join(rowO) + "\n")
+        elif line.startswith("#"):
+            fho.write(line)
+        else:
+            if args.phased:
+                line = line.replace("0/", "0|")
+                line = line.replace("1/", "1|")
+            row = line.strip("\n").split("\t")
+            fho.write("\t".join(row[0:9] + ["0|0"] + row[9:len(row)]) + "\n")
+    fhi.close()
+    fho.close()
 
 def ase(args):
     lsth = ["chr", "pos", "ref", "alt", "qual", "depth", "dpr", "dpa"]
@@ -197,7 +216,7 @@ def ase(args):
         #if dp != dpr + dpa:
         #    print("%s:%s %d <> %d + %d" % (chrom, pos, dp, dpr, dpa))
         lst = [chrom, pos, ref, alt, qual, dp, dpr, dpa]
-        print("\t".join([str(x) for x in lst])) 
+        print("\t".join([str(x) for x in lst]))
 
 def hybrid(args):
     for line in must_open(args.fi):
@@ -261,6 +280,14 @@ if __name__ == '__main__':
     sp1.add_argument('fv', help = 'vcf file (.vcf)')
     sp1.add_argument('fs', help = 'reference sequence file (.fas)')
     sp1.set_defaults(func = vcf2fas)
+
+    sp1 = sp.add_parser("addRef", help = "add a referene genotype column",
+            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    sp1.add_argument('fi', help = 'input vcf file')
+    sp1.add_argument('fo', help = 'output vcf file')
+    sp1.add_argument('--ref', default='Zmays_B73', help = 'Reference sample ID')
+    sp1.add_argument('--phased', action='store_true', help = 'convert homozygous genotype to phased format')
+    sp1.set_defaults(func = addRef)
 
     sp1 = sp.add_parser("2tsv", help = "vcf -> tsv")
     sp1.add_argument('fi', help = 'input vcf file')

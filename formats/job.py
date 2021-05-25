@@ -95,7 +95,7 @@ if __name__ == "__main__":
     ps.add_argument('--time', '-t', default="10:00:00", help='wall time')
     ps.add_argument('--mem', '-m', default="20G", help='memory')
     ps.add_argument('--mail_type', default="a", help='when to send email')
-    ps.add_argument('--email', default="zhoupeng03@caas.cn", help='email')
+    ps.add_argument('--email', default="pzhou@caas.cn", help='email')
     ps.add_argument('--job_name', default="test", help='job name')
     ps.add_argument('--job_out', default="%x.out", help='job output')
 
