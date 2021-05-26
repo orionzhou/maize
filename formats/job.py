@@ -97,7 +97,7 @@ if __name__ == "__main__":
     ps.add_argument('--mail_type', default="a", help='when to send email')
     ps.add_argument('--email', default="pzhou@caas.cn", help='email')
     ps.add_argument('--job_name', default="test", help='job name')
-    ps.add_argument('--job_out', default="%x.out", help='job output')
+    ps.add_argument('--job_out', default="job.out", help='job output')
 
     args = ps.parse_args()
     create_job_script(args)

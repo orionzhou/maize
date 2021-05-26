@@ -217,249 +217,6 @@ def scan_for_valid_codon(codon_span, strand, seqid, genome, type='start'):
 
     return (s, e)
 
-def cluster(args):
-    """
-    %prog cluster gffile
-
-    Given a gff file of gene structures (multiple transcripts per gene locus),
-    cluster/consolidate all transcripts based on shared splicing structure.
-
-    If `slop` is enabled, clustering/consolidation will collapse any variation
-    in terminal UTR lengths, keeping only the longest as representative.
-    """
-    from maize.utils.grouper import Grouper
-    from itertools import combinations
-
-    gffile = args.gff
-    slop = args.slop
-    inferUTR = args.inferUTR
-
-    gff = make_index(gffile)
-
-    fw = must_open(args.outfile, "w")
-    print >> fw, "##gff-version	3"
-    seen = {}
-    for gene in gff.features_of_type('gene', order_by=('seqid', 'start')):
-        g = Grouper()
-        mrnas = list(combinations([mrna for mrna in gff.children(gene, featuretype='mRNA', order_by=('start'))], 2))
-        if len(mrnas) > 0:
-            for mrna1, mrna2 in mrnas:
-                mrna1s, mrna2s = gff.children_bp(mrna1, child_featuretype='exon'), \
-                    gff.children_bp(mrna2, child_featuretype='exon')
-                g.join((mrna1.id, mrna1s))
-                g.join((mrna2.id, mrna2s))
-
-                if match_subfeats(mrna1, mrna2, gff, gff, featuretype='CDS'):
-                    res = []
-                    ftypes = ['exon'] if inferUTR else ['five_prime_UTR', 'three_prime_UTR']
-                    for ftype in ftypes:
-                        res.append(match_subfeats(mrna1, mrna2, gff, gff, featuretype=ftype, slop=slop))
-
-                    if all(r == True for r in res):
-                        g.join((mrna1.id, mrna1s), (mrna2.id, mrna2s))
-        else:
-            for mrna1 in gff.children(gene, featuretype='mRNA', order_by=('start')):
-                mrna1s = gff.children_bp(mrna1, child_featuretype='exon')
-                g.join((mrna1.id, mrna1s))
-
-        print >> fw, gene
-        for group in g:
-            group.sort(key=lambda x: x[1], reverse=True)
-            mrnas = [el[0] for el in group]
-            m = mrnas[0]
-
-            _mrnaid = []
-            for x in mrnas:
-                if x not in _mrnaid: _mrnaid.append(x)
-            mrnaid = "{0}".format("-".join(_mrnaid))
-            if mrnaid not in seen:
-                seen[mrnaid] = 0
-            else:
-                seen[mrnaid] += 1
-                mrnaid = "{0}-{1}".format(mrnaid, seen[mrnaid])
-
-            _mrna = gff[m]
-            _mrna.attributes['ID'] = [mrnaid]
-            _mrna.attributes['Parent'] = [gene.id]
-            children = gff.children(m, order_by='start')
-            print >> fw, _mrna
-            for child in children:
-                child.attributes['ID'] = ["{0}".format(child.id)]
-                child.attributes['Parent'] = [mrnaid]
-                print >> fw, child
-
-    fw.close()
-
-def summary(args):
-    """
-    %prog summary gffile
-
-    Print summary stats for features of different types.
-    """
-    from maize.formats.base import SetFile
-    from maize.formats.bed import BedSummary
-    from maize.utils.table import tabulate
-    gff_file = args.fi
-    ids = args.ids
-
-    if ids:
-        ids = SetFile(ids)
-        logging.debug("Total ids loaded: {0}".format(len(ids)))
-
-        if args.isoform:
-            pids = set()
-            gff = Gff(gff_file)
-            for g in gff:
-                if g.type != "mRNA":
-                    continue
-                if g.parent not in ids:
-                    continue
-                if "longest" not in g.attributes:
-                    pids = set(x + ".1" for x in ids)
-                    break
-                if g.attributes["longest"][0] == "0":
-                    continue
-                pids.add(g.id)
-            ids = pids
-            logging.debug("After checking longest: {0}".format(len(ids)))
-
-        # Collects aliases
-        gff = Gff(gff_file)
-        for g in gff:
-            if g.name in ids:
-                ids.add(g.id)
-        logging.debug("Total ids including aliases: {0}".format(len(ids)))
-
-    gff = Gff(gff_file)
-    beds = defaultdict(list)
-    for g in gff:
-        if ids and not (g.id in ids or g.name in ids or g.parent in ids):
-            continue
-
-        beds[g.type].append(g.bedline)
-
-    table = {}
-    for type, bb in sorted(beds.items()):
-        bs = BedSummary(bb)
-        table[(type, "Features")] = bs.nfeats
-        table[(type, "Unique bases")] = bs.unique_bases
-        table[(type, "Total bases")] = bs.total_bases
-
-    print >> sys.stdout, tabulate(table)
-
-def orient(args):
-    """
-    %prog orient in.gff3 features.fasta > out.gff3
-
-    Change the feature orientations based on translation. This script is often
-    needed in fixing the strand information after mapping RNA-seq transcripts.
-
-    You can generate the features.fasta similar to this command:
-
-    $ %prog load --parents=EST_match --children=match_part clc.JCVIv4a.gff
-    JCVI.Medtr.v4.fasta -o features.fasta
-    """
-    from maize.formats.fasta import longestorf
-    ingff3, fastafile = args.fi, args.fasta
-    idsfile = fastafile.rsplit(".", 1)[0] + ".orf.ids"
-    if need_update(fastafile, idsfile):
-        longestorf([fastafile, "--ids"])
-
-    orientations = DictFile(idsfile)
-    gff = Gff(ingff3)
-    flipped = 0
-    for g in gff:
-        id = None
-        for tag in ("ID", "Parent"):
-            if tag in g.attributes:
-                id, = g.attributes[tag]
-                break
-        assert id
-
-        orientation = orientations.get(id, "+")
-        if orientation == '-':
-            g.strand = {"+": "-", "-": "+"}[g.strand]
-            flipped += 1
-
-        print(g)
-
-    logging.debug("A total of {0} features flipped.".format(flipped))
-
-def rename(args):
-    """
-    %prog rename in.gff3 switch.ids > reindexed.gff3
-
-    Change the IDs within the gff3.
-    """
-    ingff3, switch = args.fi, args.map
-    switch = DictFile(switch)
-
-    gff = Gff(ingff3)
-    for g in gff:
-        id, = g.attributes["ID"]
-        newname = switch.get(id, id)
-        g.attributes["ID"] = [newname]
-
-        if "Parent" in g.attributes:
-            parents = g.attributes["Parent"]
-            g.attributes["Parent"] = [switch.get(x, x) for x in parents]
-
-        g.update_attributes()
-        print(g)
-
-def filter(args):
-    """
-    %prog filter gffile > filtered.gff
-
-    Filter the gff file based on criteria below:
-    (1) feature attribute values: [Identity, Coverage].
-    You can get this type of gff by using gmap
-    $ gmap -f 2 ....
-
-    (2) Total bp length of child features
-    """
-    gffile = args.fi
-    otype, oid, ocov = args.type, args.id, args.coverage
-    cftype, clenbp = args.child_ftype, args.child_bp
-
-    id_attr, cov_attr = "Identity", "Coverage"
-    if args.nocase:
-        id_attr, cov_attr = id_attr.lower(), cov_attr.lower()
-
-    gffdb = make_index(gffile)
-    bad = set()
-    ptype = None
-    for g in gffdb.features_of_type(otype, order_by=('seqid', 'start')):
-        if not ptype:
-            parent = list(gffdb.parents(g))
-            ptype = parent[0].featuretype \
-                if len(parent) > 0 else otype
-        if cftype and clenbp:
-            if gffdb.children_bp(g, child_featuretype=cftype) < clenbp:
-                bad.add(g.id)
-        elif oid and ocov:
-            identity = float(g.attributes[id_attr][0])
-            coverage = float(g.attributes[cov_attr][0])
-            if identity < oid or coverage < ocov:
-                bad.add(g.id)
-
-    logging.debug("{0} bad accns marked.".format(len(bad)))
-    for g in gffdb.features_of_type(ptype, order_by=('seqid', 'start')):
-        if ptype != otype:
-            feats = list(gffdb.children(g, featuretype=otype, order_by=('start')))
-            ok_feats = [f for f in feats if f.id not in bad]
-            if len(ok_feats) > 0:
-                print(g)
-                for feat in ok_feats:
-                    print(feat)
-                    for child in gffdb.children(feat, order_by=('start')):
-                        print(child)
-        else:
-            if g.id not in bad:
-                print(g)
-                for child in gffdb.children(g, order_by=('start')):
-                    print(child)
-
 def fix_gsac(g, notes):
     a = g.attributes
 
@@ -575,6 +332,17 @@ def fix(args):
                 g.set_attr("Parent", id_map[g.get_attr("Parent")])
                 g.update_attributes()
             print(g)
+    elif opt == 'nogene_noexon':
+        for g in gff:
+            if g.type.endswith('RNA'):
+                g2 = g
+                g2.type = 'gene'
+                print(g2)
+            elif g.type.endswith('CDS'):
+                g2 = g
+                g2.type = 'exon'
+                print(g2)
+            print(g)
     elif opt == 'mo17':
         gdic = dict()
         for g in gff:
@@ -641,181 +409,6 @@ def fix(args):
             print(g)
     else:
         logging.error("unknown opt: %s" % opt)
-
-def extract(args):
-    """
-    %prog extract gffile
-
-    --contigs: Extract particular contig(s) from the gff file. If multiple contigs are
-    involved, use "," to separate, e.g. "contig_12,contig_150"; or provide a file
-    with multiple contig IDs, one per line
-    --names: Process particular ID(s) from the gff file. If multiple IDs are
-    involved, use "," to separate; or provide a file with multiple IDs, one per line
-    """
-    gffile = args.fi
-    contigfile = args.contigs
-    namesfile = args.names
-    typesfile = args.types
-    nametag = args.tag
-
-    contigID = parse_multi_values(contigfile)
-    names = parse_multi_values(namesfile)
-    types = parse_multi_values(typesfile)
-    if args.children:
-        assert types is not None or names is not None, "Must set --names or --types"
-        if names == None: names = list()
-        populate_children(outfile, names, gffile, iter=args.children, types=types)
-        return
-
-    fp = must_open(gffile)
-    for row in fp:
-        atoms = row.split()
-        if len(atoms) == 0:
-            continue
-        tag = atoms[0]
-        if row[0] == "#":
-            if row.strip() == "###":
-                continue
-            if not (tag == RegionTag and contigID and atoms[1] not in contigID):
-                print >> fw, row.rstrip()
-            if tag == FastaTag:
-                break
-            continue
-
-        b = GffLine(row)
-        attrib = b.attributes
-        if contigID and tag not in contigID:
-            continue
-        if types and b.type in types:
-            _id = b.accn
-            if _id not in names:
-                names.append(_id)
-        if names is not None:
-            if nametag not in attrib:
-                continue
-            if attrib[nametag][0] not in names:
-                continue
-
-        print(row.rstrip())
-
-    if not args.fasta:
-        return
-
-    f = Fasta(gffile)
-    for s in contigID:
-        if s in f:
-            SeqIO.write([f[s]], sys.stdout, "fasta")
-
-def chain(args):
-    """
-    %prog chain gffile > chained.gff
-
-    Fill in parent features by chaining child features and return extent of the
-    child coordinates.
-    """
-    gffile = args.gff
-    attrib_key = args.attrib_key
-    attrib_list = args.attrib_list
-    score_merge_op = args.score_merge_op
-    break_chain = args.break_chain
-
-    chain_ftype = args.chain_ftype
-    parent_ftype = args.parent_ftype
-
-    gffdict = {}
-    fw = must_open(args.outfile, "w")
-    gff = Gff(gffile)
-    if break_chain:
-        ctr, prev_gid = dict(), None
-    for g in gff:
-        if g.type != chain_ftype:
-            print >> fw, g
-            continue
-
-        id = g.accn
-        gid = id
-        if attrib_key:
-            assert attrib_key in g.attributes.keys(), \
-                "Attribute `{0}` not present in GFF3".format(attrib_key)
-            gid = g.get_attr(attrib_key)
-        curr_gid = gid
-        if break_chain:
-            if prev_gid != curr_gid:
-                if curr_gid not in ctr:
-                    ctr[curr_gid] = 0
-                else:
-                    ctr[curr_gid] += 1
-            gid = "{0}:{1}".format(gid, ctr[curr_gid])
-        gkey = (g.seqid, gid)
-        if gkey not in gffdict:
-            gffdict[gkey] = { 'seqid': g.seqid,
-                            'source': g.source,
-                            'strand': g.strand,
-                            'type': parent_ftype,
-                            'coords': [],
-                            'children': [],
-                            'score': [],
-                            'attrs': DefaultOrderedDict(set)
-                          }
-            gffdict[gkey]['attrs']['ID'].add(gid)
-
-        if attrib_list:
-            for a in attrib_list.split(","):
-                if a in g.attributes:
-                    [gffdict[gkey]['attrs'][a].add(x) for x in g.attributes[a]]
-                    del g.attributes[a]
-
-        if break_chain:
-            _attrib = "Alias" if attrib_list and ("Name" not in attrib_list) else "Name"
-            gffdict[gkey]['attrs'][_attrib].add(curr_gid)
-
-        gffdict[gkey]['coords'].append((g.start, g.end))
-        if score_merge_op:
-            if is_number(g.score):
-                gffdict[gkey]['score'].append(float(g.score))
-                g.score = "."
-
-        g.attributes["Parent"] = [gid]
-        g.attributes["ID"] = ["{0}-{1}".\
-                format(gid, len(gffdict[gkey]['children']) + 1)]
-        g.update_attributes()
-        gffdict[gkey]['children'].append(g)
-        if break_chain:
-            prev_gid = curr_gid
-
-    for gkey, v in sorted(gffdict.items()):
-        gseqid, key = gkey
-        seqid = v['seqid']
-        source = v['source']
-        type = v['type']
-        strand = v['strand']
-        start, stop = range_minmax(gffdict[gkey]['coords'])
-
-        score = "."
-        if score_merge_op:
-            v['score'].sort()
-            if score_merge_op == "sum":
-                score = sum(v['score'])
-            elif score_merge_op == "min":
-                score = min(v['score'])
-            elif score_merge_op == "max":
-                score = max(v['score'])
-            elif score_merge_op == "mean":
-                score = sum(v['score'], 0.0)/len(v['score'])
-            elif score_merge_op == "collapse":
-                score = ",".join((str(x) for x in v['score']))
-
-        g = GffLine("\t".join(str(x) for x in [seqid, source, type, start, stop, \
-            score, strand, ".", None]))
-        g.attributes = v['attrs']
-        g.update_attributes()
-
-        print >> fw, g
-
-        for child in gffdict[gkey]['children']:
-            print >> fw, child
-
-    fw.close()
 
 def format(args):
     """
@@ -1150,38 +743,51 @@ def format(args):
 
     fw.close()
 
-def fixboundaries(args):
+def note(args):
     """
-    %prog fixboundaries gffile --type="gene" --child_ftype="mRNA" > gffile.fixed
-
-    Adjust the boundary coordinates of parents features based on
-    range chained child features, extracting their min and max values
+    %prog note gffile > tabfile
+    Extract certain attribute field for each feature.
     """
     gffile = args.fi
-    gffdb = make_index(gffile)
+    type = args.type
+    if type:
+        type = type.split(",")
 
-    for f in gffdb.all_features(order_by=('seqid', 'start')):
-        if f.featuretype == args.type:
-            child_coords = []
-            for cftype in args.child_ftype.split(","):
-                for c in gffdb.children(f, featuretype=cftype, order_by=('start')):
-                    child_coords.append((c.start, c.stop))
-            f.start, f.stop = range_minmax(child_coords)
-        print(f)
+    g = make_index(gffile)
+    exoncounts = {}
+    if args.exoncount:
+        for feat in g.features_of_type("mRNA"):
+            nexons = 0
+            for c in g.children(feat.id, 1):
+                if c.featuretype != "exon":
+                    continue
+                nexons += 1
+            exoncounts[feat.id] = nexons
 
-def get_piles(allgenes):
-    """
-    Before running uniq, we need to compute all the piles. The piles are a set
-    of redundant features we want to get rid of. Input are a list of GffLines
-    features. Output are list of list of features distinct "piles".
-    """
-    from maize.utils.range import Range, range_piles
+    attrib = args.attribute.split(",")
 
-    ranges = [Range(a.seqid, a.start, a.end, 0, i) \
-                    for i, a in enumerate(allgenes)]
-
-    for pile in range_piles(ranges):
-        yield [allgenes[x] for x in pile]
+    gff = Gff(gffile)
+    seen = set()
+    AED = args.AED
+    print("\t".join(['id'] + attrib))
+    for g in gff:
+        if type and g.type not in type:
+            continue
+        if AED is not None and float(g.attributes["_AED"][0]) > AED:
+            continue
+        keyval = [g.accn]
+        for x in attrib:
+            if x in g.attributes:
+                keyval.append(",".join(g.attributes[x]))
+            else:
+                keyval.append('')
+        if exoncounts:
+            nexons = exoncounts.get(g.accn, 0)
+            keyval.append(str(nexons))
+        keyval = tuple(keyval)
+        if keyval not in seen:
+            print("\t".join(keyval))
+            seen.add(keyval)
 
 def match_span(f1, f2):
     return (f1.start == f2.start) and (f1.stop == f2.stop)
@@ -1788,154 +1394,6 @@ def fromgtf(args):
 
     logging.debug("A total of {0} features written.".format(nfeats))
 
-def merge(args):
-    """
-    %prog merge gffiles
-
-    Merge several gff files into one. When only one file is given, it is assumed
-    to be a file with a list of gff files.
-    """
-    print("##gff-version 3")
-    attrs = ['ID', 'Parent', 'gene_id']
-    for line in must_open(args.config):
-        line = line.strip(" \t\n\r")
-        if line == "":
-            continue
-        (pre, fi) = line.split(",")
-        if not os.access(fi, os.R_OK):
-            logging.error("no access to input file: %s" % fi)
-            sys.exit(1)
-        fhi = must_open(fi)
-        for ln in fhi:
-            if ln.startswith("#"):
-                continue
-            gl = GffLine(ln)
-            gl.seqid = "%s|%s" % (pre, gl.seqid)
-            for attr in attrs:
-                v = gl.get_attr(attr)
-                if v != None:
-                    gl.set_attr(attr, "%s|%s" % (pre, v), update=True)
-            print(gl)
-
-def note(args):
-    """
-    %prog note gffile > tabfile
-
-    Extract certain attribute field for each feature.
-    """
-    gffile = args.fi
-    type = args.type
-    if type:
-        type = type.split(",")
-
-    g = make_index(gffile)
-    exoncounts = {}
-    if args.exoncount:
-        for feat in g.features_of_type("mRNA"):
-            nexons = 0
-            for c in g.children(feat.id, 1):
-                if c.featuretype != "exon":
-                    continue
-                nexons += 1
-            exoncounts[feat.id] = nexons
-
-    attrib = args.attribute.split(",")
-
-    gff = Gff(gffile)
-    seen = set()
-    AED = args.AED
-    print("\t".join(['id'] + attrib))
-    for g in gff:
-        if type and g.type not in type:
-            continue
-        if AED is not None and float(g.attributes["_AED"][0]) > AED:
-            continue
-        keyval = [g.accn]
-        for x in attrib:
-            if x in g.attributes:
-                keyval.append(",".join(g.attributes[x]))
-            else:
-                keyval.append('')
-        if exoncounts:
-            nexons = exoncounts.get(g.accn, 0)
-            keyval.append(str(nexons))
-        keyval = tuple(keyval)
-        if keyval not in seen:
-            print("\t".join(keyval))
-            seen.add(keyval)
-
-def splicecov(args):
-    """
-    %prog splicecov annotation.gff3 junctions.bed
-
-    Given an annotation GFF file (containing introns) and a
-    TopHat junctions.bed file (preprocessed using formats.bed.juncs(),
-    each intron gets tagged with the JUNC identifier and read coverage.
-
-    Output is a summary table listing for each gene locus, the isoform number,
-    number of splice junctions and {average, median, min & max} read coverage
-    across the junctions.
-    """
-    from tempfile import mkstemp
-    from pybedtools import BedTool
-    from maize.utils.cbook import SummaryStats
-
-    gfffile, juncsbed = args.gff, args.bed
-    tagged = "{0}.{1}.gff3".format(gfffile.rsplit(".", 1)[0], "tag_introns")
-
-    gff3, junc = BedTool(gfffile), BedTool(juncsbed)
-    ab = gff3.intersect(junc, wao=True, f=1.0, s=True)
-    abfh = must_open(ab.fn)
-
-    seen = set()
-    scov = AutoVivification()
-
-    fh, tmpgff = mkstemp(suffix=".gff3")
-    fw = must_open(tmpgff, "w")
-    for line in abfh:
-        args = line.strip().split("\t")
-        g = GffLine("\t".join(str(x) for x in args[:9]))
-        if g.type == "intron" and args[10] != -1:
-            ispan, jspan = g.span, int(args[11]) - int(args[10])
-            if ispan == jspan:
-                g.set_attr("ID", args[12], update=True)
-                g.score = int(args[13])
-
-                pparts = g.get_attr("Parent").split(".")
-                locus, iso = pparts[0], ".".join(pparts[1:])
-                seen.add(iso)
-                if not scov[locus][iso]:
-                    scov[locus][iso] = []
-                scov[locus][iso].append(g.score)
-            else:
-                continue
-        print >> fw, g
-    fw.close()
-
-    format([tmpgff, "--unique", "-o", tagged])
-    os.unlink(tmpgff)
-
-    isos = sorted(list(seen))
-    fw = must_open(args.outfile, "w")
-    h1, h2, stats = ["#"], ["#locus"], ["N", "mean", "median", "min", "max"]
-    for iso in isos:
-        h1.extend([str(iso)] + [""] * (len(stats) - 1))
-        h2.extend(stats)
-    print >> fw, "\t".join(str(x) for x in h1)
-    print >> fw, "\t".join(str(x) for x in h2)
-    for locus in scov.keys():
-        out = [locus]
-        for iso in isos:
-            if iso in scov[locus].keys():
-                juncs = scov[locus][iso]
-                jstats = SummaryStats(juncs, dtype="int")
-                out.extend([jstats.size, jstats.mean, jstats.median, \
-                        jstats.min, jstats.max])
-            else:
-                out.extend(["-"] * len(stats))
-        print >> fw, "\t".join(str(x) for x in out)
-    fw.close()
-
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
@@ -1943,14 +1401,6 @@ if __name__ == '__main__':
             description = 'gff utilities'
     )
     sp = parser.add_subparsers(title = 'available commands', dest = 'command')
-
-    sp1 = sp.add_parser("summary", help = "print summary stats for features of different types",
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help = 'input gtf file')
-    sp1.add_argument("--isoform", default=False, action="store_true",
-                   help="Find longest isoform of each id")
-    sp1.add_argument("--ids", help="Only include features from certain IDs")
-    sp1.set_defaults(func = summary)
 
     sp1 = sp.add_parser("filter", help = "filter the gff file based on  Identity and Coverage",
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
@@ -1972,59 +1422,10 @@ if __name__ == '__main__':
     sp1.add_argument('--opt', default='ensembl', help = 'fix option')
     sp1.set_defaults(func = fix)
 
-    sp1 = sp.add_parser('fixboundaries', help = 'fix boundaries of parent features by range chaining child features',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help = 'input GFF3 file')
-    sp1.add_argument("--type", default="gene", help="Feature type for which to adjust boundaries")
-    sp1.add_argument("--child_ftype", default="mRNA", help="Child featuretype(s) to use for identifying boundaries")
-    sp1.set_defaults(func = fixboundaries)
-
     sp1 = sp.add_parser('index', help = 'index gff db')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.add_argument('fo', help = 'output GFF3 db')
     sp1.set_defaults(func = index)
-
-    sp1 = sp.add_parser('extract', help = 'extract contig or features from gff file',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('fi', help = 'input GFF3 file')
-    sp1.add_argument("--contigs", help="Extract features from select contigs")
-    sp1.add_argument("--names", help="Extract features with certain names")
-    sp1.add_argument("--types", help="Extract features of certain feature types")
-    sp1.add_argument("--children", default=0, choices=["1", "2"], help="Specify number of iterations: `1` grabs children, `2` grabs grand-children")
-    sp1.add_argument("--tag", default="ID", help="Scan the tags for the names")
-    sp1.add_argument("--fasta", action="store_true", help="Write FASTA if available")
-    sp1.set_defaults(func = extract)
-
-    sp1 = sp.add_parser('cluster', help = 'cluster transcripts based on shared splicing structure',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('gff', help = 'input GFF3 file')
-    sp1.add_argument('outfile', help = 'output file')
-    sp1.add_argument("--slop", action="store_true",
-            help="allow minor variation in terminal 5'/3' UTR start/stop position")
-    sp1.add_argument("--inferUTR", action="store_true",
-            help="infer presence of UTRs from exon coordinates")
-    sp1.set_defaults(func = cluster)
-
-    sp1 = sp.add_parser('chain', help = 'fill in parent features by chaining children',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('gff', help = 'input GFF3 file')
-    sp1.add_argument('outfile', help = 'output file')
-    sp1.add_argument("--key", dest="attrib_key", default=None,
-                help="Attribute to use as `key` for chaining operation")
-    sp1.add_argument("--chain_ftype", default="mRNA",
-                help="GFF feature type to use for chaining operation")
-    sp1.add_argument("--parent_ftype", default="gene",
-                help="GFF feature type to use for the chained coordinates")
-    sp1.add_argument("--break", dest="break_chain", action="store_true",
-                help="Break long chains which are non-contiguous")
-    sp1.add_argument("--transfer_attrib", dest="attrib_list",
-                help="Attributes to transfer to parent feature; accepts comma" + \
-                " separated list of attribute names")
-    valid_merge_op = ('sum', 'min', 'max', 'mean', 'collapse')
-    sp1.add_argument("--transfer_score", dest="score_merge_op", choices=valid_merge_op,
-                help="Transfer value stored in score field to parent feature." + \
-                " Score is reported based on chosen operation")
-    sp1.set_defaults(func = chain)
 
     sp1 = sp.add_parser('format', help = 'format gff file, change seqid, etc.',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
@@ -2091,13 +1492,6 @@ if __name__ == '__main__':
     sp1.add_argument("--exoncount", action="store_true", help="Get the exon count for each mRNA feat")
     sp1.set_defaults(func = note)
 
-    sp1 = sp.add_parser('splicecov', help = 'extract certain attribute field for each feature',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('gff', help = 'input GFF3 file')
-    sp1.add_argument('bed', help = 'junctions bed')
-    sp1.add_argument('outfile', help = 'output file')
-    sp1.set_defaults(func = splicecov)
-
     sp1 = sp.add_parser('picklong', help = 'pick longest transcript')
     sp1.add_argument('fi', help = 'input GFF3 file')
     sp1.set_defaults(func = pick_longest)
@@ -2151,11 +1545,6 @@ if __name__ == '__main__':
     sp1.add_argument("--gene_id", default="gene_id", help="Field name for gene")
     sp1.add_argument("--augustus", default=False, action="store_true", help="Input is AUGUSTUS gtf")
     sp1.set_defaults(func = fromgtf)
-
-    sp1 = sp.add_parser("merge", help = "merge several gff files into one",
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('config', help = 'config file containing a list of gff files')
-    sp1.set_defaults(func = merge)
 
     args = parser.parse_args()
     if args.command:
