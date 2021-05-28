@@ -335,13 +335,23 @@ def fix(args):
     elif opt == 'nogene_noexon':
         for g in gff:
             if g.type.endswith('RNA'):
-                g2 = g
+                g2 = GffLine(str(g))
                 g2.type = 'gene'
+                gid = g.get_attr("ID")
+                mid = f'rna.{gid}'
+                g.set_attr("ID", mid)
+                g.set_attr("Parent", gid)
                 print(g2)
             elif g.type.endswith('CDS'):
-                g2 = g
+                g2 = GffLine(str(g))
                 g2.type = 'exon'
+                mid = "rna." + g.get_attr("Parent")
+                g.set_attr("Parent", mid)
+                g2.set_attr("Parent", mid)
+                g2.phase = '.'
+                g2.update_attributes()
                 print(g2)
+            g.update_attributes()
             print(g)
     elif opt == 'mo17':
         gdic = dict()
