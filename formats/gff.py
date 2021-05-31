@@ -283,7 +283,7 @@ def fix(args):
             else:
                 g.set_attr("Parent", g.get_attr("Parent").replace("transcript:", ""))
                 if g.type == 'CDS':
-                    g.set_attr("ID", '')
+                    g.set_attr("ID", None)
             g.update_attributes()
             print(g)
     elif opt == 'ensembl':
@@ -1204,148 +1204,6 @@ def gff2bed12(args):
                 name, score, strand, thickStart, thickEnd, itemRgb,
                 blockCount, blockSizes, blockStarts)))
 
-def gff2fas(args):
-    '''
-    %prog load gff_file fasta_file [--arguments]
-
-    Parses the selected features out of GFF, with subfeatures concatenated.
-    For example, to get the CDS sequences, do this:
-    $ %prog load athaliana.gff athaliana.fa --parents mRNA --children CDS
-
-    To get 500bp upstream of a genes Transcription Start Site (TSS), do this:
-    $ %prog load athaliana.gff athaliana.fa --feature=upstream:TSS:500
-
-    Switch TSS with TrSS for Translation Start Site.
-    '''
-    from datetime import datetime as dt
-    from pyfaidx import Fasta
-    from Bio import SeqIO
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    # can request output fasta sequence id to be picked from following attributes
-    valid_id_attributes = ["ID", "Name", "Parent", "Alias", "Target"]
-    gff_file, fasta_file = args.gff, args.fasta
-
-    if args.feature:
-        args.feature, args.parent, args.children, upstream_site, upstream_len, \
-                flag, error_msg = parse_feature_param(args.feature)
-        if flag:
-            sys.exit(error_msg)
-
-    parents = set(args.parents.split(','))
-    children_list = set(args.children.split(','))
-
-    """
-    In a situation where we want to extract sequence for only the top-level
-    parent feature, specify feature type of parent == child
-    """
-    skipChildren = True if len(parents.symmetric_difference(children_list)) == 0 \
-            else False
-
-    id_attr = args.id_attribute
-    desc_attr = args.desc_attribute
-    sep = args.sep
-
-    import gffutils
-    g = make_index(gff_file)
-    f = Fasta(fasta_file)
-    seqlen = {}
-    for seqid in f.keys():
-        seqlen[seqid] = len(f[seqid])
-
-    for feat in g.features_of_type(parents):
-        desc = ""
-        if desc_attr:
-            fparent = feat.attributes['Parent'][0] \
-                if 'Parent' in feat.attributes else None
-            if fparent:
-                try:
-                    g_fparent = g[fparent]
-                except gffutils.exceptions.FeatureNotFoundError:
-                    logging.error("{} not found in index .. skipped".format(fparent))
-                    continue
-                if desc_attr in g_fparent.attributes:
-                    desc = ",".join(g_fparent.attributes[desc_attr])
-            elif desc_attr in feat.attributes:
-                desc = ",".join(feat.attributes[desc_attr])
-
-        if args.full_header:
-            desc_parts = []
-            desc_parts.append(desc)
-
-            if args.conf_class and 'conf_class' in feat.attributes:
-                desc_parts.append(feat.attributes['conf_class'][0])
-
-            if args.full_header == "tair":
-                orient = "REVERSE" if feat.strand == "-" else "FORWARD"
-                feat_coords = "{0}:{1}-{2} {3} LENGTH=[LEN]".format(feat.seqid, \
-                    feat.start, feat.end, orient)
-            else:
-                (s, e) = (feat.start, feat.end) if (feat.strand == "+") \
-                        else (feat.end, feat.start)
-                feat_coords = "{0}:{1}-{2}".format(feat.seqid, s, e)
-            desc_parts.append(feat_coords)
-
-            datestamp = args.datestamp if args.datestamp else \
-                    "{0}{1}{2}".format(dt.now().year, dt.now().month, dt.now().day)
-            desc_parts.append(datestamp)
-
-            desc = sep.join(str(x) for x in desc_parts)
-            desc = "".join(str(x) for x in (sep, desc)).strip()
-
-        if args.feature == "upstream":
-            upstream_start, upstream_stop = get_upstream_coords(upstream_site, upstream_len, \
-                     seqlen[feat.seqid], feat, children_list, g)
-
-            if not upstream_start or not upstream_stop:
-                continue
-
-            rc = True if feat.strand == '-' else False
-            feat_seq = f.get_seq(feat.seqid, upstream_start, upstream_stop, rc = rc).seq
-
-            (s, e) = (upstream_start, upstream_stop) \
-                    if feat.strand == "+" else \
-                     (upstream_stop, upstream_start)
-            upstream_seq_loc = str(feat.seqid) + ":" + str(s) + "-" + str(e)
-            desc = sep.join(str(x) for x in (desc, upstream_seq_loc, \
-                    "FLANKLEN=" + str(upstream_len)))
-        else:
-            children = []
-            if not skipChildren:
-                for c in g.children(feat.id, 1):
-                    if c.featuretype not in children_list:
-                        continue
-                    rc = True if c.strand == '-' else False
-                    child = f.get_seq(c.seqid, c.start, c.stop, rc = rc).seq
-                    children.append((child, c))
-
-                if not children:
-                    logging.error("%s has no children with type %s" % (feat.id, ','.join(children_list)))
-                    continue
-            else:
-                rc = True if feat.strand == '-' else False
-                child = f.get_seq(feat.seqid, feat.start, feat.stop, rc = rc).seq
-                children.append((child, feat))
-
-            # sort children in incremental position
-            children.sort(key=lambda x: x[1].start)
-            # reverse children if negative strand
-            if feat.strand == '-':
-                children.reverse()
-            feat_seq = ''.join(x[0] for x in children)
-
-        desc = desc.replace("\"", "")
-
-        id = ",".join(feat.attributes[id_attr]) if id_attr \
-                and feat.attributes[id_attr] else \
-                feat.id
-
-        if args.full_header == "tair":
-            desc = desc.replace("[LEN]", str(len(feat_seq)))
-
-        rcd = SeqRecord(Seq(feat_seq), id=id, description=desc)
-        SeqIO.write([rcd], sys.stdout, 'fasta')
-
 def frombed(args):
     """
     %prog frombed bed_file [--arguments] > gff_file
@@ -1522,31 +1380,6 @@ if __name__ == '__main__':
     sp1.add_argument("--block", default="exon", help="Feature type for regular blocks")
     sp1.add_argument("--thick", default="CDS", help="Feature type for thick blocks")
     sp1.set_defaults(func = gff2bed12)
-
-    sp1 = sp.add_parser('2fas', help = 'extract feature (e.g. CDS) seqs and concatenate',
-            formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    sp1.add_argument('gff', help = 'input GFF3 file')
-    sp1.add_argument('fasta', help = 'genome fasta file')
-    sp1.add_argument("--parents", dest="parents", default="mRNA",
-            help="list of features to extract, use comma to separate (e.g.: 'gene,mRNA')")
-    sp1.add_argument("--children", dest="children", default="CDS",
-            help="list of features to extract, use comma to separate (e.g.: 'five_prime_UTR,CDS,three_prime_UTR')")
-    sp1.add_argument("--feature", dest="feature",
-            help="feature type to extract. e.g. `--feature=CDS` or `--feature=upstream:TSS:500`")
-    valid_id_attributes = ["ID", "Name", "Parent", "Alias", "Target"]
-    sp1.add_argument("--id_attribute", choices=valid_id_attributes,
-            help="The attribute field to extract and use as FASTA sequence ID ")
-    sp1.add_argument("--desc_attribute", default="Note",
-            help="The attribute field to extract and use as FASTA sequence description")
-    sp1.add_argument("--full_header", default=None, choices=["default", "tair"],
-            help="Specify if full FASTA header (with seqid, coordinates and datestamp) should be generated")
-    sp1.add_argument("--sep", dest="sep", default=" ", \
-            help="Specify separator used to delimiter header elements")
-    sp1.add_argument("--datestamp", dest="datestamp", \
-            help="Specify a datestamp in the format YYYYMMDD or automatically pick `today`")
-    sp1.add_argument("--conf_class", dest="conf_class", default=False, action="store_true",
-            help="Specify if `conf_class` attribute should be parsed and placed in the header")
-    sp1.set_defaults(func = gff2fas)
 
     sp1 = sp.add_parser('fromgtf', help = 'convert gtf to gff3 format',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
