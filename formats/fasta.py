@@ -312,7 +312,7 @@ def extract_chrom_num(sid, opt):
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = res.group(1) if res else False
     else:
-        ptn = "^(chr|chromsome|Ta)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)" #(MtrunA17)?
+        ptn = "^(chr|chromsome)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)" #(MtrunA17)?
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = res.group(2).lstrip('0') if res else False
     return chrom
