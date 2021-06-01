@@ -31,7 +31,6 @@ tmpl_sge = '''#!/bin/bash -l
 #$ -l h_vmem={{ mem }}
 #$ -l s_rt={{ time }}
 #$ -pe smp {{ ntasks }}
-#$ -l h_vmem={{ mem }}
 #$ -m {{ mail_type }}
 #$ -M {{ email }}
 #$ -j y
