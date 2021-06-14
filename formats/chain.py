@@ -6,8 +6,46 @@ import sys
 import logging
 
 from jcvi.formats.base import BaseFile, read_block, must_open
-from jcvi.formats.chain import ChainLine, Chain
+#from jcvi.formats.chain import ChainLine, Chain
 from jcvi.apps.base import need_update, which, sh
+
+class ChainLine(object):
+    def __init__(self, chain, lines):
+        self.chain = chain
+        self.blocks = []
+        for line in lines:
+            atoms = line.split()
+            if len(atoms) == 1:
+                atoms += [0, 0]
+            if len(atoms) == 0:
+                continue
+
+            self.blocks.append([int(x) for x in atoms])
+
+        self.ungapped, self.dt, self.dq = zip(*self.blocks)
+        self.ungapped = sum(self.ungapped)
+        self.dt = sum(self.dt)
+        self.dq = sum(self.dq)
+
+class Chain(BaseFile): # this is different from jcvi.formats.chain
+    def __init__(self, filename):
+        super(Chain, self).__init__(filename)
+        self.chains = list(self.iter_chain())
+
+        self.ungapped = sum(x.ungapped for x in self.chains)
+        self.dt = sum(x.dt for x in self.chains)
+        self.dq = sum(x.dq for x in self.chains)
+
+    def __len__(self):
+        return len(self.chains)
+
+    def iter_chain(self):
+        fp = open(self.filename)
+
+        for chain, lines in read_block(fp, "chain"):
+            lines = list(lines)
+            yield ChainLine(chain, lines)
+
 
 def chainstat(args):
     sh("chain.py 2bed %s > tmp.bed" % args.fi)
@@ -79,7 +117,7 @@ def chain2bed(args):
     chainFile = Chain(args.fi)
     fho = must_open(args.fo, 'w')
     for c in chainFile.chains:
-        cid, score, tName, tSize, tSrd, tStart, tEnd, \
+        id, score, tName, tSize, tSrd, tStart, tEnd, \
                 qName, qSize, qSrd, qStart, qEnd, cid = c.chain.split()
         assert tSrd == '+', 'tStrand is not "+"'
         score, tStart, tEnd, tSize, qStart, qEnd, qSize = \

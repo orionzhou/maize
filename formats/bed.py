@@ -114,12 +114,14 @@ def binpacking(args):
     print("size range: %s - %s" % (sizes[0], sizes[n-1]))
 
 def size(args):
-    sizes = [b.end - b.start + 1 for b in Bed(args.fi)]
-    sizes = np.sort(sizes)
-    total = np.sum(sizes)
-    min_sizes = " ".join(str(x) for x in sizes[0:3])
-    max_sizes = " ".join(str(x) for x in sizes[-3:])
-    logging.debug("size range: %s - %s, total size: %d" % (min_sizes, max_sizes, total))
+    # sizes = [b.end - b.start + 1 for b in Bed(args.fi)]
+    # sizes = np.sort(sizes)
+    # total = np.sum(sizes)
+    # min_sizes = " ".join(str(x) for x in sizes[0:3])
+    # max_sizes = " ".join(str(x) for x in sizes[-3:])
+    # logging.debug("size range: %s - %s, total size: %d" % (min_sizes, max_sizes, total))
+    cmd = "bioawk -t '{sum += $3 - $2} END {print sum/1000000000}'"
+    sh(cmd + " " + args.fi)
 
 def makewindow(args):
     fhi = must_open(args.fi)
