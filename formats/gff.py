@@ -332,6 +332,22 @@ def fix(args):
                 g.set_attr("Parent", id_map[g.get_attr("Parent")])
                 g.update_attributes()
             print(g)
+    elif opt == 'as60': # strip ".1" from gene ID, no exon
+        for g in gff:
+            if g.type == 'gene':
+                gid = g.get_attr("ID").replace(".1", '')
+                g.set_attr("ID", gid)
+            elif g.type.endswith('RNA'):
+                gid = g.get_attr("Parent").replace(".1", '')
+                g.set_attr("Parent", gid)
+            elif g.type.endswith('CDS'):
+                g2 = GffLine(str(g))
+                g2.type = 'exon'
+                g2.phase = '.'
+                g2.update_attributes()
+                print(g2)
+            g.update_attributes()
+            print(g)
     elif opt == 'nogene_noexon':
         for g in gff:
             if g.type.endswith('RNA'):

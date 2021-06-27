@@ -8,6 +8,8 @@ import logging
 import re
 import string
 
+from itertools import groupby
+
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -103,7 +105,7 @@ def extract(args):
     if op.isfile(args.db):
         db = Fasta(args.db)
     else:
-        f_db = "%s/data/%s/10_genome.fna" % (os.environ["genome"], args.db)
+        f_db = "%s/data/%s/10.fasta" % (os.environ["genome"], args.db)
         assert op.isfile(f_db), "cannot find %s" % args.db
         db = Fasta(f_db)
 
@@ -118,7 +120,7 @@ def extract(args):
                 beg = 0
                 if sid in db:
                     end = len(db[sid])
-                    bed.add("%s\t%d\t%d\n" % (sid, beg, end))
+                    bed.add(f"{sid}\t{beg}\t{end}\t{sid}-{beg+1}-{end}\t.\t+\n")
                 else:
                     logging.warning(f"{sid} not in db => skipped")
         else:
@@ -130,7 +132,7 @@ def extract(args):
                 sid, beg, end = res.group(1), res.group(2), res.group(4)
                 beg = int(beg.replace(",", ""))
                 end = int(end.replace(",", ""))
-                bed.add("%s\t%d\t%d\n" % (sid, beg-1, end))
+                bed.add(f"{sid}\t{beg-1}\t{end}\t{sid}-{beg}-{end}\t.\t+\n")
             else:
                 res = reg2.match(loc)
                 if res:
@@ -138,46 +140,36 @@ def extract(args):
                     beg = 0
                     if sid in db:
                         end = len(db[sid])
-                        bed.add("%s\t%d\t%d\n" % (sid, beg, end))
+                        bed.add(f"{sid}\t{beg}\t{end}\t{sid}-{beg+1}-{end}\t.\t+\n")
                     else:
                         logging.warning(f"{sid} not in db => skipped")
                 else:
                     logging.warning(f"{loc}: unknown locstr => skipped")
 
-    rcds = []
-    for b in bed:
-        sid, beg, end = b.seqid, b.start, b.end
-        oid = sid if args.list else f"{sid}-{beg}-{end}"
-        if b.accn:
-            oid = b.accn
-        if sid not in db:
-            logging.warning(f"{sid} not in db => skipped")
-            continue
-        size = end - beg + 1
-        bp_pad = 0
-        if beg < 1:
-            bp_pad += 1 - beg
-            beg = 1
-        if beg > len(db[sid]):
-            bp_pad = 1
-            beg = len(db[sid])
-        if end > len(db[sid]):
-            bp_pad += end - len(db[sid])
-            end = len(db[sid])
-        seq = db[sid][beg-1:end].seq
-        if args.padding:
-            if bp_pad > 0:
-                if end-beg+1 < 30:
-                    seq = "N" * size
-                else:
-                    seq += "N" * bp_pad
-            assert len(seq) == size, "error in seq size: %s:%d-%d %d" % (sid, beg, end, bp_pad)
+    fho = must_open(args.out, 'w')
+    for accn, beds in groupby(bed, key=lambda x: x.accn):
+        srd = ''
+        seqs = []
+        for b in beds:
+            sid, beg, end = b.seqid, b.start, b.end
+            if srd == '': srd = b.strand
+            if srd != b.strand:
+                logging.error(f"{accn} has both +/- segments")
+                sys.exit(1)
+            if sid not in db:
+                logging.warning(f"{sid} not in db => skipped")
+                continue
+            seqobj = db[sid][beg-1:end]
+            seq = seqobj.reverse.complement.seq if b.strand == '-' else seqobj.seq
+            seqs.append(seq)
 
+        if srd == '-': seqs.reverse()
+        fseq = ''.join(seqs)
         if args.tsv:
-            print("\t".join([sid, str(beg), str(end), seq]))
+            fho.write(f"{accn}\t{fseq}\n")
         else:
-            rcd = SeqRecord(Seq(seq), id = oid, description = '')
-            SeqIO.write([rcd], sys.stdout, 'fasta')
+            rcd = SeqRecord(Seq(fseq), id = accn, description = '')
+            SeqIO.write([rcd], fho, 'fasta')
 
 def split_old(args):
     fi, dirw = op.realpath(args.fi), op.realpath(args.outdir)
@@ -552,7 +544,8 @@ if __name__ == "__main__":
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('db', help = 'sequence database (fasta or genome ID)')
     sp1.add_argument('loc', help = 'location string(s) or BED file(s) (separated by ",")')
-    sp1.add_argument('--padding', action = "store_true", help = 'padding to size')
+    sp1.add_argument('out', help = 'output file (.tsv or .fasta)')
+    #sp1.add_argument('--padding', action = "store_true", help = 'padding to size')
     sp1.add_argument('--tsv', action = "store_true", help = 'output in tabular format')
     sp1.add_argument('--list', action = "store_true", help = 'input is text file with sequence IDs')
     sp1.set_defaults(func = extract)
