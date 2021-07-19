@@ -120,7 +120,7 @@ def extract(args):
                 beg = 0
                 if sid in db:
                     end = len(db[sid])
-                    bed.add(f"{sid}\t{beg}\t{end}\t{sid}-{beg+1}-{end}\t.\t+\n")
+                    bed.add(f"{sid}\t{beg}\t{end}\t{sid}\t.\t+\n")
                 else:
                     logging.warning(f"{sid} not in db => skipped")
         else:
