@@ -18,12 +18,12 @@ tmpl_slurm = '''#!/bin/bash -l
 #SBATCH --mail-type={{ mail_type }}
 #SBATCH --mail-user={{ email }}
 #SBATCH -o {{ out }}
+#SBATCH -J {{ name }}
 
 echo ${SLURM_JOBID}
 '''
 
 tmpl_sge = '''#!/bin/bash -l
-#$ -N {{ name }}
 #$ -cwd
 #$ -S /bin/bash
 #$ -V
@@ -35,6 +35,7 @@ tmpl_sge = '''#!/bin/bash -l
 #$ -M {{ email }}
 #$ -j y
 #$ -o {{ out }}
+#$ -N {{ name }}
 '''
 
 

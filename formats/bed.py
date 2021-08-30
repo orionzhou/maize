@@ -92,14 +92,14 @@ def binpacking(args):
     fho = must_open(fo, 'w')
     for b in Bed(fi):
         rid = "s%d" % i
-        sdic[rid] = [b.seqid, b.start-1, b.end, b.span]
         nid = "%s-%d-%d" % (b.seqid, b.start, b.end)
+        sdic[rid] = [b.seqid, b.start-1, b.end, nid, b.span]
         fho.write("\t".join(str(x) for x in [nid, 0, b.span, '+',
                                              b.seqid, b.start-1, b.end, rid]) + "\n")
         i += 1
     fho.close()
 
-    zdic = {k: v[3] for k, v in sdic.items()}
+    zdic = {k: v[4] for k, v in sdic.items()}
     bins = binpacking.to_constant_bin_number(zdic, n)
 
     sizes = []
