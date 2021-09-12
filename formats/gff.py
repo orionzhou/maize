@@ -348,6 +348,24 @@ def fix(args):
                 print(g2)
             g.update_attributes()
             print(g)
+    elif opt == 'renan': # no gene feature, 'transcipt'->'mRNA'
+        for g in gff:
+            if g.type.endswith('transcript'):
+                mid = g.get_attr("ID")
+                gid = g.get_attr("geneID")
+                g.type = 'mRNA'
+                g.set_attr("geneID", None)
+                g.set_attr("gene_name", None)
+                g.update_attributes()
+                if mid.endswith('.1'):
+                    g2 = GffLine(str(g))
+                    g2.type = 'gene'
+                    g2.set_attr("ID", gid)
+                    g2.update_attributes()
+                    print(g2)
+                g.set_attr("Parent", gid)
+            g.update_attributes()
+            print(g)
     elif opt == 'nogene_noexon':
         for g in gff:
             if g.type.endswith('RNA'):
