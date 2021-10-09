@@ -76,7 +76,7 @@ def compatible_vars(a, b):
     b_chr, b_pos, b_type, b_data = b[:4]
     assert a_chr == b_chr
     assert a_pos <= b_pos
-    
+
     if a_pos == b_pos:
         return False
     if a_type == 'D':
@@ -93,7 +93,7 @@ def extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID):
     chr_seq = chr_dic[chr]
     vars = []
     assert ',' not in ref_allele
-    alt_alleles = alt_alleles.split(',')    
+    alt_alleles = alt_alleles.split(',')
     for a in range(len(alt_alleles)):
         alt_allele = alt_alleles[a]
         if 'N' in alt_allele:
@@ -133,7 +133,7 @@ def extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID):
         if len(alt_alleles) > 1:
             varID2 = "%s.%d" % (varID, a)
         vars.append([chr, pos2, type, data, {"id":varID, "id2":varID2}])
-                    
+
     return vars
 
 
@@ -203,7 +203,7 @@ def generate_haplotypes(snp_file,
                 if var_pos < var2_pos:
                     break
             vars_cmpt[v2] = v
-            
+
     # Assign genotypes for those missing genotypes
     genotypes_list = []
     if num_genomes > 0:
@@ -226,13 +226,13 @@ def generate_haplotypes(snp_file,
 
                 assert False in used
                 for i in range(len(used)):
-                    if not used[i]:                
+                    if not used[i]:
                         var_dic["genotype"] = ("%d" % i) * (num_genomes * 2)
                         if i > max_genotype_num:
                             max_genotype_num = i
                         break
             genotypes_list.append(var_dic["genotype"])
-            
+
         num_chromosomes = len(genotypes_list[0])
         # daehwan - for debugging purposes
         """
@@ -272,8 +272,8 @@ def generate_haplotypes(snp_file,
                         if haplotype == "":
                             haplotype = str(i)
                         else:
-                            haplotype += ("#%d" % i)                    
-                assert haplotype != ""            
+                            haplotype += ("#%d" % i)
+                assert haplotype != ""
                 haplotypes.add(haplotype)
 
     else:
@@ -294,11 +294,11 @@ def generate_haplotypes(snp_file,
 
             assert False in used
             for i in range(len(used)):
-                if not used[i]:                
+                if not used[i]:
                     var_dic["genotype"] = i
                     break
             genotypes_list.append(var_dic["genotype"])
-            
+
         # genotypes_list looks like
         #    Var0: 0
         #    Var1: 0
@@ -360,7 +360,7 @@ def generate_haplotypes(snp_file,
         if a_begin != b_begin:
             return a_begin - b_begin
         return a_end - b_end
-    
+
     haplotypes = sorted(list(haplotypes2), cmp=cmp_haplotype)
 
     # daehwan - for debugging purposes
@@ -520,7 +520,7 @@ def main(genome_file,
                     genotype_ranges[chr][gene][0] = var_pos
                 if var_pos > genotype_ranges[chr][gene][1]:
                     genotype_ranges[chr][gene][1] = var_pos
-                    
+
                 var_set.add(var_str)
 
         print >> sys.stderr, "Number of variants in %s is:" % (genotype_vcf)
@@ -581,7 +581,7 @@ def main(genome_file,
         else:
             assert reference_type == "genome"
             os.system("cp genome.fa %s_backbone.fa" % base_fname)
-        
+
     num_haplotypes = 0
     num_unassigned = 0
     for VCF_fname in VCF_fnames:
@@ -589,7 +589,7 @@ def main(genome_file,
         if VCF_fname == "/dev/null" or \
                 not os.path.exists(VCF_fname):
             empty_VCF_file = True
-        
+
         if reference_type != "genome" and \
                 len(genotype_gene_list) > 0:
             continue
@@ -623,7 +623,7 @@ def main(genome_file,
 
                 if len(fields) >= 9:
                     format = fields[8]
-               
+
                 genotypes = []
                 if len(fields) >= 10:
                     genotypes = fields[9:]
@@ -646,12 +646,12 @@ def main(genome_file,
 
                 if chr not in chr_dic:
                     continue
-                
+
                 if filter != 'PASS' and filter != '.':
                     continue
-                
-                if float(qual) < 100:
-                    continue
+
+                # if qual != '.' or float(qual) < 100:
+                    # continue
                 #if False:
                 #idic, gdic = parse_vcf_tags(info, format, fields[9])
                 #if int(idic['DP']) > 2270:
@@ -703,7 +703,7 @@ def main(genome_file,
                     continue
 
                 if len(vars) > 0 and \
-                        (curr_right + inter_gap < pos or prev_chr != chr):                    
+                        (curr_right + inter_gap < pos or prev_chr != chr):
                     num_haplotypes = generate_haplotypes(SNP_file,
                                                          haplotype_file,
                                                          vars,
@@ -755,7 +755,7 @@ def main(genome_file,
                         if max_right < right:
                             max_right = right
                     return max_right
-  
+
                 right = add_vars(pos,
                                  offset,
                                  gene,
@@ -781,7 +781,7 @@ def main(genome_file,
                                                      num_haplotypes)
                 vars = []
 
-        else:            
+        else:
             for chr in genotype_var_list.keys():
                 chr_seq = chr_dic[chr]
                 chr_genotype_vars = genotype_var_list[chr]
@@ -820,7 +820,7 @@ def main(genome_file,
 
     if genotype_vcf != "":
         clnsig_file.close()
-        
+
 
 
 if __name__ == '__main__':
@@ -924,5 +924,5 @@ if __name__ == '__main__':
          args.reference_type,
          args.genotype_vcf,
          args.genotype_gene_list,
-         args.extra_files,         
+         args.extra_files,
          args.verbose)
