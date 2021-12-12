@@ -21,6 +21,8 @@ tmpl_slurm = '''#!/bin/bash -l
 #SBATCH -J {{ name }}
 
 echo ${SLURM_JOBID}
+
+{{ cmd }}
 '''
 
 tmpl_sge = '''#!/bin/bash -l
@@ -36,6 +38,8 @@ tmpl_sge = '''#!/bin/bash -l
 #$ -j y
 #$ -o {{ out }}
 #$ -N {{ name }}
+
+{{ cmd }}
 '''
 
 
@@ -51,6 +55,7 @@ def create_job_script(args):
     email = args.email
     name = args.job_name
     out = args.job_out
+    cmd = args.cmd
     if args.fmt == 'slurm':
         tmpl = Template(tmpl_slurm)
         queue = 'amdsmall,amdlarge,amd512,small,large,max,ram256g'
@@ -70,7 +75,8 @@ def create_job_script(args):
         mail_type = mail_type,
         email = email,
         name = name,
-        out = out
+        out = out,
+        cmd = cmd
     )
 
     fho = must_open(args.out, 'w')
@@ -98,6 +104,7 @@ if __name__ == "__main__":
     ps.add_argument('--email', default="pzhou@caas.cn", help='email')
     ps.add_argument('--job_name', default="test", help='job name')
     ps.add_argument('--job_out', default="job.out", help='job output')
+    ps.add_argument('--cmd', default="", help='job commands')
 
     args = ps.parse_args()
     create_job_script(args)
