@@ -11,7 +11,7 @@ from jcvi.formats.base import must_open
 
 def main(args):
     pre = args.fo
-    sh(f"rm {pre}*")
+    sh(f"rm {pre}.*")
     cmd = ''
     if args.s2 == '':
         samples = args.s1
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ps.add_argument('s1', help = 'sample 1')
     ps.add_argument('fo', help = 'output file prefix')
     ps.add_argument('--s2', default='', help = 'sample 2')
-    ps.add_argument('--vcf', default=f"{os.environ['s3']}/zhoup-nfo/zm.vt03/04.snp.vcf.gz", help='input (joint) VCF')
+    ps.add_argument('--vcf', default=f"{os.environ['s3']}/zhoup-nfo/zm.vt10/04.snp.vcf.gz", help='input (joint) VCF')
     ps.add_argument('--gq', default=30, help='minimum Genotype Quality score')
     ps.add_argument('--header', default=f"{os.environ['maize']}/assets/dummy_header.vcf", help='vcf header')
 
