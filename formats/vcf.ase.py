@@ -11,12 +11,18 @@ from jcvi.formats.base import must_open
 
 def main(args):
     pre = args.fo
-    sh(f"rm {pre}.*")
+    if op.isfile(f"{pre}.bcf"):
+        if not args.force:
+            logging.warning(f"{pre}.bcf already exists - skip")
+            sys.exit(0)
+        else:
+            logging.warning(f"{pre}.bcf already exists - overwriting")
+            sh(f"rm {pre}.*")
     cmd = ''
-    if args.s2 == '':
+    if args.s2 == '' or args.s2 == 'self':
         samples = args.s1
         cmd = (
-            f'bcftools view -s {samples} -Ou {args.vcf} |',
+            f'bcftools view --trim-alt-alleles -s {samples} -Ou {args.vcf} |',
             f'bcftools filter -i \'N_PASS(GQ>={args.gq} & GT!="mis")=1 && FORMAT/GT[0]="AA"\' |'
             'bcftools annotate -x QUAL,INFO,^FORMAT/GT |'
             'bioawk -t \'{if(!/^#/){$10=substr($10,1,1)"|"substr($10,1,1)}; print}\' |',
@@ -30,14 +36,14 @@ def main(args):
         elif args.s2.endswith("B73"):
             ref_rule = '&& FORMAT/GT[1]="RR"'
         cmd = (
-            f'bcftools view -s {samples} -Ou {args.vcf} |',
+            f'bcftools view --trim-alt-alleles -s {samples} -Ou {args.vcf} |',
             f'bcftools filter -i \'N_PASS(GQ>={args.gq} & GT!="mis")=2 && N_PASS(GT="RR")=1 && N_PASS(GT="AA")=1 {ref_rule}\' |',
             'bcftools annotate -x QUAL,INFO,^FORMAT/GT |',
             'bioawk -t \'{if(!/^#/){$10=substr($10,1,1)"|"substr($11,1,1)}; $11=""; print}\' |',
             f'bcftools reheader -h {args.header} > {pre}.vcf'
         )
     sh(''.join(cmd))
-    sh(f"bgzip {pre}.vcf")
+    sh(f"bgzip -f {pre}.vcf")
     sh(f"bcftools index -t {pre}.vcf.gz")
     sh(f"bcftools view {pre}.vcf.gz -Ob -o {pre}.bcf")
     sh(f"bcftools index {pre}.bcf")
@@ -57,6 +63,7 @@ if __name__ == "__main__":
     ps.add_argument('--vcf', default=f"{os.environ['s3']}/zhoup-nfo/zm.vt10/04.snp.vcf.gz", help='input (joint) VCF')
     ps.add_argument('--gq', default=30, help='minimum Genotype Quality score')
     ps.add_argument('--header', default=f"{os.environ['maize']}/assets/dummy_header.vcf", help='vcf header')
+    ps.add_argument('-f', '--force', action='store_true', help='overwrite existing files?')
 
     args = ps.parse_args()
     main(args)

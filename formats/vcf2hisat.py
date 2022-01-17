@@ -724,6 +724,7 @@ def main(genome_file,
                     tmp_vars = extract_vars(chr_dic, chr, pos, ref_allele, alt_alleles, varID)
                     max_right = -1
                     for v in range(len(tmp_vars)):
+                        if v >= 9: continue
                         var = tmp_vars[v]
                         _, pos2, type, data = var[:4]
                         cnv_genotypes = []
