@@ -303,6 +303,10 @@ def extract_chrom_num(sid, opt):
         ptn = "^([1-9][0-9]{0,1})$"
         res = re.search(ptn, sid, re.IGNORECASE)
         chrom = res.group(1) if res else False
+    # elif opt == 'ctg':
+        # ptn = "^(chr|ctg)?[ _]*(0*[1-9XY][0-9]{0,2}[A-Z]?)"
+        # res = re.search(ptn, sid, re.IGNORECASE)
+        # chrom = res.group(2) if res else False
     else:
         ptn = "^(chr|chromsome|Ta)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)" #(MtrunA17)?
         res = re.search(ptn, sid, re.IGNORECASE)
@@ -335,13 +339,20 @@ def rename(args):
     maxnum = 0
     if len(sdic) > 0:
         maxnum = max(v[2] for k,v in sdic.items())
-        assert maxnum <= 99, ">99 [%d] chroms: not supported" % maxnum
+        assert maxnum <= 999, f">999 [{maxnum}] chroms: not supported"
         for sid, sval in sdic.items():
             chrom, size, num = sval
-            sdic[sid][0] = f"{prefix_chr}0{chrom}" if num <= 9 and maxnum >= 10 else f"{prefix_chr}{chrom}"
+            if num <= 9 and maxnum > 9 and maxnum <= 99:
+                sdic[sid][0] = f"{prefix_chr}0{chrom}"
+            elif num <= 9 and maxnum > 99:
+                sdic[sid][0] = f"{prefix_chr}00{chrom}"
+            elif num > 9 and num <= 99 and maxnum > 99:
+                sdic[sid][0] = f"{prefix_chr}0{chrom}"
+            else:
+                sdic[sid][0] = f"{prefix_chr}{chrom}"
 
     slst = sorted(sdic.items(), key = lambda t: t[1][0])
-    clst = sorted(cdic.items(), key = lambda t: t[1][0])
+    clst = sorted(cdic.items(), key = lambda t: -t[1][1])
     cdigits = ndigit(clst[-1][1][0]) if len(clst) > 0 else 1
     cfmt = "%s%%0%dd" % (prefix_ctg, cdigits)
     logging.debug("%d chromosomes, %d scaffolds/contigs" % (len(sdic), len(cdic)))
@@ -384,13 +395,15 @@ def rename(args):
         nrcd = SeqRecord(Seq(seq), id = zid, description = '')
         SeqIO.write(nrcd, fho, "fasta")
     else:
+        cidx = 1
         for cid, sval in clst:
             ccnt, size = sval
-            ncid = cfmt % ccnt
+            ncid = cfmt % cidx
             fhf.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (cid, 0, size, ncid, 0, size, i))
             fhb.write("%s\t%d\t%d\t+\t%s\t%d\t%d\t%d\n" % (ncid, 0, size, cid, 0, size, i))
             nrcd = SeqRecord(Seq(str(db[cid])), id = ncid, description = '')
             SeqIO.write(nrcd, fho, "fasta")
+            cidx += 1
             i += 1
 
     fhf.close()

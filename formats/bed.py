@@ -70,10 +70,13 @@ def filter(args):
             continue
         keep.append(span)
         print(b)
-    logging.debug("Stats: {0} features kept.".\
-        format(percentage(len(keep), len(total))))
-    logging.debug("Stats: {0} bases kept.".\
-        format(percentage(sum(keep), sum(total))))
+    if len(total) == 0:
+        logging.debug("Stats: 0/0 features kept.")
+    else:
+        logging.debug("Stats: {0} features kept.".\
+            format(percentage(len(keep), len(total))))
+        logging.debug("Stats: {0} bases kept.".\
+            format(percentage(sum(keep), sum(total))))
 
 def binpacking(args):
     import binpacking

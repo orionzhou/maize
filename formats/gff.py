@@ -348,6 +348,24 @@ def fix(args):
                 print(g2)
             g.update_attributes()
             print(g)
+    elif opt == 'evm':
+        for g in gff:
+            if g.type == 'gene':
+                gid = g.get_attr("ID").replace("_pilon_pilon",'').replace("evm.TU.ctg", 'g')
+                g.set_attr("ID", gid)
+                g.set_attr("Name", None)
+            elif g.type.endswith('RNA'):
+                gid = g.get_attr("Parent").replace("_pilon_pilon",'').replace("evm.TU.ctg", 'g')
+                rid = g.get_attr("ID").replace("_pilon_pilon",'').replace("evm.model.ctg", 'r')
+                g.set_attr("ID", rid)
+                g.set_attr("Parent", gid)
+                g.set_attr("Name", None)
+            elif g.type.endswith('CDS') or g.type.endswith("exon"):
+                rid = g.get_attr("Parent").replace("_pilon_pilon",'').replace("evm.model.ctg", 'r')
+                g.set_attr("Parent", rid)
+                g.set_attr("ID", None)
+            g.update_attributes()
+            print(g)
     elif opt == 'renan': # no gene feature, 'transcipt'->'mRNA'
         for g in gff:
             if g.type.endswith('transcript'):
