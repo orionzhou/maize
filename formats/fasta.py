@@ -308,9 +308,13 @@ def extract_chrom_num(sid, opt):
         # res = re.search(ptn, sid, re.IGNORECASE)
         # chrom = res.group(2) if res else False
     else:
-        ptn = "^(chr|chromsome|Ta)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)" #(MtrunA17)?
+        ptn = "^(chr|chromsome|Ta)?[ _]*(0*[1-9XY][0-9]{0,1}[A-Z]?)"
         res = re.search(ptn, sid, re.IGNORECASE)
-        chrom = res.group(2).lstrip('0') if res else False
+        chrom = False
+        if res:
+            chrom = res.group(2).lstrip('0')
+            if chrom[0] not in [str(x) for x in range(1,10)]:
+                chrom = False
     return chrom
 
 def rename(args):
@@ -327,7 +331,9 @@ def rename(args):
     ccnt = 1
     for sid in db.keys():
         size = len(db[sid])
-        chrom = extract_chrom_num(sid, opt)
+        chrom = False
+        sid0 = sid.replace('MtrunA17', '') if opt == 'Mtruncatula_A17v5' else sid
+        chrom = extract_chrom_num(sid0, opt)
         if chrom:
             num = chrom.strip(string.ascii_letters)
             num = int(num) if len(num) > 0 else 0

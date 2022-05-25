@@ -235,7 +235,11 @@ def fix_gsac(g, notes):
 def fix(args):
     fi, opt = args.fi, args.opt
     gff = Gff(fi)
-    if opt == 'genbank':
+    if opt == 'simple':
+        for g in gff:
+            if g.type in valid_gff_type:
+                print(g)
+    elif opt == 'genbank':
         for g in gff:
             if g.type == 'region':
                 continue
@@ -296,6 +300,8 @@ def fix(args):
                 g.type = "gene"
             elif g.type == 'pseudogene':
                 g.type = 'gene'
+            elif g.type == 'transcript':
+                g.type = 'ncRNA'
             elif g.type == 'pseudogenic_transcript':
                 valid_pseudo_biotype = { 'pseudogene':'mRNA',
                                         'tRNA_pseudogene':'tRNA' }
@@ -414,21 +420,6 @@ def fix(args):
                 g.type = 'five_prime_UTR'
             elif g.type == 'three_P00rime_UTR':
                 g.type = 'three_prime_UTR'
-            # elif g.type == 'gene':
-                # nid = g.get_attr('locus_tag').replace('Zm00014a_','Zm00014a')
-                # oid = g.get_attr('ID')
-                # g.set_attr('ID', nid)
-                # gdic[oid] = nid
-                # g.update_tag("Note", "note1")
-                # g.update_tag("gene", "note2")
-            # elif g.type.endswith('RNA'):
-                # nid = g.get_attr('orig_transcript_id').replace('gnl|WGS:NCVQ|','').replace('Zm00014a_','Zm00014a')
-                # oid = g.get_attr('ID')
-                # g.set_attr('ID', nid)
-                # gdic[oid] = nid
-                # g.set_attr('Parent', gdic[g.get_attr('Parent')])
-            # else:
-                # g.set_attr('Parent', gdic[g.get_attr('Parent')])
             g.update_attributes()
             print(g)
     elif opt == 'hzs':
@@ -1338,7 +1329,7 @@ if __name__ == '__main__':
     sp1 = sp.add_parser('fix', help = 'fix gff fields using various options',
             formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     sp1.add_argument('fi', help = 'input GFF3 file')
-    opts = 'genbank tair phytozome maize ensembl mo17 w22 ph207 phb47 hzs'.split()
+    opts = 'simple genbank tair phytozome maize ensembl mo17 w22 ph207 phb47 hzs'.split()
     sp1.add_argument('--opt', default='ensembl', help = 'fix option')
     sp1.set_defaults(func = fix)
 
