@@ -58,9 +58,9 @@ def create_job_script(args):
     cmd = args.cmd
     if args.fmt == 'slurm':
         tmpl = Template(tmpl_slurm)
-        queue = 'amdsmall,amdlarge,amd512,small,large,max,ram256g'
         mail_type = "FAIL"
-        mem = '20gb'
+        # queue = 'amdsmall,amdlarge,amd512,small,large,max,ram256g'
+        # mem = '20gb'
     elif args.fmt == 'sge':
         tmpl = Template(tmpl_sge)
     else:
