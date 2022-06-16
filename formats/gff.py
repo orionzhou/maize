@@ -1090,8 +1090,10 @@ def pick_longest(args):
             #    logging.debug(gene['ID'][0], rna.featuretype, rna['ID'])
             rnalen = 0
             if rna.featuretype == "mRNA":
-                for cds in g.children(rna, featuretype = 'CDS'):
-                    rnalen += cds.end - cds.start + 1
+                #for cds in g.children(rna, featuretype = 'CDS'):
+                #    rnalen += cds.end - cds.start + 1
+                for exon in g.children(rna, featuretype = 'exon'):
+                    rnalen += exon.end - exon.start + 1
             else:
                 for exon in g.children(rna, featuretype = 'exon'):
                     rnalen += exon.end - exon.start + 1
