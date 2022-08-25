@@ -291,17 +291,16 @@ def fix(args):
             g.update_attributes()
             print(g)
     elif opt == 'ensembl':
-        seqtypes = ["chromosome","contig",'supercontig','biological_region','region','scaffold']
+        seqtypes = ["chromosome","contig",'supercontig','biological_region','region','scaffold','repeat_region']
         id_map = dict()
         for g in gff:
             if g.type in seqtypes:
                 continue
-            elif g.type == "ncRNA_gene":
+            elif g.type in ["ncRNA_gene",'miRNA_gene','pseudogene']:
                 g.type = "gene"
-            elif g.type == 'pseudogene':
-                g.type = 'gene'
             elif g.type == 'transcript':
-                g.type = 'ncRNA'
+                g.type = 'mRNA'
+                #g.type = 'ncRNA'
             elif g.type == 'pseudogenic_transcript':
                 valid_pseudo_biotype = { 'pseudogene':'mRNA',
                                         'tRNA_pseudogene':'tRNA' }
