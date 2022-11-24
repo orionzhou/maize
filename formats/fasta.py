@@ -236,7 +236,7 @@ def merge(args):
 
         fh = must_open(fseq)
         seq_it = SeqIO.parse(fh, "fasta")
-        seqs = [SeqRecord(rcd.seq, id = pre + "|" + rcd.id,
+        seqs = [SeqRecord(rcd.seq, id = f"{rcd.id}{args.sep}{pre}" if args.suffix else f"{pre}{args.sep}{rcd.id}",
             description = '') for rcd in seq_it]
         SeqIO.write(seqs, sys.stdout, "fasta")
         fh.close()
@@ -598,6 +598,8 @@ if __name__ == "__main__":
 
     sp1 = sp.add_parser("merge", help='merge multiple fasta files and update IDs')
     sp1.add_argument('cfg', help='config file (a text file with identifier followed by the absolute path of fasta in each line)')
+    sp1.add_argument('--suffix', action="store_true", help='modify ID by suffixing rather than prefixing')
+    sp1.add_argument('--sep', default="|", help='separater')
     sp1.set_defaults(func = merge)
 
     sp1 = sp.add_parser("merge_pe",
